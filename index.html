@@ -1,0 +1,1922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>LCC · Lindenhurst Cricket Club · Scorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<!-- Firebase (compat build = works with plain script, no modules) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+  // ── LCC Firebase configuration ──
+  const firebaseConfig = {
+    apiKey: "AIzaSyA_b8dFbqqAQRfl0W6uGyKmebepM8jtt68",
+    authDomain: "mcc-scorer.firebaseapp.com",
+    databaseURL: "https://mcc-scorer-default-rtdb.firebaseio.com",
+    projectId: "mcc-scorer",
+    storageBucket: "mcc-scorer.firebasestorage.app",
+    messagingSenderId: "813330930410",
+    appId: "1:813330930410:web:e996dc941659e5fd6bd593"
+  };
+  // ── App PINs (admin is fixed; team PINs are set per-match by admin) ──
+  const ADMIN_PIN = "4821";
+
+  // Persistent per-device ID — survives refresh so the same phone re-entering a PIN
+  // is recognized as the same scorer, not a new "3rd person".
+  function getDeviceId(){
+    try{
+      let id = localStorage.getItem("lcc_device_id");
+      if(!id){ id = "dev_"+Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem("lcc_device_id", id); }
+      return id;
+    }catch(e){
+      // localStorage unavailable (private browsing etc) — fall back to a session-only id
+      if(!window.__lccSessionId) window.__lccSessionId = "dev_"+Math.random().toString(36).slice(2)+Date.now().toString(36);
+      return window.__lccSessionId;
+    }
+  }
+  const DEVICE_ID = getDeviceId();
+
+  let DB=null, FB_OK=false;
+  function tryInitFirebase(){
+    if(FB_OK) return; // already done
+    if(typeof firebase==="undefined") return; // SDK not loaded yet
+    try {
+      if(!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      DB = firebase.database();
+      FB_OK = true;
+    } catch(e){ console.error("Firebase init failed:",e); }
+  }
+  tryInitFirebase();
+  // Safety net: if the SDK was still loading on first attempt (slow network), retry once everything has loaded.
+  if(!FB_OK) window.addEventListener("load", tryInitFirebase);
+</script>
+<style>
+
+@keyframes pulseGlow{0%,100%{box-shadow:0 0 20px rgba(245,158,11,.4)}50%{box-shadow:0 0 40px rgba(245,158,11,.8)}}
+@keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
+@keyframes bounceIn{0%{transform:scale(0.3);opacity:0}50%{transform:scale(1.05)}70%{transform:scale(0.9)}100%{transform:scale(1);opacity:1}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes drift{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-12px) rotate(4deg)}}
+@keyframes bgShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+@keyframes floatUp{0%{transform:translateY(100vh) rotate(0deg);opacity:0}10%{opacity:.5}90%{opacity:.5}100%{transform:translateY(-20vh) rotate(360deg);opacity:0}}
+@keyframes logoFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-8px) scale(1.03)}}
+@keyframes ringPulse{0%{transform:scale(.95);opacity:.7}100%{transform:scale(1.6);opacity:0}}
+@keyframes slideInUp{0%{transform:translateY(30px);opacity:0}100%{transform:translateY(0);opacity:1}}
+@keyframes glowText{0%,100%{filter:drop-shadow(0 0 8px rgba(245,158,11,.3))}50%{filter:drop-shadow(0 0 20px rgba(245,158,11,.6))}}
+@keyframes sweep{0%{left:-100%}100%{left:200%}}
+/* ── Cricket scene (viewBox 320x120, ground y=104) ── */
+@keyframes ballRun{0%{transform:translate(70px,110px);opacity:0}12%{opacity:1}48%{transform:translate(252px,118px)}100%{transform:translate(160px,126px);opacity:0}}
+@keyframes ballHit6{0%{transform:translate(70px,110px);opacity:0}12%{opacity:1}44%{transform:translate(252px,118px);opacity:1}100%{transform:translate(60px,42px);opacity:0}}
+@keyframes ballHit4{0%{transform:translate(70px,110px);opacity:0}12%{opacity:1}44%{transform:translate(252px,118px);opacity:1}100%{transform:translate(8px,112px);opacity:0}}
+@keyframes ballStumps{0%{transform:translate(70px,110px);opacity:0}12%{opacity:1}52%{transform:translate(284px,118px);opacity:1}100%{transform:translate(291px,130px);opacity:0}}
+@keyframes swing6{0%,28%{transform:rotate(0deg)}38%{transform:rotate(-90deg)}44%{transform:rotate(-150deg)}58%{transform:rotate(-160deg)}100%{transform:rotate(0deg)}}
+@keyframes swing4{0%,30%{transform:rotate(0deg)}38%{transform:rotate(-70deg)}44%{transform:rotate(-95deg)}58%{transform:rotate(-100deg)}100%{transform:rotate(0deg)}}
+@keyframes bowlArm{0%,20%{transform:rotate(0deg)}36%{transform:rotate(-220deg)}100%{transform:rotate(-360deg)}}
+@keyframes stumpFall{0%,54%{transform:rotate(0deg)}70%{transform:rotate(40deg)}100%{transform:rotate(40deg)}}
+@keyframes resultPop{0%,40%{transform:scale(.5);opacity:0}44%{transform:scale(1.15);opacity:.95}54%{transform:scale(1);opacity:.95}82%{opacity:.85}100%{transform:scale(.95) translateY(-6px);opacity:0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes coinFlip{
+  0%{transform:rotateY(0deg) translateY(0)}
+  8%{transform:rotateY(720deg) translateY(-22px)}
+  20%{transform:rotateY(1800deg) translateY(-40px)}
+  35%{transform:rotateY(3240deg) translateY(-46px)}
+  50%{transform:rotateY(4680deg) translateY(-40px)}
+  65%{transform:rotateY(6120deg) translateY(-26px)}
+  78%{transform:rotateY(7200deg) translateY(-12px)}
+  88%{transform:rotateY(7920deg) translateY(-4px)}
+  95%{transform:rotateY(8280deg) translateY(-1px)}
+  100%{transform:rotateY(8460deg) translateY(0)}
+}
+@keyframes scoreFlash{0%,100%{opacity:1}40%{opacity:.2}}
+.animate-fade{animation:fadeUp .4s ease both}
+.animate-bounce-in{animation:bounceIn .5s ease both}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:#0a0414;color:#fff;min-height:100vh}
+.font-mono{font-family:'JetBrains Mono',monospace}
+.font-display{font-family:'Oswald',sans-serif}
+
+/* Layout */
+.screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,#022c1e 0%,#0a2540 28%,#1c1150 58%,#2d0f5c 80%,#0a0414 100%);position:relative;overflow:hidden}
+.card{background:rgba(30,27,75,.75);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(99,102,241,.35);border-radius:28px;padding:26px;width:100%;max-width:480px;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+.section-title{color:#818cf8;font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.2em;margin-bottom:6px}
+
+/* Inputs */
+input{width:100%;background:#0f0c29;border:1.5px solid #3730a3;border-radius:12px;padding:10px 14px;color:#fff;font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:border-color .2s}
+input:focus{border-color:#6366f1}
+input::placeholder{color:#4338ca}
+label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.15em;margin-bottom:6px}
+
+/* Buttons */
+.btn{border:none;cursor:pointer;font-family:'Inter',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-radius:14px;transition:all .15s;font-size:13px}
+.btn-primary{background:linear-gradient(135deg,#f59e0b,#ef4444);color:#111;padding:13px 20px}
+.btn-primary:hover{filter:brightness(1.1);transform:scale(1.02)}
+.btn-primary:active{transform:scale(.97)}
+.btn-ghost{background:transparent;border:1.5px solid #374151;color:#9ca3af;padding:13px 20px}
+.btn-ghost:hover{border-color:#ef4444;color:#f87171}
+.btn-danger{background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;padding:13px 20px}
+.btn-danger:hover{filter:brightness(1.1)}
+.btn-outline-amber{background:transparent;border:1.5px solid #d97706;color:#fbbf24;padding:13px 14px}
+.btn-outline-amber:hover{background:rgba(217,119,6,.15)}
+.btn-outline-gray{background:transparent;border:1.5px solid #374151;color:#6b7280;padding:13px 14px}
+.btn-outline-gray:hover{border-color:#6366f1;color:#818cf8}
+.btn-run{background:#1e1b4b;border:1.5px solid #3730a3;color:#fff;padding:16px 8px;font-family:'Oswald',sans-serif;font-size:24px;font-weight:700;border-radius:16px;width:100%}
+.btn-run:hover{border-color:#818cf8;background:rgba(99,102,241,.2);transform:translateY(-2px);box-shadow:0 4px 16px rgba(99,102,241,.2)}
+.btn-run.amber{background:linear-gradient(135deg,#f59e0b,#d97706);color:#111;border:none;box-shadow:0 0 24px rgba(245,158,11,.5);text-shadow:0 1px 0 rgba(0,0,0,.15)}
+.btn-run.green{background:linear-gradient(135deg,#10b981,#059669);color:#111;border:none;box-shadow:0 0 20px rgba(16,185,129,.3)}
+.btn-undo{background:transparent;border:1.5px solid #4338ca;color:#818cf8;padding:6px 12px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s}
+.btn-undo:hover{background:rgba(99,102,241,.15)}
+.btn-undo:disabled{border-color:#1f2937;color:#374151;cursor:not-allowed}
+
+/* Score header */
+.score-header{background:linear-gradient(135deg,rgba(16,185,129,.14),rgba(45,15,92,.3),rgba(245,158,11,.08));border-bottom:1px solid #3730a3;padding:20px 20px 16px}
+.score-big{font-family:'Oswald',sans-serif;font-size:68px;font-weight:700;line-height:1;background:linear-gradient(135deg,#fff,#c7d2fe);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.score-wkt{-webkit-text-fill-color:#f87171}
+
+/* Tabs */
+.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:#1e1b4b;border-radius:16px;padding:4px;margin:16px 20px}
+.tab{background:transparent;border:none;color:#6b7280;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.08em;padding:10px;border-radius:12px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s}
+.tab.active{background:linear-gradient(135deg,#f59e0b,#ef4444);color:#111}
+
+/* Over ticker */
+.chip{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;border:2px solid;flex-shrink:0;transition:transform .15s;cursor:default}
+.chip-W{background:#ef4444;color:#fff;border-color:#f87171;box-shadow:0 0 12px rgba(239,68,68,.4)}
+.chip-4{background:#f59e0b;color:#111;border-color:#fbbf24;box-shadow:0 0 12px rgba(245,158,11,.4)}
+.chip-6{background:#10b981;color:#111;border-color:#34d399;box-shadow:0 0 12px rgba(16,185,129,.35)}
+.chip-WD,.chip-NB{background:transparent;color:#fbbf24;border-color:#f59e0b;border-style:dashed}
+.chip-0{background:transparent;color:#4b5563;border-color:#374151}
+.chip-run{background:rgba(99,102,241,.2);color:#a5b4fc;border-color:#6366f1}
+
+/* Mini cards */
+.mini-card{background:#1e1b4b;border:1px solid #3730a3;border-radius:16px;padding:12px}
+
+/* Table */
+.score-table{width:100%;border-collapse:collapse;font-size:13px}
+.score-table th{font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.15em;color:#4338ca;font-weight:500;padding:10px 8px;background:#1a1757}
+.score-table th:first-child{text-align:left;padding-left:16px}
+.score-table th:last-child{padding-right:16px}
+.score-table td{padding:10px 8px;border-top:1px solid #1e1b4b;color:#d1d5db;text-align:right;font-family:'JetBrains Mono',monospace}
+.score-table td:first-child{text-align:left;padding-left:16px;font-family:'Inter',sans-serif;color:#fff;font-weight:600}
+.score-table td:last-child{padding-right:16px}
+
+/* Grids */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.grid-4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px}
+
+/* Alert boxes */
+.alert-red{background:rgba(239,68,68,.12);border:1.5px solid rgba(239,68,68,.5);border-radius:16px;padding:14px}
+.alert-indigo{background:rgba(99,102,241,.12);border:1.5px solid rgba(99,102,241,.5);border-radius:16px;padding:14px}
+
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center;z-index:100;padding:16px}
+@media(min-width:640px){.modal-bg{align-items:center}}
+.modal{background:#1a1757;border:1px solid #3730a3;border-radius:24px;padding:20px;width:100%;max-width:360px}
+
+/* Misc */
+.divider{height:1px;background:#3730a3;margin:8px 0}
+.tag-amber{background:rgba(245,158,11,.15);color:#f59e0b;border-radius:10px;padding:6px 14px;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;text-align:center}
+.gap-4{gap:16px}
+.gap-2{gap:8px}
+.mb-1{margin-bottom:4px}
+.mb-2{margin-bottom:8px}
+.mb-3{margin-bottom:12px}
+.mb-4{margin-bottom:16px}
+.mb-6{margin-bottom:24px}
+.mt-1{margin-top:4px}
+.mt-2{margin-top:8px}
+.mt-3{margin-top:12px}
+.mt-4{margin-top:16px}
+.flex{display:flex}.items-center{align-items:center}.justify-between{justify-content:space-between}
+.space-y-3>*+*{margin-top:12px}
+.space-y-4>*+*{margin-top:16px}
+.text-right{text-align:right}
+.text-center{text-align:center}
+.truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.w-full{width:100%}
+.shrink-0{flex-shrink:0}
+.ml-2{margin-left:8px}
+.content{padding:0 20px 24px}
+@keyframes flash{0%,100%{opacity:1}50%{opacity:.3}}
+.flash{animation:flash .5s ease}
+
+/* Logo icon */
+.logo-icon{display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:22px;background:linear-gradient(135deg,#f59e0b,#ef4444,#8b5cf6);font-size:36px;margin-bottom:14px;box-shadow:0 8px 32px rgba(245,158,11,.4);animation:pulseGlow 3s ease-in-out infinite}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const{useState,useRef,useCallback}=React;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const nb=(n)=>({name:n,runs:0,balls:0,fours:0,sixes:0,out:false,howOut:"",onStrike:false});
+const nw=(n)=>({name:n,overs:0,ballsThisOver:0,runs:0,wickets:0,maidens:0,runsThisOver:0});
+const ovStr=(b)=>`${Math.floor(b/6)}.${b%6}`;
+const rr=(r,b)=>b===0?"0.00":((r/b)*6).toFixed(2);
+const T=20;
+
+function chipClass(ev){
+  if(ev.type==="W")  return "chip chip-W";
+  if(ev.type==="4")  return "chip chip-4";
+  if(ev.type==="6")  return "chip chip-6";
+  if(ev.type==="WD") return "chip chip-WD";
+  if(ev.type==="NB") return "chip chip-NB";
+  if(ev.type==="0")  return "chip chip-0";
+  return "chip chip-run";
+}
+function chipLbl(ev){
+  if(ev.type==="W")  return"W";
+  if(ev.type==="WD") return ev.extraRuns>1?`wd+${ev.extraRuns-1}`:"wd";
+  if(ev.type==="NB") return ev.extraRuns>1?`nb+${ev.extraRuns-1}`:"nb";
+  return ev.type;
+}
+
+// ── Setup (Admin only: teams, venue, toss — NO players) ──────────────────────
+function Setup({onStart,role,onExit,onHistory}){
+  const rA=useRef(),rB=useRef();
+  const[venue,setVenue]=useState(null);     // "lakes" | "millennium"
+  const[overs,setOvers]=useState(8);
+  const[wkts,setWkts]=useState(6);
+  const[customOv,setCustomOv]=useState(false);
+  const[customWk,setCustomWk]=useState(false);
+  const[mWkts,setMWkts]=useState(10);        // Millennium Park wickets per side (default 10, raisable for extra players)
+  const[customMWk,setCustomMWk]=useState(false);
+  const[single,setSingle]=useState(false);   // single-batsman mode (Lakes)
+  const[pinA,setPinA]=useState(()=>String(Math.floor(1000+Math.random()*9000)));
+  const[pinB,setPinB]=useState(()=>String(Math.floor(1000+Math.random()*9000)));
+  const[tossWinner,setTossWinner]=useState(null); // "A" | "B"
+  const[tossChoice,setTossChoice]=useState(null); // "bat" | "bowl"
+  const[flipping,setFlipping]=useState(false);
+  const[coinResult,setCoinResult]=useState(null); // "heads" | "tails"
+  const mountedRef=useRef(true);
+  const audioCtxRef = useRef(null);
+  React.useEffect(()=>()=>{mountedRef.current=false;},[]);
+
+  // Defense in depth: Setup creates/configures matches and exposes the "reset live data" tool —
+  // it must never be reachable by a non-admin. Placed AFTER all hooks above (Rules of Hooks).
+  if(role!=="admin"){
+    return <Centered emoji="🏏" title="No active match yet" sub="Ask the admin to start a match first." onExit={onExit}/>;
+  }
+
+  const isSingle=venue==="lakes"&&single;
+
+  // ── Lightweight Web Audio sound effects (no external files needed) ──
+  const getAudioCtx = () => {
+    if(!audioCtxRef.current){
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if(Ctx) audioCtxRef.current = new Ctx();
+    }
+    return audioCtxRef.current;
+  };
+  const playTick = () => {
+    const ctx = getAudioCtx(); if(!ctx || ctx.state!=="running") return;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.type = "square"; osc.frequency.setValueAtTime(1100, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.06, t+0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t+0.06);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t); osc.stop(t+0.07);
+  };
+  const playResultChime = () => {
+    const ctx = getAudioCtx(); if(!ctx || ctx.state!=="running") return;
+    const t = ctx.currentTime;
+    [523.25, 783.99].forEach((freq, i) => {
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = "sine"; osc.frequency.setValueAtTime(freq, t+i*0.12);
+      gain.gain.setValueAtTime(0.0001, t+i*0.12);
+      gain.gain.exponentialRampToValueAtTime(0.18, t+i*0.12+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t+i*0.12+0.5);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t+i*0.12); osc.stop(t+i*0.12+0.55);
+    });
+  };
+  // Actually SPEAK "Heads!" or "Tails!" out loud using the browser's built-in voice (no audio files needed)
+  const announceResult = (word) => {
+    try{
+      if(!window.speechSynthesis) return;
+      window.speechSynthesis.cancel(); // clear any queued/stuck utterances first
+      const utter = new SpeechSynthesisUtterance(word + "!");
+      utter.rate = 0.9; utter.pitch = 1.1; utter.volume = 1;
+      window.speechSynthesis.speak(utter);
+    }catch(e){ console.error("speech announce failed",e); }
+  };
+
+  const FLIP_DURATION = 6000; // 6 seconds, as requested — gives time for the call to happen "in the air"
+  const flipCoin=()=>{
+    if(flipping)return;
+    setFlipping(true);setCoinResult(null);
+    // iOS/Safari suspend AudioContext until it's resumed inside a real user-gesture handler — this click is that gesture.
+    const ctx = getAudioCtx();
+    if(ctx && ctx.state==="suspended") ctx.resume().catch(()=>{});
+    // Tick sound while the coin spins, slowing down toward the end like a real coin settling
+    const tickIntervals = [120,120,140,160,190,230,280,340,420,520,650,820];
+    let elapsed = 0;
+    tickIntervals.forEach((gap)=>{
+      elapsed += gap;
+      setTimeout(()=>{ if(mountedRef.current && elapsed < FLIP_DURATION-200) playTick(); }, elapsed);
+    });
+    setTimeout(()=>{
+      if(!mountedRef.current)return;
+      const result = Math.random()<0.5 ? "heads" : "tails";
+      setCoinResult(result);
+      playResultChime();
+      announceResult(result==="heads"?"Heads":"Tails");
+      setFlipping(false);
+      // Deliberately NOT auto-picking a toss winner — the coin only reveals heads/tails.
+      // Whoever called it correctly is selected manually below by admin, just like a real toss.
+    },FLIP_DURATION);
+  };
+  const go=()=>{
+    const[a,b]=[rA,rB].map(r=>r.current?.value?.trim());
+    if(!a||!b){alert("Please enter both team names.");return;}
+    if(!tossWinner||!tossChoice){alert("Select who won the toss and their decision.");return;}
+    if(venue==="lakes"){
+      if(!overs||overs<1||overs>50){alert("Enter valid overs (1-50).");return;}
+      if(!wkts||wkts<1||wkts>11){alert("Enter valid wickets (1-11).");return;}
+    }
+    if(venue==="millennium"){
+      if(!mWkts||mWkts<1||mWkts>20){alert("Enter valid wickets (1-20).");return;}
+    }
+    if(!pinA||pinA.length<3||!pinB||pinB.length<3){alert("Both team PINs must be at least 3 digits.");return;}
+    if(pinA===pinB){alert("Team A and Team B PINs must be different.");return;}
+
+    // Determine who bats first based on toss
+    const winnerName=tossWinner==="A"?a:b;
+    const loserName=tossWinner==="A"?b:a;
+    const battingFirst=tossChoice==="bat"?winnerName:loserName;
+    const bowlingFirst=battingFirst===a?b:a;
+
+    const v=venue==="millennium"
+      ?{venue:"Millennium Park, Lindenhurst",format:"T20",overs:20,maxWkts:Number(mWkts),single:false}
+      :{venue:"Lakes High School",format:"Casual",overs:Number(overs),maxWkts:Number(wkts),single:isSingle};
+    onStart({teamA:a,teamB:b,battingFirst,bowlingFirst,pinA,pinB,
+      tossSummary:`${winnerName} won the toss, chose to ${tossChoice} first`,...v});
+  };
+  const clr=()=>{[rA,rB].forEach(r=>{if(r.current)r.current.value=""});setTossWinner(null);setTossChoice(null);rA.current?.focus();};
+
+  const venueBtn=(id,emoji,title,sub,active)=>(
+    <button onClick={()=>setVenue(id)} style={{
+      flex:1,padding:"16px 12px",borderRadius:18,cursor:"pointer",textAlign:"left",
+      border:active?"2px solid #f59e0b":"1.5px solid rgba(99,102,241,.3)",
+      background:active?"linear-gradient(135deg,rgba(245,158,11,.18),rgba(239,68,68,.1))":"rgba(30,27,75,.5)",
+      transition:"all .18s",color:"#fff",fontFamily:"'Inter',sans-serif"
+    }}>
+      <div style={{fontSize:28,marginBottom:6}}>{emoji}</div>
+      <div style={{fontWeight:700,fontSize:14,marginBottom:2}}>{title}</div>
+      <div style={{fontSize:11,color:active?"#fbbf24":"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>{sub}</div>
+    </button>
+  );
+
+  const chip=(val,cur,set,suffix)=>(
+    <button onClick={()=>set(val)} style={{
+      flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,
+      fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",
+      border:cur===val?"none":"1.5px solid rgba(99,102,241,.3)",
+      background:cur===val?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",
+      color:cur===val?"#111":"#9ca3af"
+    }}>{val}{suffix||""}</button>
+  );
+
+  const teamAName=rA.current?.value?.trim()||"Team A";
+  const teamBName=rB.current?.value?.trim()||"Team B";
+
+  return(
+    <div className="screen">
+      <div style={{width:"100%",maxWidth:460}}>
+        <div className="flex items-center justify-between" style={{marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:11,background:"rgba(239,68,68,.18)",color:"#f87171",border:"1px solid rgba(239,68,68,.4)",borderRadius:8,padding:"4px 10px",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>👑 ADMIN</span>
+            <span style={{fontSize:10,color:FB_OK?"#34d399":"#f87171",fontFamily:"'JetBrains Mono',monospace"}} title={FB_OK?"Live sync connected":"Offline — live sync unavailable"}>{FB_OK?"● online":"⚠️ offline"}</span>
+          </div>
+          {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:18}}>
+          {onHistory&&<button onClick={onHistory} style={{flex:1,background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.35)",color:"#a5b4fc",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}}>📚 Match History</button>}
+          {FB_OK&&DB&&<button onClick={()=>{ if(confirm("Clear any stuck/corrupted live match data? This won't affect saved history.")){ DB.ref("live").remove().then(()=>alert("Live data cleared. You can start a fresh match now.")); } }} style={{flex:1,background:"transparent",border:"1px solid rgba(99,102,241,.25)",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}} title="Use this if scorers see a blank screen">🧹 Reset Live Data</button>}
+        </div>
+        <div className="text-center mb-6 animate-fade">
+          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:76,height:76,borderRadius:22,background:"linear-gradient(135deg,#f59e0b,#ef4444,#8b5cf6)",fontSize:38,marginBottom:14,boxShadow:"0 8px 32px rgba(245,158,11,.45)",animation:"pulseGlow 3s ease-in-out infinite"}}>🏏</div>
+          <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#818cf8",textTransform:"uppercase",letterSpacing:".3em",marginBottom:4}}>Official Match Scorer</p>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:52,fontWeight:700,letterSpacing:"-2px",background:"linear-gradient(135deg,#fff,#c7d2fe 40%,#fbbf24)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"shimmer 3s linear infinite"}}>LCC</h1>
+          <p style={{color:"rgba(129,140,248,.5)",fontSize:13,marginTop:2,fontWeight:500}}>Lindenhurst Cricket Club</p>
+        </div>
+        <div className="card space-y-4">
+          {/* Venue picker */}
+          <div>
+            <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em",marginBottom:8}}>📍 Select Ground</p>
+            <div style={{display:"flex",gap:10}}>
+              {venueBtn("lakes","🎾","Lakes High School","Casual · 6-8 ov",venue==="lakes")}
+              {venueBtn("millennium","🏟️","Millennium Park","T20 · 20 ov",venue==="millennium")}
+            </div>
+          </div>
+
+          {/* Lakes: choose overs + wickets */}
+          {venue==="lakes"&&(
+            <div className="animate-fade" style={{background:"rgba(7,5,15,.4)",borderRadius:16,padding:14,border:"1px solid rgba(99,102,241,.15)"}}>
+              <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>Overs per side</p>
+              <div style={{display:"flex",gap:6,marginBottom:customOv?6:12}}>
+                {[6,7,8].map(o=>(
+                  <button key={o} onClick={()=>{setCustomOv(false);setOvers(o)}} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customOv&&overs===o)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customOv&&overs===o)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customOv&&overs===o)?"#111":"#9ca3af"}}>{o}</button>
+                ))}
+                <button onClick={()=>{setCustomOv(true);setOvers("")}} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customOv?"none":"1.5px solid rgba(99,102,241,.3)",background:customOv?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customOv?"#fff":"#9ca3af"}}>Custom</button>
+              </div>
+              {customOv&&<input type="number" min="1" max="50" value={overs} onChange={e=>setOvers(e.target.value)} placeholder="Type overs (e.g. 10, 12, 15)" style={{width:"100%",marginBottom:12,background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(139,92,246,.5)",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>}
+
+              <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>Wickets per side</p>
+              <div style={{display:"flex",gap:6,marginBottom:customWk?6:0}}>
+                {[4,5,6,7].map(w=>(
+                  <button key={w} onClick={()=>{setCustomWk(false);setWkts(w)}} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customWk&&wkts===w)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customWk&&wkts===w)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customWk&&wkts===w)?"#111":"#9ca3af"}}>{w}</button>
+                ))}
+                <button onClick={()=>{setCustomWk(true);setWkts("")}} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customWk?"none":"1.5px solid rgba(99,102,241,.3)",background:customWk?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customWk?"#fff":"#9ca3af"}}>Custom</button>
+              </div>
+              {customWk&&<input type="number" min="1" max="11" value={wkts} onChange={e=>setWkts(e.target.value)} placeholder="Type wickets (e.g. 9, 10)" style={{width:"100%",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(139,92,246,.5)",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>}
+
+              <div className="divider" style={{margin:"12px 0"}}/>
+              <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>Batting style</p>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>setSingle(false)} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:!single?"none":"1.5px solid rgba(99,102,241,.3)",background:!single?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:!single?"#111":"#9ca3af"}}>👥 Pair (2 batsmen)</button>
+                <button onClick={()=>setSingle(true)} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:single?"none":"1.5px solid rgba(99,102,241,.3)",background:single?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:single?"#fff":"#9ca3af"}}>🧍 Single batsman</button>
+              </div>
+              {single&&<p style={{color:"#a78bfa",fontFamily:"'JetBrains Mono',monospace",fontSize:10,marginTop:8,textAlign:"center"}}>One batsman bats alone · always on strike · can retire &amp; return</p>}
+              <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginTop:12,textAlign:"center"}}>{overs||"?"} overs · {wkts||"?"} wickets · {single?"single":"pair"}</p>
+            </div>
+          )}
+          {venue==="millennium"&&(
+            <div className="animate-fade" style={{background:"rgba(245,158,11,.08)",borderRadius:16,padding:14,border:"1px solid rgba(245,158,11,.25)"}}>
+              <p style={{color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:600,textAlign:"center",marginBottom:12}}>🏟️ Full T20 · 20 overs (fixed)</p>
+              <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>Wickets per side</p>
+              <div style={{display:"flex",gap:6,marginBottom:customMWk?6:0,flexWrap:"wrap"}}>
+                {[10,11,12,13].map(w=>(
+                  <button key={w} onClick={()=>{setCustomMWk(false);setMWkts(w)}} style={{flex:1,minWidth:44,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customMWk&&mWkts===w)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customMWk&&mWkts===w)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customMWk&&mWkts===w)?"#111":"#9ca3af"}}>{w}</button>
+                ))}
+                <button onClick={()=>{setCustomMWk(true);setMWkts("")}} style={{flex:1,minWidth:64,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customMWk?"none":"1.5px solid rgba(99,102,241,.3)",background:customMWk?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customMWk?"#fff":"#9ca3af"}}>Custom</button>
+              </div>
+              {customMWk&&<input type="number" min="1" max="20" value={mWkts} onChange={e=>setMWkts(e.target.value)} placeholder="Type wickets (e.g. 14)" style={{width:"100%",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(139,92,246,.5)",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>}
+              <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,marginTop:10,textAlign:"center"}}>Default is 10 (11-a-side). Raise this if more players are turning up — extra batsmen just bat further down the order.</p>
+            </div>
+          )}
+
+          {venue&&<>
+            <div className="divider"/>
+            <div className="grid-2">
+              <div><label>🏏 Team A</label><input ref={rA} placeholder="e.g. Mumbai XI"/></div>
+              <div><label>⚡ Team B</label><input ref={rB} placeholder="e.g. Delhi XI"/></div>
+            </div>
+
+            {/* Toss */}
+            <div style={{background:"rgba(245,158,11,.06)",border:"1px solid rgba(245,158,11,.2)",borderRadius:14,padding:14}}>
+              <p style={{color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:8}}>🪙 Toss</p>
+
+              {/* Flip a coin */}
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:14,padding:"14px 0",background:"rgba(7,5,15,.3)",borderRadius:12}}>
+                <div style={{width:64,height:64,perspective:600,marginBottom:10}}>
+                  <div style={{width:"100%",height:"100%",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+                    background:"linear-gradient(135deg,#fbbf24,#f59e0b,#d97706)",
+                    boxShadow:flipping?"0 0 24px rgba(245,158,11,.6), inset 0 2px 4px rgba(255,255,255,.4)":"0 4px 16px rgba(245,158,11,.5), inset 0 2px 4px rgba(255,255,255,.4)",
+                    fontSize:26,fontWeight:700,color:"#7c2d12",
+                    transformStyle:"preserve-3d",
+                    animation:flipping?"coinFlip 6s cubic-bezier(.36,.07,.19,.97)":"none"}}>
+                    {flipping?"":coinResult==="heads"?"H":coinResult==="tails"?"T":"?"}
+                  </div>
+                </div>
+                <button onClick={flipCoin} disabled={flipping} style={{padding:"9px 20px",borderRadius:10,cursor:flipping?"default":"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,border:"none",background:flipping?"rgba(245,158,11,.3)":"linear-gradient(135deg,#f59e0b,#ef4444)",color:flipping?"#92753a":"#111",opacity:flipping?0.7:1}}>
+                  {flipping?"🪙 Flipping…":coinResult?"🔄 Flip Again":"🪙 Flip a Coin"}
+                </button>
+                {flipping&&<p style={{color:"#92753a",fontSize:10,marginTop:8,fontFamily:"'JetBrains Mono',monospace"}}>Call it in the air…</p>}
+                {coinResult&&!flipping&&(
+                  <p style={{color:"#34d399",fontSize:16,marginTop:10,fontFamily:"'Oswald',sans-serif",fontWeight:700,letterSpacing:"2px",animation:"resultPop .5s ease both"}}>
+                    {coinResult==="heads"?"HEADS!":"TAILS!"}
+                  </p>
+                )}
+                <p style={{color:"#4b5563",fontSize:9,marginTop:6,fontFamily:"'JetBrains Mono',monospace",textAlign:"center"}}>Flip the coin, then select below who called it correctly.</p>
+              </div>
+
+              <p style={{color:"#9ca3af",fontSize:11,marginBottom:6}}>Who won the toss?</p>
+              <div style={{display:"flex",gap:6,marginBottom:10}}>
+                <button onClick={()=>setTossWinner("A")} style={{flex:1,padding:"9px 6px",borderRadius:10,cursor:"pointer",fontWeight:600,fontFamily:"'Inter',sans-serif",fontSize:12,border:tossWinner==="A"?"none":"1.5px solid rgba(99,102,241,.3)",background:tossWinner==="A"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:tossWinner==="A"?"#111":"#9ca3af"}}>{teamAName}</button>
+                <button onClick={()=>setTossWinner("B")} style={{flex:1,padding:"9px 6px",borderRadius:10,cursor:"pointer",fontWeight:600,fontFamily:"'Inter',sans-serif",fontSize:12,border:tossWinner==="B"?"none":"1.5px solid rgba(99,102,241,.3)",background:tossWinner==="B"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:tossWinner==="B"?"#111":"#9ca3af"}}>{teamBName}</button>
+              </div>
+              <p style={{color:"#9ca3af",fontSize:11,marginBottom:6}}>Elected to:</p>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>setTossChoice("bat")} style={{flex:1,padding:"9px 6px",borderRadius:10,cursor:"pointer",fontWeight:600,fontFamily:"'Inter',sans-serif",fontSize:12,border:tossChoice==="bat"?"none":"1.5px solid rgba(99,102,241,.3)",background:tossChoice==="bat"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:tossChoice==="bat"?"#111":"#9ca3af"}}>🏏 Bat First</button>
+                <button onClick={()=>setTossChoice("bowl")} style={{flex:1,padding:"9px 6px",borderRadius:10,cursor:"pointer",fontWeight:600,fontFamily:"'Inter',sans-serif",fontSize:12,border:tossChoice==="bowl"?"none":"1.5px solid rgba(99,102,241,.3)",background:tossChoice==="bowl"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:tossChoice==="bowl"?"#111":"#9ca3af"}}>🎯 Bowl First</button>
+              </div>
+              {tossWinner&&tossChoice&&(
+                <p style={{color:"#34d399",fontSize:11,marginTop:10,textAlign:"center",fontFamily:"'JetBrains Mono',monospace"}}>
+                  {(tossWinner==="A"?teamAName:teamBName)} won the toss, chose to {tossChoice} first
+                </p>
+              )}
+            </div>
+
+            {/* Two team PINs */}
+            {(()=>{
+              const pinRow=(label,color,val,setVal)=>(
+                <div style={{marginBottom:10}}>
+                  <p style={{color:color,fontFamily:"'JetBrains Mono',monospace",fontSize:10,marginBottom:4}}>{label}</p>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <input value={val} onChange={e=>setVal(e.target.value.replace(/[^0-9]/g,"").slice(0,6))} inputMode="numeric" style={{flex:1,textAlign:"center",letterSpacing:"0.3em",fontSize:20,fontWeight:700,background:"rgba(7,5,15,.8)",border:`1.5px solid ${color}66`,borderRadius:12,padding:"9px",color:color,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>
+                    <button onClick={()=>setVal(String(Math.floor(1000+Math.random()*9000)))} style={{padding:"9px 13px",borderRadius:12,border:`1.5px solid ${color}66`,background:"transparent",color:color,cursor:"pointer",fontSize:17}} title="New random PIN">🎲</button>
+                  </div>
+                </div>
+              );
+              return(
+                <div style={{background:"rgba(99,102,241,.08)",border:"1px solid rgba(99,102,241,.3)",borderRadius:14,padding:14}}>
+                  <p style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:10}}>🔑 Separate PIN per team</p>
+                  {pinRow(`🏏 ${teamAName} scorer PIN`,"#fbbf24",pinA,setPinA)}
+                  {pinRow(`⚡ ${teamBName} scorer PIN`,"#34d399",pinB,setPinB)}
+                  <p style={{color:"#4338ca",fontSize:10,fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>Each team enters their own players when they log in to bat or bowl.</p>
+                </div>
+              );
+            })()}
+
+            <div className="grid-2">
+              <button className="btn btn-ghost w-full" onClick={clr}>Clear</button>
+              <button className="btn btn-primary w-full" onClick={go}>Start Match</button>
+            </div>
+          </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── App root ─────────────────────────────────────────────────────────────────
+function App({role,onExit,onHistory}){
+  const isScorer=role==="scorer"||role==="admin";
+  const[match,setMatch]=useState(null);
+  const[tab,setTab]=useState("score");
+  const[inn,setInn]=useState(null);
+  const[hist,setHist]=useState([]);
+  const[pw,setPW]=useState(false);
+  const[nbn,setNBN]=useState("");
+  const[nnb,setNNB]=useState(false);
+  const[nbwn,setNBWN]=useState("");
+  const[ib,setIB]=useState(false);
+  const[mo,setMO]=useState(null);
+  const[flash,setFlash]=useState(false);
+  const[inn1,setInn1]=useState(null);
+  const[pr,setPR]=useState(false);   // pending retire -> choose next batsman
+  const[saved,setSaved]=useState(false);
+  const[syncErr,setSyncErr]=useState(null);
+  const[loaded,setLoaded]=useState(!FB_OK||!DB); // becomes true once we've checked Firebase for an existing match
+  const[preEnd,setPreEnd]=useState(null); // snapshot before ending innings/match, so admin can revert
+  const[slotsA,setSlotsA]=useState([]);  // device IDs holding Team A's 2 scorer slots
+  const[slotsB,setSlotsB]=useState([]);  // device IDs holding Team B's 2 scorer slots
+  const localChange=React.useRef(false); // true right after THIS device makes a change — skip the next incoming sync to avoid clobbering our own optimistic update
+
+  // Pull in any match that's already live (so a scorer/admin joining mid-match sees it)
+  // and keep listening so both team scorers + admin always see the SAME shared match.
+  React.useEffect(()=>{
+    if(!isScorer||!FB_OK||!DB)return;
+    const ref=DB.ref("live");
+    const cb=ref.on("value",s=>{
+      if(localChange.current){ localChange.current=false; return; } // ignore echo of our own write
+      const v=s.val();
+      // IMPORTANT: Firebase Realtime Database does NOT store empty objects {} or empty arrays [] —
+      // those keys are silently omitted on write. So a freshly-created match (before openers are set)
+      // legitimately arrives here with batsmen/bowlers/battingOrder/etc. MISSING, not present-but-empty.
+      // We must normalize those back to {} / [] rather than rejecting the data as "invalid".
+      const innOk = v&&v.inn&&typeof v.inn==="object"
+        &&typeof v.inn.totalRuns==="number"&&typeof v.inn.totalBalls==="number"&&typeof v.inn.wickets==="number"
+        &&typeof v.inn.battingTeam==="string"&&typeof v.inn.bowlingTeam==="string";
+      const valid=v&&v.match&&innOk&&v.match.teamA&&v.match.teamB;
+      if(!valid){ setLoaded(true); return; }
+      const normInn = {
+        ...v.inn,
+        overEvents: v.inn.overEvents||[],
+        completedOvers: v.inn.completedOvers||[],
+        battingOrder: v.inn.battingOrder||[],
+        bowlingOrder: v.inn.bowlingOrder||[],
+        batsmen: v.inn.batsmen||{},
+        bowlers: v.inn.bowlers||{},
+        extras: v.inn.extras||{wd:0,nb:0,b:0,lb:0},
+      };
+      setMatch(v.match);
+      setInn(normInn);
+      setInn1(v.inn1||null);
+      setIB(!!v.ib);
+      setMO(v.mo||null);
+      setSlotsA(Array.isArray(v.slotsA)?v.slotsA:[]);
+      setSlotsB(Array.isArray(v.slotsB)?v.slotsB:[]);
+      setLoaded(true);
+    },err=>{ console.error("live listener error",err); setSyncErr(err.message||"Could not read live match"); setLoaded(true); });
+    return ()=>ref.off("value",cb);
+  },[isScorer]);
+
+  React.useEffect(()=>{
+    if(!isScorer||!FB_OK||!DB||!loaded)return;
+    // Firebase rejects undefined — strip via JSON round-trip
+    // NOTE: slotsA/slotsB are included here (preserved from the last read) so this full-node
+    // overwrite never erases the scorer-slot locks claimed via ScorerGate.
+    const payload=JSON.parse(JSON.stringify({match,inn,inn1,ib,mo,pinA:match?.pinA||null,pinB:match?.pinB||null,teamA:match?.teamA||null,teamB:match?.teamB||null,battingTeam:inn?.battingTeam||null,slotsA,slotsB,t:Date.now()}));
+    localChange.current=true;
+    DB.ref("live").set(payload).then(()=>{if(syncErr)setSyncErr(null);}).catch(e=>{console.error("sync failed",e);setSyncErr(e.message||"Write blocked — check Firebase rules");});
+  },[match,inn,inn1,ib,mo,isScorer,loaded,slotsA,slotsB]);
+
+  React.useEffect(()=>{
+    if(!isScorer||!FB_OK||!DB||!mo||saved||!inn)return;
+    const histPayload=JSON.parse(JSON.stringify({result:mo,inn1:inn1||null,inn2:inn,teamA:match?.teamA,teamB:match?.teamB,tossSummary:match?.tossSummary||null,venue:inn.venue,format:inn.format,overs:inn.overs,maxWkts:inn.maxWkts,finishedAt:Date.now()}));
+    DB.ref("history").push(histPayload).then(()=>setSaved(true)).catch(e=>console.error("hist save failed",e));
+  },[mo,saved,isScorer,inn,inn1,match]);
+
+  if(isScorer&&FB_OK&&DB&&!loaded){
+    return <Centered emoji="🔄" title="Loading match…" sub="Checking for a live match"/>;
+  }
+
+  const startMatch=({teamA,teamB,battingFirst,bowlingFirst,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary})=>{
+    setSaved(false);
+    setMatch({teamA,teamB,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary});setHist([]);setInn1(null);
+    // Shell innings — no players yet, batting team must enter openers
+    setInn({battingTeam:battingFirst,bowlingTeam:bowlingFirst,inningsNum:1,
+      venue,format,overs,maxWkts,single:!!single,
+      awaitingOpeners:true,
+      batsmen:{},battingOrder:[],
+      bowlers:{},bowlingOrder:[],
+      strikerName:null,nonStrikerName:null,bowlerName:null,
+      totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],
+      extras:{wd:0,nb:0,b:0,lb:0},target:null});
+  };
+
+  // Called once the batting team's scorer enters opening striker/non-striker
+  // and the bowling team's scorer (or admin) enters the opening bowler.
+  const fillOpeners=({striker,nonStriker,bowler})=>{
+    setInn(p=>{
+      const single=p.single;
+      const batsmen=single
+        ?{[striker]:{...nb(striker),onStrike:true}}
+        :{[striker]:{...nb(striker),onStrike:true},[nonStriker]:nb(nonStriker)};
+      return{...p,awaitingOpeners:false,
+        batsmen,battingOrder:single?[striker]:[striker,nonStriker],
+        bowlers:{[bowler]:nw(bowler)},bowlingOrder:[bowler],
+        strikerName:striker,nonStrikerName:single?null:nonStriker,bowlerName:bowler};
+    });
+  };
+
+  const swap=(i)=>{
+    const b={...i.batsmen};
+    b[i.strikerName]={...b[i.strikerName],onStrike:false};
+    b[i.nonStrikerName]={...b[i.nonStrikerName],onStrike:true};
+    return{...i,batsmen:b,strikerName:i.nonStrikerName,nonStrikerName:i.strikerName};
+  };
+
+  const endInnings=(i)=>{
+    if(i.inningsNum===1){setInn1(JSON.parse(JSON.stringify(i)));setIB(true);return;}
+    const t=i.target;
+    if(i.totalRuns<t-1) setMO({winner:i.bowlingTeam,margin:`${t-1-i.totalRuns} run${t-1-i.totalRuns===1?"":"s"}`});
+    else if(i.totalRuns===t-1) setMO({winner:null});
+    else setMO({winner:i.battingTeam,margin:`${i.maxWkts-i.wickets} wicket${i.maxWkts-i.wickets===1?"":"s"}`});
+  };
+
+  // Snapshot before ending innings/match, so admin can revert
+  const manualEndInnings=()=>{
+    if(!inn)return;
+    if(!confirm(inn.inningsNum===1?"End the 1st innings now?":"End the match now?"))return;
+    setPreEnd({inn:JSON.parse(JSON.stringify(inn)),inn1:inn1?JSON.parse(JSON.stringify(inn1)):null,ib,mo});
+    endInnings(inn);
+  };
+  const revert=()=>{
+    if(!preEnd)return;
+    if(!confirm("Revert and bring the match back to live? This undoes the innings/match end."))return;
+    setInn(preEnd.inn);setInn1(preEnd.inn1);setIB(false);setMO(null);setSaved(false);
+    setPreEnd(null);
+  };
+
+  const undo=()=>{
+    if(!hist.length)return;
+    const prev=hist[hist.length-1];
+    setHist(h=>h.slice(0,-1));
+    setInn(prev);setPW(false);setNNB(false);
+    setFlash(true);setTimeout(()=>setFlash(false),500);
+  };
+
+  const record=(ev)=>{
+    if(!inn)return;
+    setHist(h=>[...h,JSON.parse(JSON.stringify(inn))]);
+    let i=JSON.parse(JSON.stringify(inn));
+    let bw=i.bowlers[i.bowlerName];
+    let st=i.batsmen[i.strikerName];
+    const isL=ev.type!=="WD"&&ev.type!=="NB";
+    let rT=0,rS=0,rB=0,cross=false;
+
+    if(ev.type==="WD"){rT=ev.extraRuns;rB=ev.extraRuns;i.extras.wd+=ev.extraRuns;if((ev.extraRuns-1)>0&&(ev.extraRuns-1)%2===1)cross=true;}
+    else if(ev.type==="NB"){rT=ev.extraRuns+ev.batRuns;rB=rT;rS=ev.batRuns;i.extras.nb+=ev.extraRuns;if(ev.batRuns%2===1)cross=true;}
+    else if(ev.type==="B"||ev.type==="LB"){rT=ev.extraRuns;i.extras[ev.type==="B"?"b":"lb"]+=ev.extraRuns;if(ev.extraRuns%2===1)cross=true;}
+    else if(ev.type==="W"){rT=ev.extraRuns||0;bw.wickets++;i.wickets++;}
+    else{const r=parseInt(ev.type);rT=r;rS=r;rB=r;if(r%2===1)cross=true;}
+
+    i.totalRuns+=rT;bw.runs+=rB;bw.runsThisOver+=rB;
+    if(isL){bw.ballsThisOver++;i.totalBalls++;}
+    if(ev.type!=="WD"){st.runs+=rS;if(isL)st.balls++;if(ev.type==="4")st.fours++;if(ev.type==="6")st.sixes++;}
+    if(ev.type==="W"){st.out=true;st.howOut=ev.dismissal||`b ${i.bowlerName}`;}
+    i.batsmen[i.strikerName]=st;i.bowlers[i.bowlerName]=bw;
+    i.overEvents=[...i.overEvents,ev];
+
+    let overDone=false;
+    if(isL&&bw.ballsThisOver===6){
+      bw.maidens=bw.runsThisOver===0?bw.maidens+1:bw.maidens;
+      bw.overs++;bw.ballsThisOver=0;bw.runsThisOver=0;
+      i.bowlers[i.bowlerName]=bw;
+      i.completedOvers=[...i.completedOvers,i.overEvents];i.overEvents=[];
+      overDone=true;if(!i.single)cross=!cross;
+    }
+    if(i.single)cross=false;  // single batsman always on strike
+    setInn(i);
+    if(ev.type==="W"){
+      if(i.battingOrder.length>=i.maxWkts+1||i.wickets>=i.maxWkts||i.totalBalls>=i.overs*6){endInnings(i);return;}
+      setPW(true);
+      if(overDone)setNNB(true);  // wicket fell on the over's last ball — still need a new bowler too
+      return;
+    }
+    if(cross)setInn(p=>swap(p));
+    if(i.totalBalls>=i.overs*6){endInnings(i);return;}
+    if(i.target!==null&&i.totalRuns>=i.target){setMO({winner:i.battingTeam,margin:`${i.maxWkts-i.wickets} wicket${i.maxWkts-i.wickets===1?"":"s"}`});return;}
+    if(overDone)setNNB(true);
+  };
+
+  const confBatsman=()=>{
+    const nm=nbn.trim();if(!nm)return;
+    setInn(p=>{
+      const b={...p.batsmen};
+      const existing=b[nm];
+      if(existing){
+        // returning retired batsman — keep their score, clear retired flag
+        b[nm]={...existing,onStrike:true,retired:false};
+      }else{
+        b[nm]={...nb(nm),onStrike:true};
+      }
+      const order=p.battingOrder.includes(nm)?p.battingOrder:[...p.battingOrder,nm];
+      return{...p,batsmen:b,battingOrder:order,strikerName:nm};
+    });
+    setNBN("");setPW(false);setPR(false);
+  };
+  const retire=()=>{
+    // mark current striker as retired, prompt for next batsman
+    setHist(h=>[...h,JSON.parse(JSON.stringify(inn))]);
+    setInn(p=>{const b={...p.batsmen};b[p.strikerName]={...b[p.strikerName],retired:true,onStrike:false};return{...p,batsmen:b};});
+    setPR(true);
+  };
+  const confBowler=()=>{
+    const nm=nbwn.trim();if(!nm)return;
+    if(inn&&nm===inn.bowlerName){alert("A bowler cannot bowl two overs in a row. Pick a different bowler.");return;}
+    setInn(p=>{const b={...p.bowlers};if(!b[nm])b[nm]=nw(nm);return{...p,bowlers:b,bowlingOrder:p.bowlingOrder.includes(nm)?p.bowlingOrder:[...p.bowlingOrder,nm],bowlerName:nm};});
+    setNBWN("");setNNB(false);
+  };
+  const start2=({striker,nonStriker,bowler})=>{
+    setHist([]);
+    setInn(p=>({battingTeam:p.bowlingTeam,bowlingTeam:p.battingTeam,inningsNum:2,
+      venue:p.venue,format:p.format,overs:p.overs,maxWkts:p.maxWkts,single:p.single,
+      batsmen:p.single?{[striker]:{...nb(striker),onStrike:true}}:{[striker]:{...nb(striker),onStrike:true},[nonStriker]:nb(nonStriker)},
+      battingOrder:p.single?[striker]:[striker,nonStriker],
+      bowlers:{[bowler]:nw(bowler)},bowlingOrder:[bowler],
+      strikerName:striker,nonStrikerName:p.single?null:nonStriker,bowlerName:bowler,
+      totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],
+      extras:{wd:0,nb:0,b:0,lb:0},target:p.totalRuns+1}));
+    setIB(false);
+  };
+
+  if(!match){
+    if(role!=="admin"){
+      return <Centered emoji="🏏" title="No active match yet" sub="Ask the admin to start a match first. This screen will update automatically once they do." onExit={onExit}/>;
+    }
+    return<Setup onStart={startMatch} role={role} onExit={onExit} onHistory={onHistory}/>;
+  }
+  if(!inn)   return null;
+  if(inn.awaitingOpeners) return<OpenersForm inn={inn} match={match} onSubmit={fillOpeners} role={role} onExit={onExit}/>;
+  if(ib)     return<InningsBreak inn={inn} match={match} onStart={start2} role={role} onRevert={revert} canRevert={!!preEnd} onExit={onExit}/>;
+  if(mo)     return<MatchOver result={mo} inn={inn} inn1={inn1} match={match} role={role} onRevert={revert} canRevert={!!preEnd} onNew={()=>{setMatch(null);setInn(null);setMO(null);setInn1(null);setPreEnd(null);}}/>;
+
+  const SK=inn.batsmen[inn.strikerName];
+  const NS=inn.nonStrikerName?inn.batsmen[inn.nonStrikerName]:null;
+  const BW=inn.bowlers[inn.bowlerName];
+  const bLeft=inn.overs*6-inn.totalBalls;
+  const crr=rr(inn.totalRuns,inn.totalBalls);
+  const req=inn.target?inn.target-inn.totalRuns:null;
+  const rrr=inn.target&&bLeft>0?((req/bLeft)*6).toFixed(2):null;
+
+  return(
+    <div style={{background:"linear-gradient(165deg,#022c1e 0%,#0a2540 24%,#1c1150 52%,#2d0f5c 76%,#0a0414 100%)",minHeight:"100vh"}}>
+
+      {syncErr&&(
+        <div style={{background:"rgba(239,68,68,.15)",borderBottom:"1px solid rgba(239,68,68,.5)",padding:"8px 14px",textAlign:"center"}}>
+          <span style={{color:"#f87171",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>⚠️ Live sync blocked — publish Firebase rules (read/write: true). Scoring still works locally.</span>
+        </div>
+      )}
+
+      {/* Score header */}
+      <div className="score-header">
+        <div className="flex items-center justify-between mb-3">
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".2em"}}>{inn.inningsNum===1?"1st":"2nd"} Innings</span>
+            <span style={{width:4,height:4,borderRadius:"50%",background:"#4338ca",display:"inline-block"}}/>
+            <span style={{fontWeight:600,fontSize:14}}>{inn.battingTeam}</span>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{color:"#4b5563",fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
+            {role==="admin"&&onHistory&&<button onClick={onHistory} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.35)",color:"#a5b4fc",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>📚 History</button>}
+            {role==="admin"&&<PinButton match={match} slotsA={slotsA} slotsB={slotsB} onClearSlots={()=>{
+              setSlotsA([]); setSlotsB([]);
+            }}/>}
+            {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+          <span style={{fontSize:10,background:inn.format==="T20"?"rgba(245,158,11,.18)":"rgba(99,102,241,.18)",color:inn.format==="T20"?"#fbbf24":"#a5b4fc",border:`1px solid ${inn.format==="T20"?"rgba(245,158,11,.35)":"rgba(99,102,241,.35)"}`,borderRadius:6,padding:"2px 8px",fontFamily:"'JetBrains Mono',monospace",fontWeight:600,letterSpacing:".05em"}}>{inn.format==="T20"?"🏟️ T20":`🎾 ${inn.overs} OV`}</span>
+          <span style={{fontSize:10,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace"}}>{inn.venue} · {inn.overs} ov · {inn.maxWkts} wkts</span>
+        </div>
+        {match?.tossSummary&&<div style={{marginBottom:6}}><span style={{fontSize:10,color:"#34d399",fontFamily:"'JetBrains Mono',monospace"}}>🪙 {match.tossSummary}</span></div>}
+        <div className={`flex items-center gap-4 ${flash?"flash":""}`}>
+          <span className="score-big">{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
+          <span style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:16,marginBottom:4}}>({ovStr(inn.totalBalls)} ov)</span>
+        </div>
+        <div style={{display:"flex",gap:16,marginTop:10,flexWrap:"wrap"}}>
+          <span style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>CRR <span style={{color:"#fbbf24",fontWeight:600}}>{crr}</span></span>
+          {inn.target&&<>
+            <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>Target <span style={{color:"#fff",fontWeight:600}}>{inn.target}</span></span>
+            <span style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>Need <span style={{color:"#fff",fontWeight:600}}>{Math.max(req,0)}</span> off <span style={{color:"#fff",fontWeight:600}}>{bLeft}</span>b</span>
+            {rrr&&<span style={{color:parseFloat(rrr)>12?"#f87171":"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>RRR <span style={{fontWeight:600,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span></span>}
+          </>}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="tabs">
+        {[["score","🏏 Live"],["batting","🟡 Batting"],["bowling","🎯 Bowling"]].map(([id,lbl])=>(
+          <button key={id} className={`tab${tab===id?" active":""}`} onClick={()=>setTab(id)}>{lbl}</button>
+        ))}
+      </div>
+
+      <div className="content">
+        {tab==="score"&&<ScoreTab inn={inn} SK={SK} NS={NS} BW={BW} record={record}
+          pw={pw} nbn={nbn} setNBN={setNBN} confBatsman={confBatsman}
+          nnb={nnb} nbwn={nbwn} setNBWN={setNBWN} confBowler={confBowler}
+          pr={pr} onRetire={retire}
+          onEndInnings={manualEndInnings} onRevert={revert} canRevert={!!preEnd} role={role}
+          onUndo={undo} canUndo={hist.length>0}/>}
+        {tab==="batting"&&<BattingTab inn={inn}/>}
+        {tab==="bowling"&&<BowlingTab inn={inn}/>}
+      </div>
+    </div>
+  );
+}
+
+// ── Score Tab ─────────────────────────────────────────────────────────────────
+function ScoreTab({inn,SK,NS,BW,record,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onEndInnings,onRevert,canRevert,role,onUndo,canUndo}){
+  const[wt,setWT]=useState("Bowled");
+  const[showW,setSW]=useState(false);
+  const[em,setEM]=useState(null);
+  const[er,setER]=useState(0);
+  const dis=pw||nnb||pr;
+  const retiredList=(inn.battingOrder||[]).filter(n=>inn.batsmen&&inn.batsmen[n]&&inn.batsmen[n].retired);
+
+  const wlbl=(t)=>{
+    if(t==="Bowled")  return`b ${inn.bowlerName}`;
+    if(t==="Caught")  return`c & b ${inn.bowlerName}`;
+    if(t==="LBW")     return`lbw b ${inn.bowlerName}`;
+    if(t==="Run Out") return"run out";
+    if(t==="Stumped") return`st b ${inn.bowlerName}`;
+    return t;
+  };
+  const doW=()=>{record({type:"W",extraRuns:0,dismissal:wlbl(wt)});setSW(false);};
+  const doEx=()=>{
+    if(em==="WD")record({type:"WD",extraRuns:1+er});
+    else if(em==="NB")record({type:"NB",extraRuns:1,batRuns:er});
+    else record({type:em,extraRuns:er||1});
+    setEM(null);setER(0);
+  };
+
+  return(
+    <div className="space-y-4">
+      {(pw||pr)&&(
+        <div className={pr?"alert-indigo":"alert-red"}>
+          <p style={{color:pr?"#818cf8":"#f87171",fontFamily:"'JetBrains Mono',monospace",fontSize:11,textTransform:"uppercase",letterSpacing:".15em",marginBottom:8}}>{pr?"🔁 Retired — who's in next?":"⚡ Wicket! Who's next?"}</p>
+          <div style={{display:"flex",gap:8}}>
+            <input value={nbn} onChange={e=>setNBN(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confBatsman()} placeholder="Batsman name" autoFocus list="batlist" style={{flex:1}}/>
+            <datalist id="batlist">{retiredList.map(n=><option key={n} value={n}/>)}</datalist>
+            <button className="btn btn-primary" onClick={confBatsman} style={{padding:"10px 16px",whiteSpace:"nowrap"}}>In →</button>
+          </div>
+          {retiredList.length>0&&<div style={{marginTop:8}}>
+            <p style={{fontSize:10,color:"#a78bfa",fontFamily:"'JetBrains Mono',monospace",marginBottom:5}}>Tap a retired batsman to return:</p>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {retiredList.map(n=>(
+                <button key={n} onClick={()=>{setNBN(n);}} style={{padding:"5px 10px",borderRadius:8,border:"1px solid rgba(139,92,246,.4)",background:"rgba(139,92,246,.12)",color:"#c4b5fd",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif"}}>{n} <span style={{color:"#7c6aa8"}}>({inn.batsmen[n].runs})</span></button>
+              ))}
+            </div>
+          </div>}
+        </div>
+      )}
+      {nnb&&!pw&&(
+        <div className="alert-indigo" style={{border:"2px solid #6366f1"}}>
+          <p style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:12,textTransform:"uppercase",letterSpacing:".12em",marginBottom:4,fontWeight:700}}>🎯 Over Complete!</p>
+          <p style={{color:"#818cf8",fontSize:12,marginBottom:10}}>Select the next bowler (a bowler can't bowl two overs in a row):</p>
+          <div style={{display:"flex",gap:8,marginBottom:(inn.bowlingOrder||[]).filter(b=>b!==inn.bowlerName).length>0?10:0}}>
+            <input value={nbwn} onChange={e=>setNBWN(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confBowler()} placeholder="Type bowler name" autoFocus style={{flex:1}}/>
+            <button className="btn btn-primary" onClick={confBowler} style={{padding:"10px 18px",whiteSpace:"nowrap"}}>Bowl →</button>
+          </div>
+          {(inn.bowlingOrder||[]).filter(b=>b!==inn.bowlerName).length>0&&<div>
+            <p style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginBottom:5}}>Or tap a previous bowler:</p>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {(inn.bowlingOrder||[]).filter(b=>b!==inn.bowlerName).map(b=>(
+                <button key={b} onClick={()=>setNBWN(b)} style={{padding:"6px 12px",borderRadius:8,border:nbwn===b?"none":"1px solid rgba(99,102,241,.4)",background:nbwn===b?"linear-gradient(135deg,#6366f1,#8b5cf6)":"rgba(99,102,241,.12)",color:nbwn===b?"#fff":"#a5b4fc",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>{b}</button>
+              ))}
+            </div>
+          </div>}
+          <p style={{fontSize:10,color:"#4338ca",marginTop:8,fontFamily:"'JetBrains Mono',monospace"}}>Last over bowled by: {inn.bowlerName}</p>
+        </div>
+      )}
+
+      {/* Mini cards */}
+      <div className="grid-2">
+        <div className="mini-card">
+          <p className="section-title">🟡 {inn.single?"Batsman":"Batting"}</p>
+          {(inn.single?[{p:SK,a:true}]:[{p:SK,a:true},{p:NS,a:false}]).map(({p,a},i)=>p?(
+            <div key={i} className="flex items-center justify-between" style={{padding:"3px 0"}}>
+              <span style={{fontSize:13,fontWeight:a?700:400,color:a?"#fff":"#9ca3af",display:"flex",alignItems:"center",gap:4,overflow:"hidden"}}>
+                {a&&<span style={{color:"#fbbf24",fontSize:10}}>●</span>}
+                <span className="truncate">{p.name}</span>
+              </span>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0,marginLeft:8}}>{p.runs} ({p.balls})</span>
+            </div>
+          ):null)}
+          {retiredList.length>0&&<p style={{fontSize:9,color:"#7c6aa8",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{retiredList.length} retired</p>}
+        </div>
+        <div className="mini-card">
+          <p className="section-title">🎯 Bowling</p>
+          {BW&&<div className="flex items-center justify-between">
+            <span style={{fontSize:13,fontWeight:700,color:"#fff"}} className="truncate">{BW.name}</span>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0,marginLeft:8}}>{BW.overs}.{BW.ballsThisOver}-{BW.runs}-{BW.wickets}</span>
+          </div>}
+        </div>
+      </div>
+
+      {/* Over ticker */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="section-title" style={{marginBottom:0}}>Over {Math.floor(inn.totalBalls/6)+1}/{inn.overs} · <span style={{color:"#fbbf24"}}>{inn.totalBalls%6} of 6 balls</span>{(inn.overEvents||[]).filter(e=>e.type==="WD"||e.type==="NB").length>0&&<span style={{color:"#fb923c"}}> +{(inn.overEvents||[]).filter(e=>e.type==="WD"||e.type==="NB").length} extra</span>}</p>
+          <button className="btn-undo" onClick={onUndo} disabled={!canUndo}>↩ Undo</button>
+        </div>
+        <div style={{background:"#130f3a",border:"1px solid #1e1b4b",borderRadius:16,padding:"12px 14px",display:"flex",flexWrap:"wrap",gap:8,minHeight:60}}>
+          {(inn.overEvents||[]).length===0
+            ?<span style={{color:"#2d2a6a",fontFamily:"'JetBrains Mono',monospace",fontSize:12,alignSelf:"center"}}>— new over —</span>
+            :(inn.overEvents||[]).map((ev,i)=><div key={i} className={chipClass(ev)}>{chipLbl(ev)}</div>)
+          }
+        </div>
+      </div>
+
+      {/* Buttons */}
+      <div style={{opacity:dis?.4:1,pointerEvents:dis?"none":"auto"}} className="space-y-3">
+        <div className="grid-4">
+          {[0,1,2,3].map(r=><button key={r} className="btn-run" onClick={()=>record({type:String(r)})}>{r}</button>)}
+        </div>
+        <div className="grid-3">
+          <button className="btn-run amber" onClick={()=>record({type:"4"})}>4</button>
+          <button className="btn-run green" onClick={()=>record({type:"6"})}>6</button>
+          <button className="btn-run" onClick={()=>record({type:"5"})}>5</button>
+        </div>
+        <div className="grid-4">
+          <button className="btn btn-danger" onClick={()=>setSW(true)} style={{borderRadius:14,padding:"13px 8px",fontSize:13}}>Wicket</button>
+          <button className="btn btn-outline-amber" onClick={()=>setEM("WD")} style={{borderRadius:14,fontSize:13}}>Wide</button>
+          <button className="btn btn-outline-amber" onClick={()=>setEM("NB")} style={{borderRadius:14,fontSize:13,borderColor:"#ca8a04",color:"#facc15"}}>No Ball</button>
+          <button className="btn btn-outline-gray" onClick={()=>setEM("B")} style={{borderRadius:14,fontSize:13}}>Bye</button>
+        </div>
+        <button className="btn w-full" onClick={onRetire} style={{borderRadius:14,fontSize:13,padding:"12px",background:"transparent",border:"1.5px solid rgba(139,92,246,.5)",color:"#c4b5fd",marginTop:8}}>🔁 Retire {inn.single?"Batsman":"Striker"}</button>
+      </div>
+
+      {/* End Innings / Revert — always clickable, even mid-wicket or mid-bowler-change, so admin/scorer can always end or recover */}
+      <div className="grid-2" style={{marginTop:8}}>
+        <button className="btn w-full" onClick={onEndInnings} style={{borderRadius:14,fontSize:12,padding:"11px",background:"transparent",border:"1.5px solid rgba(239,68,68,.4)",color:"#f87171"}}>⏹ End {inn.inningsNum===1?"Innings":"Match"}</button>
+        {role==="admin"&&<button className="btn w-full" onClick={onRevert} disabled={!canRevert} style={{borderRadius:14,fontSize:12,padding:"11px",background:"transparent",border:`1.5px solid ${canRevert?"rgba(52,211,153,.5)":"rgba(55,65,129,.3)"}`,color:canRevert?"#34d399":"#374151",cursor:canRevert?"pointer":"not-allowed"}}>↩️ Revert to Live</button>}
+      </div>
+
+      {/* Wicket modal */}
+      {showW&&<Modal onClose={()=>setSW(false)} title="🏏 How Out?">
+        <div className="grid-2 mb-4">
+          {["Bowled","Caught","LBW","Run Out","Stumped"].map(w=>(
+            <button key={w} onClick={()=>setWT(w)} style={{padding:"10px 8px",borderRadius:12,border:`1.5px solid ${wt===w?"transparent":"#374151"}`,background:wt===w?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:wt===w?"#fff":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:13,fontFamily:"'Inter',sans-serif",marginBottom:4}}>{w}</button>
+          ))}
+        </div>
+        <button className="btn btn-danger w-full" style={{borderRadius:14}} onClick={doW}>Confirm Wicket</button>
+      </Modal>}
+
+      {/* Extra modal */}
+      {em&&<Modal onClose={()=>setEM(null)} title={em==="WD"?"Wide":em==="NB"?"No Ball":em==="B"?"Byes":"Leg Byes"}>
+        <p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:12}}>{em==="NB"?"Runs off the bat:":"Additional runs:"}</p>
+        <div className="grid-4 mb-4" style={{gridTemplateColumns:"repeat(3,1fr)"}}>
+          {[0,1,2,3,4,6].map(r=>(
+            <button key={r} onClick={()=>setER(r)} style={{padding:"10px",borderRadius:12,border:`1.5px solid ${er===r?"transparent":"#374151"}`,background:er===r?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:er===r?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:14,marginBottom:6}}>{r}</button>
+          ))}
+        </div>
+        <button className="btn btn-primary w-full" style={{borderRadius:14}} onClick={doEx}>Confirm</button>
+      </Modal>}
+    </div>
+  );
+}
+
+function Modal({children,onClose,title}){
+  return(
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 style={{fontWeight:700,fontSize:17}}>{title}</h3>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#6b7280",fontSize:22,cursor:"pointer",lineHeight:1,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:8}}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── PIN Viewer — admin can check both team PINs anytime during the match ──────
+function PinButton({match,slotsA,slotsB,onClearSlots}){
+  const[open,setOpen]=React.useState(false);
+  if(!match||!match.pinA||!match.pinB) return null;
+  const copy=(txt)=>{ if(navigator.clipboard) navigator.clipboard.writeText(txt).catch(()=>{}); };
+  const sA = slotsA||[], sB = slotsB||[];
+  return(<>
+    <button onClick={()=>setOpen(true)} style={{background:"rgba(245,158,11,.12)",border:"1px solid rgba(245,158,11,.35)",color:"#fbbf24",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>🔑 PINs</button>
+    {open&&(
+      <Modal onClose={()=>setOpen(false)} title="🔑 Team Scorer PINs">
+        {[["🏏",match.teamA,match.pinA,"#fbbf24",sA],["⚡",match.teamB,match.pinB,"#34d399",sB]].map(([emoji,team,pin,color,slots])=>(
+          <div key={team} style={{marginBottom:14}}>
+            <p style={{color:color,fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:6}}>{emoji} {team}</p>
+            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
+              <div style={{flex:1,textAlign:"center",letterSpacing:"0.4em",fontSize:24,fontWeight:700,background:"rgba(7,5,15,.8)",border:`1.5px solid ${color}66`,borderRadius:12,padding:"10px",color:color,fontFamily:"'JetBrains Mono',monospace"}}>{pin}</div>
+              <button onClick={()=>copy(pin)} style={{padding:"10px 13px",borderRadius:12,border:`1.5px solid ${color}66`,background:"transparent",color:color,cursor:"pointer",fontSize:16}} title="Copy PIN">📋</button>
+            </div>
+            <p style={{fontSize:10,color:slots.length>=2?"#f87171":"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>{slots.length}/2 scorer slots in use{slots.length>=2?" · full":""}</p>
+          </div>
+        ))}
+        {(sA.length>0||sB.length>0)&&(
+          <button onClick={()=>{ if(confirm("Free up all scorer slots? Both teams' currently-connected scorers will need to re-enter their PIN to continue.")) onClearSlots&&onClearSlots(); }}
+            style={{width:"100%",marginTop:4,padding:"9px",borderRadius:10,border:"1px solid rgba(239,68,68,.4)",background:"rgba(239,68,68,.1)",color:"#f87171",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',sans-serif"}}>
+            🔓 Free All Slots (if a scorer's device is lost)
+          </button>
+        )}
+        <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:10}}>Admin PIN ({ADMIN_PIN}) always works as a master key too.</p>
+      </Modal>
+    )}
+  </>);
+}
+
+// ── Batting Tab ───────────────────────────────────────────────────────────────
+function BattingTab({inn}){
+  return(
+    <div style={{background:"#1e1b4b",border:"1px solid #3730a3",borderRadius:20,overflow:"hidden"}}>
+      <table className="score-table">
+        <thead><tr>{["Batsman","R","B","4s","6s","SR"].map((h,i)=><th key={h} style={i===0?{textAlign:"left"}:{}}>{h}</th>)}</tr></thead>
+        <tbody>
+          {(inn.battingOrder||[]).map(name=>{
+            const b=inn.batsmen[name];
+            const sr=b.balls>0?((b.runs/b.balls)*100).toFixed(1):"—";
+            const bat=name===inn.strikerName||(inn.nonStrikerName&&name===inn.nonStrikerName);
+            return(
+              <tr key={name}>
+                <td style={{fontFamily:"'Inter',sans-serif"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:600}}>
+                    {name===inn.strikerName&&<span style={{color:"#fbbf24",fontSize:10}}>●</span>}{name}
+                  </div>
+                  <div style={{color:b.retired?"#a78bfa":"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{b.out?b.howOut:b.retired?"retired":bat?"not out":"yet to bat"}</div>
+                </td>
+                <td style={{fontWeight:700,color:"#fff"}}>{b.runs}</td>
+                <td style={{color:"#6b7280"}}>{b.balls}</td>
+                <td style={{color:"#fbbf24"}}>{b.fours}</td>
+                <td style={{color:"#34d399"}}>{b.sixes}</td>
+                <td style={{color:"#6b7280"}}>{sr}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div style={{padding:"10px 16px",borderTop:"1px solid #1a1757",fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#4338ca"}}>
+        Extras: <span style={{color:"#fff"}}>{Object.values(inn.extras).reduce((a,b)=>a+b,0)}</span>
+        <span style={{marginLeft:8}}>(wd {inn.extras.wd}  nb {inn.extras.nb}  b {inn.extras.b}  lb {inn.extras.lb})</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Bowling Tab ───────────────────────────────────────────────────────────────
+function BowlingTab({inn}){
+  return(
+    <div style={{background:"#1e1b4b",border:"1px solid #3730a3",borderRadius:20,overflow:"hidden"}}>
+      <table className="score-table">
+        <thead><tr>{["Bowler","O","M","R","W","Econ"].map((h,i)=><th key={h} style={i===0?{textAlign:"left"}:{}}>{h}</th>)}</tr></thead>
+        <tbody>
+          {(inn.bowlingOrder||[]).map(name=>{
+            const b=inn.bowlers[name];
+            const balls=b.overs*6+b.ballsThisOver;
+            const econ=balls>0?((b.runs/balls)*6).toFixed(2):"—";
+            return(
+              <tr key={name}>
+                <td style={{fontFamily:"'Inter',sans-serif",fontWeight:600}}>
+                  {name}{name===inn.bowlerName&&<span style={{color:"#fbbf24",fontSize:10,marginLeft:6}}>●</span>}
+                </td>
+                <td>{b.overs}.{b.ballsThisOver}</td>
+                <td style={{color:"#6b7280"}}>{b.maidens}</td>
+                <td style={{color:"#6b7280"}}>{b.runs}</td>
+                <td style={{color:"#f87171",fontWeight:700}}>{b.wickets}</td>
+                <td style={{color:"#6b7280"}}>{econ}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Openers Form — batting team enters striker/non-striker, bowling team enters bowler ──
+function OpenersForm({inn,match,onSubmit,role,onExit}){
+  const rS=useRef(),rNS=useRef(),rBw=useRef();
+  const single=inn.single;
+  const go=()=>{
+    const[s,ns,bw]=[rS,rNS,rBw].map(r=>r.current?.value?.trim());
+    if(!s){alert(single?"Enter the batsman's name.":"Enter the striker's name.");return;}
+    if(!single&&!ns){alert("Enter the non-striker (or admin can set Single batsman mode at Lakes).");return;}
+    if(!bw){alert("Enter the opening bowler's name.");return;}
+    onSubmit({striker:s,nonStriker:single?null:ns,bowler:bw});
+  };
+  return(
+    <div className="screen">
+      <div style={{width:"100%",maxWidth:460}}>
+        {(onExit||role==="admin")&&<div style={{display:"flex",justifyContent:"flex-end",gap:10,marginBottom:8}}>
+          {role==="admin"&&<PinButton match={match}/>}
+          {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
+        </div>}
+        <div className="text-center mb-6">
+          <div style={{fontSize:44,marginBottom:10}}>🏏</div>
+          <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:11,textTransform:"uppercase",letterSpacing:".25em",marginBottom:8}}>
+            {inn.inningsNum===1?"Match Ready — Set Openers":"2nd Innings — Set Openers"}
+          </p>
+          <h1 style={{fontSize:30,fontFamily:"'Oswald',sans-serif",fontWeight:700}}>{inn.battingTeam} <span style={{color:"#6b7280",fontSize:18}}>vs</span> {inn.bowlingTeam}</h1>
+          {match?.tossSummary&&<p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginTop:6}}>🪙 {match.tossSummary}</p>}
+        </div>
+        <div className="card space-y-4">
+          <div style={{background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.25)",borderRadius:14,padding:"10px 14px",textAlign:"center"}}>
+            <span style={{color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:600}}>🏏 {inn.battingTeam} is batting first</span>
+          </div>
+          <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em"}}>{inn.battingTeam}'s opening {single?"batsman":"pair"}</p>
+          <div><label>🟡 {single?"Batsman":"Striker (on strike)"}</label><input ref={rS} placeholder={single?"Batsman name":"On-strike batsman"}/></div>
+          {!single&&<div><label>⚪ Non-striker</label><input ref={rNS} placeholder="Other batsman"/></div>}
+          <div className="divider"/>
+          <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em"}}>{inn.bowlingTeam}'s opening bowler</p>
+          <div><label>🎯 Opening Bowler</label><input ref={rBw} placeholder={`${inn.bowlingTeam} bowler`}/></div>
+          <button className="btn btn-primary w-full" onClick={go}>▶ Start Scoring</button>
+          <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textAlign:"center"}}>
+            {inn.battingTeam}'s scorer enters their batsmen · {inn.bowlingTeam}'s scorer enters the bowler{role==="admin"?" · or admin can fill both":""}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onExit}){
+  const rS=useRef(),rNS=useRef(),rBw=useRef();
+  const single=inn.single;
+  const go=()=>{
+    const[s,ns,bw]=[rS,rNS,rBw].map(r=>r.current?.value?.trim());
+    if(!s||!bw){alert("Fill all required fields.");return;}
+    if(!single&&!ns){alert("Enter the non-striker.");return;}
+    onStart({striker:s,nonStriker:single?null:ns,bowler:bw});
+  };
+  const fields=single
+    ?[["🟡 Batsman",rS,"Batsman name"],["🎯 Opening Bowler",rBw,"Bowler name"]]
+    :[["🟡 Striker",rS,"On-strike batsman"],["⚪ Non-striker",rNS,"Non-strike batsman"],["🎯 Opening Bowler",rBw,"Bowler name"]];
+  return(
+    <div className="screen">
+      <div style={{width:"100%",maxWidth:460}}>
+        {(onExit||role==="admin")&&<div style={{display:"flex",justifyContent:"flex-end",gap:10,marginBottom:8}}>
+          {role==="admin"&&<PinButton match={match}/>}
+          {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
+        </div>}
+        <div className="text-center mb-6">
+          <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:11,textTransform:"uppercase",letterSpacing:".25em",marginBottom:8}}>Innings Break</p>
+          <h1 style={{fontSize:56,fontFamily:"'Oswald',sans-serif",fontWeight:700}}>{inn.totalRuns}/{inn.wickets}</h1>
+          <p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:13,marginTop:4}}>{inn.battingTeam} · {ovStr(inn.totalBalls)} overs{single?" · single batsman":""}</p>
+        </div>
+        <div className="card space-y-4">
+          <div className="tag-amber">🎯 {inn.bowlingTeam} need {inn.totalRuns+1} to win in {inn.overs} overs</div>
+          <div className="divider"/>
+          {fields.map(([l,r,p])=>(
+            <div key={l}><label>{l}</label><input ref={r} placeholder={p}/></div>
+          ))}
+          <button className="btn btn-primary w-full" onClick={go}>Start 2nd Innings</button>
+          {role==="admin"&&canRevert&&(
+            <button className="btn w-full" onClick={onRevert} style={{borderRadius:14,fontSize:13,padding:"12px",background:"transparent",border:"1.5px solid rgba(52,211,153,.5)",color:"#34d399"}}>↩️ Revert — undo end, back to live 1st innings</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Match Over ────────────────────────────────────────────────────────────────
+function MatchOver({result,inn,inn1,match,role,onRevert,canRevert,onNew}){
+  const[saving,setSaving]=React.useState(false);
+
+  const downloadScorecard=()=>{
+    setSaving(true);
+    setTimeout(()=>{
+      const W=800,pad=32;
+      // Build rows
+      const i1=inn1||{battingTeam:"",bowlingTeam:"",totalRuns:0,wickets:0,totalBalls:0,battingOrder:[],batsmen:{},bowlers:{},bowlingOrder:[],extras:{wd:0,nb:0,b:0,lb:0}};
+      const i2=inn;
+      const allBat1=i1.battingOrder.map(n=>{const b=i1.batsmen[n];const sr=b.balls>0?((b.runs/b.balls)*100).toFixed(1):"0.0";return[n,b.out?b.howOut:b.retired?"retired":"not out",b.runs,b.balls,b.fours,b.sixes,sr];});
+      const allBat2=i2.battingOrder.map(n=>{const b=i2.batsmen[n];const sr=b.balls>0?((b.runs/b.balls)*100).toFixed(1):"0.0";return[n,b.out?b.howOut:b.retired?"retired":"not out",b.runs,b.balls,b.fours,b.sixes,sr];});
+      const allBwl1=i1.bowlingOrder.map(n=>{const b=i1.bowlers[n];const bl=b.overs*6+b.ballsThisOver;return[n,`${b.overs}.${b.ballsThisOver}`,b.maidens,b.runs,b.wickets,bl>0?((b.runs/bl)*6).toFixed(2):"0.00"];});
+      const allBwl2=i2.bowlingOrder.map(n=>{const b=i2.bowlers[n];const bl=b.overs*6+b.ballsThisOver;return[n,`${b.overs}.${b.ballsThisOver}`,b.maidens,b.runs,b.wickets,bl>0?((b.runs/bl)*6).toFixed(2):"0.00"];});
+
+      const rowH=28,headH=44,secH=36,extraH=28,divH=2;
+      const tableW=W-pad*2;
+      const batCols=[tableW*0.3,tableW*0.28,tableW*0.07,tableW*0.07,tableW*0.07,tableW*0.07,tableW*0.07,tableW*0.07];
+      const bwlCols=[tableW*0.35,tableW*0.1,tableW*0.1,tableW*0.1,tableW*0.1,tableW*0.12,tableW*0.13];
+
+      // Calc height
+      const headerH = match?.tossSummary ? 96 : 80;
+      const H=headerH+secH+headH+(allBat1.length*rowH)+extraH+divH+
+               secH+headH+(allBwl1.length*rowH)+40+
+               secH+headH+(allBat2.length*rowH)+extraH+divH+
+               secH+headH+(allBwl2.length*rowH)+60;
+
+      const cv=document.createElement("canvas");
+      cv.width=W*2;cv.height=H*2;
+      const ctx=cv.getContext("2d");
+      ctx.scale(2,2);
+
+      // Background
+      const bg=ctx.createLinearGradient(0,0,W,H);
+      bg.addColorStop(0,"#0f0c29");bg.addColorStop(0.5,"#1a1040");bg.addColorStop(1,"#0d1223");
+      ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+      let y=0;
+
+      // Header banner
+      const hb=ctx.createLinearGradient(0,0,W,headerH);
+      hb.addColorStop(0,"#1e1b4b");hb.addColorStop(1,"#13103a");
+      ctx.fillStyle=hb;ctx.fillRect(0,0,W,headerH);
+      ctx.fillStyle="#818cf8";ctx.font="bold 11px 'JetBrains Mono',monospace";ctx.textAlign="center";
+      ctx.fillText(`LCC · LINDENHURST CRICKET CLUB · ${(inn.format==="T20"?"T20 @ MILLENNIUM PARK":(inn.overs+"-OVER @ LAKES HIGH SCHOOL"))}`,W/2,22);
+      // Result
+      const resultTxt=result.winner?`${result.winner} won${result.margin?" by "+result.margin:""}`:inn1?"Match Tied":"";
+      ctx.fillStyle="#fbbf24";ctx.font="bold 22px 'Oswald',sans-serif";
+      ctx.fillText(resultTxt,W/2,52);
+      // Score line
+      const s1=`${i1.battingTeam}: ${i1.totalRuns}/${i1.wickets} (${ovStr(i1.totalBalls)} ov)`;
+      const s2=`${i2.battingTeam}: ${i2.totalRuns}/${i2.wickets} (${ovStr(i2.totalBalls)} ov)`;
+      ctx.fillStyle="#a5b4fc";ctx.font="12px 'Inter',sans-serif";
+      ctx.fillText(`${s1}   |   ${s2}`,W/2,72);
+      // Toss line (if available)
+      if(match?.tossSummary){
+        ctx.fillStyle="#34d399";ctx.font="11px 'JetBrains Mono',monospace";
+        ctx.fillText(`🪙 ${match.tossSummary}`,W/2,90);
+      }
+      y=headerH;
+
+      const drawSection=(title,color)=>{
+        ctx.fillStyle=color||"#1e1b4b";ctx.fillRect(0,y,W,secH);
+        ctx.fillStyle="#fff";ctx.font="bold 13px 'Oswald',sans-serif";ctx.textAlign="left";
+        ctx.fillText(title,pad,y+secH/2+5);
+        y+=secH;
+      };
+
+      const drawTableHead=(cols,labels,isLeft)=>{
+        ctx.fillStyle="#13103a";ctx.fillRect(0,y,W,headH);
+        ctx.fillStyle="#818cf8";ctx.font="bold 10px 'JetBrains Mono',monospace";
+        let x=pad;
+        labels.forEach((l,i)=>{
+          ctx.textAlign=i===0?"left":"right";
+          ctx.fillText(l,i===0?x:x+cols[i]-4,y+headH/2+4);
+          x+=cols[i];
+        });
+        y+=headH;
+      };
+
+      const drawBatRow=(row,cols,alt)=>{
+        if(alt){ctx.fillStyle="rgba(255,255,255,0.03)";ctx.fillRect(0,y,W,rowH);}
+        let x=pad;
+        row.forEach((cell,i)=>{
+          ctx.fillStyle=i===0?"#fff":i===2?"#fff":i===4?"#fbbf24":i===5?"#34d399":"#9ca3af";
+          ctx.font=i===0?"600 12px 'Inter',sans-serif":i===1?"11px 'Inter',sans-serif":"12px 'JetBrains Mono',monospace";
+          ctx.textAlign=i===0?"left":"right";
+          if(i===1){
+            ctx.fillStyle="#4338ca";ctx.font="10px 'JetBrains Mono',monospace";
+            ctx.fillText(String(cell),x+cols[i]-4,y+rowH/2+4);
+          } else {
+            ctx.fillText(String(cell),i===0?x:x+cols[i]-4,y+rowH/2+4);
+          }
+          x+=cols[i];
+        });
+        ctx.strokeStyle="rgba(99,102,241,0.15)";ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(pad,y+rowH);ctx.lineTo(W-pad,y+rowH);ctx.stroke();
+        y+=rowH;
+      };
+
+      const drawBwlRow=(row,cols,alt)=>{
+        if(alt){ctx.fillStyle="rgba(255,255,255,0.03)";ctx.fillRect(0,y,W,rowH);}
+        let x=pad;
+        row.forEach((cell,i)=>{
+          ctx.fillStyle=i===0?"#fff":i===4?"#f87171":"#9ca3af";
+          ctx.font=i===0?"600 12px 'Inter',sans-serif":"12px 'JetBrains Mono',monospace";
+          ctx.textAlign=i===0?"left":"right";
+          ctx.fillText(String(cell),i===0?x:x+cols[i]-4,y+rowH/2+4);
+          x+=cols[i];
+        });
+        ctx.strokeStyle="rgba(99,102,241,0.15)";ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(pad,y+rowH);ctx.lineTo(W-pad,y+rowH);ctx.stroke();
+        y+=rowH;
+      };
+
+      const drawExtras=(ex)=>{
+        const total=ex.wd+ex.nb+ex.b+ex.lb;
+        ctx.fillStyle="#4338ca";ctx.font="11px 'JetBrains Mono',monospace";ctx.textAlign="left";
+        ctx.fillText(`Extras: ${total}  (wd ${ex.wd}  nb ${ex.nb}  b ${ex.b}  lb ${ex.lb})`,pad,y+extraH/2+4);
+        y+=extraH;
+      };
+
+      const divider=()=>{
+        ctx.fillStyle="#3730a3";ctx.fillRect(0,y,W,divH);y+=divH;
+      };
+
+      // 1st innings batting
+      drawSection(`🏏 1st Innings — ${i1.battingTeam} Batting`,"#1e1b4b");
+      drawTableHead(batCols,["Batsman","Dismissal","R","B","4s","6s","SR"]);
+      allBat1.forEach((r,i)=>drawBatRow(r,batCols,i%2===1));
+      drawExtras(i1.extras);divider();
+
+      // 1st innings bowling
+      drawSection(`🎯 ${i2.battingTeam} Bowling`,"#130f3a");
+      drawTableHead(bwlCols,["Bowler","O","M","R","W","Econ"]);
+      allBwl2.forEach((r,i)=>drawBwlRow(r,bwlCols,i%2===1));
+      y+=20;
+
+      // 2nd innings batting
+      drawSection(`🏏 2nd Innings — ${i2.battingTeam} Batting`,"#1e1b4b");
+      drawTableHead(batCols,["Batsman","Dismissal","R","B","4s","6s","SR"]);
+      allBat2.forEach((r,i)=>drawBatRow(r,batCols,i%2===1));
+      drawExtras(i2.extras);divider();
+
+      // 2nd innings bowling
+      drawSection(`🎯 ${i1.battingTeam} Bowling`,"#130f3a");
+      drawTableHead(bwlCols,["Bowler","O","M","R","W","Econ"]);
+      allBwl1.forEach((r,i)=>drawBwlRow(r,bwlCols,i%2===1));
+      y+=20;
+
+      // Footer
+      ctx.fillStyle="#3730a3";ctx.font="10px 'JetBrains Mono',monospace";ctx.textAlign="center";
+      ctx.fillText("Generated by CricScore · T20 Match Scorer",W/2,y+20);
+
+      // Download
+      const dataUrl=cv.toDataURL("image/png");
+      const fname=`LCC-scorecard-${(i1.battingTeam||"team").replace(/\s+/g,"-")}-vs-${(i2.battingTeam||"team").replace(/\s+/g,"-")}.png`;
+      // iOS Safari/Chrome ignore the download attribute — detect and open in new tab so user can long-press to save
+      const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+      if(isIOS){
+        const w=window.open();
+        if(w){ w.document.write(`<title>${fname}</title><body style="margin:0;background:#07050f;display:flex;flex-direction:column;align-items:center;font-family:sans-serif"><p style="color:#fbbf24;padding:14px;font-size:15px;text-align:center">📥 Press &amp; hold the image below → <b>Save to Photos</b></p><img src="${dataUrl}" style="width:100%;max-width:800px"/></body>`); }
+        else { alert("Please allow popups to save the scorecard, or take a screenshot."); }
+      } else {
+        const a=document.createElement("a");
+        a.download=fname;
+        a.href=dataUrl;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      setSaving(false);
+    },100);
+  };
+
+  return(
+    <div className="screen">
+      <div style={{textAlign:"center",maxWidth:460,width:"100%"}}>
+        <div style={{fontSize:64,marginBottom:20}}>🏆</div>
+        <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:11,textTransform:"uppercase",letterSpacing:".25em",marginBottom:12}}>Match Complete</p>
+        <h1 style={{fontSize:40,fontFamily:"'Oswald',sans-serif",fontWeight:700,marginBottom:8}}>{result.winner?`${result.winner} Win!`:"Match Tied!"}</h1>
+        {result.winner&&<p style={{color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontSize:18,marginBottom:16}}>by {result.margin}</p>}
+
+        {/* Score summary card */}
+        <div className="card" style={{marginBottom:20,textAlign:"left"}}>
+          {inn1&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #3730a3",marginBottom:8}}>
+            <span style={{fontWeight:600,fontSize:14}}>{inn1.battingTeam}</span>
+            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700,color:"#a5b4fc"}}>{inn1.totalRuns}/{inn1.wickets} <span style={{fontSize:13,color:"#6b7280"}}>({ovStr(inn1.totalBalls)} ov)</span></span>
+          </div>}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0"}}>
+            <span style={{fontWeight:600,fontSize:14}}>{inn.battingTeam}</span>
+            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700,color:"#a5b4fc"}}>{inn.totalRuns}/{inn.wickets} <span style={{fontSize:13,color:"#6b7280"}}>({ovStr(inn.totalBalls)} ov)</span></span>
+          </div>
+        </div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <button className="btn btn-primary" style={{padding:"14px 20px",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}} onClick={downloadScorecard} disabled={saving}>
+            {saving?"Generating...":"📥 Download Scorecard (PNG)"}
+          </button>
+          {role==="admin"&&canRevert&&(
+            <button className="btn" onClick={onRevert} style={{padding:"13px 20px",fontSize:14,background:"transparent",border:"1.5px solid rgba(52,211,153,.5)",color:"#34d399",borderRadius:14}}>↩️ Revert — bring match back to live</button>
+          )}
+          <button className="btn btn-ghost" onClick={onNew} style={{padding:"13px 20px",fontSize:14}}>🏏 New Match</button>
+        </div>
+        <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,marginTop:16}}>Full batting & bowling scorecard saved as image</p>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  ROOT — role landing, PIN gates, live viewer, history
+// ════════════════════════════════════════════════════════════════════
+function ViewerLive({onExit}){
+  const[snap,setSnap]=React.useState(undefined);
+  React.useEffect(()=>{
+    if(!FB_OK||!DB){setSnap(null);return;}
+    const ref=DB.ref("live");
+    const cb=ref.on("value",s=>setSnap(s.val()));
+    return ()=>ref.off("value",cb);
+  },[]);
+
+  if(snap===undefined) return <Centered emoji="📡" title="Connecting…" sub="Loading live match" onExit={onExit}/>;
+  if(!snap||!snap.inn) return <Centered emoji="🏏" title="No live match" sub="Nothing is being scored right now. Check back when a game starts." onExit={onExit}/>;
+
+  const inn=snap.inn, inn1=snap.inn1, mo=snap.mo, match=snap.match;
+
+  if(inn.awaitingOpeners){
+    return <Centered emoji="🏏" title={`${inn.battingTeam} vs ${inn.bowlingTeam}`}
+      sub={`Match starting soon — ${inn.battingTeam} is setting their opening batsmen.`} onExit={onExit}/>;
+  }
+
+  if(mo){
+    const i2=inn;
+    return (
+      <div className="result-screen"><div className="result-card" style={{maxWidth:480}}>
+        <div className="text-center" style={{marginBottom:16}}>
+          <div style={{fontSize:54}}>🏆</div>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:36,fontWeight:700,background:"linear-gradient(135deg,#fff,#fbbf24)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{mo.winner?`${mo.winner} Win!`:"Match Tied!"}</h1>
+          {mo.winner&&<p style={{color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontSize:16}}>by {mo.margin}</p>}
+        </div>
+        {inn1&&<ScoreRow team={inn1.battingTeam} runs={inn1.totalRuns} wkts={inn1.wickets} balls={inn1.totalBalls}/>}
+        <ScoreRow team={i2.battingTeam} runs={i2.totalRuns} wkts={i2.wickets} balls={i2.totalBalls}/>
+        <button className="btn btn-ghost w-full" style={{marginTop:16}} onClick={onExit}>← Back</button>
+      </div></div>
+    );
+  }
+
+  const bLeft=inn.overs*6-inn.totalBalls;
+  const crr=rr(inn.totalRuns,inn.totalBalls);
+  const req=inn.target?inn.target-inn.totalRuns:null;
+  const rrr=inn.target&&bLeft>0?((req/bLeft)*6).toFixed(2):null;
+  const SK=inn.batsmen[inn.strikerName];
+  const NS=inn.nonStrikerName?inn.batsmen[inn.nonStrikerName]:null;
+  const BW=inn.bowlers[inn.bowlerName];
+
+  return(
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh"}}>
+      <div className="score-header">
+        <div className="flex items-center justify-between" style={{marginBottom:6}}>
+          <span style={{fontSize:10,background:"rgba(16,185,129,.18)",color:"#34d399",border:"1px solid rgba(16,185,129,.4)",borderRadius:6,padding:"3px 9px",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>● LIVE</span>
+          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+        </div>
+        <div className="flex items-center justify-between" style={{marginBottom:6}}>
+          <div className="flex items-center" style={{gap:8}}>
+            <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".2em"}}>{inn.inningsNum===1?"1st":"2nd"} Inn</span>
+            <span style={{fontWeight:700,fontSize:14}}>{inn.battingTeam}</span>
+          </div>
+          <span style={{color:"#4b5563",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
+        </div>
+        {match?.tossSummary&&<div style={{marginBottom:6}}><span style={{fontSize:10,color:"#34d399",fontFamily:"'JetBrains Mono',monospace"}}>🪙 {match.tossSummary}</span></div>}
+        <div className="flex items-center" style={{gap:10}}>
+          <span className="score-number">{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
+          <span style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:16,marginBottom:4}}>({ovStr(inn.totalBalls)} ov)</span>
+        </div>
+        <div className="flex" style={{gap:16,marginTop:8,flexWrap:"wrap"}}>
+          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280"}}>CRR <span style={{color:"#fbbf24",fontWeight:600}}>{crr}</span></span>
+          {inn.target&&<>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#818cf8"}}>Target <span style={{color:"#fff",fontWeight:600}}>{inn.target}</span></span>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280"}}>Need <span style={{color:"#fff",fontWeight:600}}>{Math.max(req,0)}</span> off <span style={{color:"#fff",fontWeight:600}}>{bLeft}</span></span>
+            {rrr&&<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:parseFloat(rrr)>12?"#f87171":"#6b7280"}}>RRR <span style={{fontWeight:600}}>{rrr}</span></span>}
+          </>}
+        </div>
+      </div>
+      <div className="content" style={{paddingTop:16}}>
+        {inn.inningsNum===2&&inn1&&(
+          <div style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",borderRadius:14,padding:"10px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:12,color:"#a5b4fc",fontFamily:"'Inter',sans-serif"}}><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"#818cf8"}}>1ST INN</span>  {inn1.battingTeam}</span>
+            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:700,color:"#c7d2fe"}}>{inn1.totalRuns}/{inn1.wickets} <span style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>({ovStr(inn1.totalBalls)})</span></span>
+          </div>
+        )}
+        <div className="grid-2" style={{marginBottom:16}}>
+          <div className="mini-card">
+            <p className="section-title">🟡 {inn.single?"Batsman":"Batting"}</p>
+            {(inn.single?[SK]:[SK,NS]).filter(Boolean).map((p,i)=>(
+              <div key={i} className="flex items-center justify-between" style={{padding:"3px 0"}}>
+                <span style={{fontSize:13,fontWeight:p===SK?700:400,color:p===SK?"#fff":"#9ca3af"}}>{p===SK&&<span style={{color:"#fbbf24",fontSize:10,marginRight:4}}>●</span>}{p.name}</span>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280"}}>{p.runs} ({p.balls})</span>
+              </div>
+            ))}
+          </div>
+          <div className="mini-card">
+            <p className="section-title">🎯 Bowling</p>
+            {BW&&<div className="flex items-center justify-between">
+              <span style={{fontSize:13,fontWeight:700}} className="truncate">{BW.name}</span>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280"}}>{BW.overs}.{BW.ballsThisOver}-{BW.runs}-{BW.wickets}</span>
+            </div>}
+          </div>
+        </div>
+        {/* This over */}
+        <p className="section-title">This Over</p>
+        <div style={{background:"#130f3a",border:"1px solid #1e1b4b",borderRadius:16,padding:"12px 14px",display:"flex",flexWrap:"wrap",gap:8,minHeight:60}}>
+          {(!inn.overEvents||inn.overEvents.length===0)
+            ?<span style={{color:"#2d2a6a",fontFamily:"'JetBrains Mono',monospace",fontSize:12,alignSelf:"center"}}>— new over —</span>
+            :inn.overEvents.map((ev,i)=><div key={i} className={chipClass(ev)}>{chipLbl(ev)}</div>)}
+        </div>
+        <p style={{textAlign:"center",color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginTop:16}}>🔄 Updates automatically · {inn.venue}</p>
+      </div>
+    </div>
+  );
+}
+
+function ScoreRow({team,runs,wkts,balls}){
+  return(
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid rgba(99,102,241,.2)"}}>
+      <span style={{fontWeight:700,fontSize:15}}>{team}</span>
+      <span style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:700}}>{runs}<span style={{color:"#f87171"}}>/{wkts}</span> <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280"}}>({ovStr(balls)})</span></span>
+    </div>
+  );
+}
+
+function Centered({emoji,title,sub,onExit,children}){
+  return(
+    <div className="result-screen"><div className="text-center" style={{maxWidth:420}}>
+      <div style={{fontSize:56,marginBottom:14}}>{emoji}</div>
+      <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:30,fontWeight:700,marginBottom:8}}>{title}</h1>
+      {sub&&<p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:13,marginBottom:20,lineHeight:1.5}}>{sub}</p>}
+      {children}
+      {onExit&&<button className="btn btn-ghost" style={{padding:"12px 28px",marginTop:8}} onClick={onExit}>← Back</button>}
+    </div></div>
+  );
+}
+
+function HistoryPage({role,onExit}){
+  const[list,setList]=React.useState(undefined);
+  const[openId,setOpenId]=React.useState(null);
+  React.useEffect(()=>{
+    if(!FB_OK||!DB){setList(null);return;}
+    const ref=DB.ref("history").limitToLast(50);
+    const cb=ref.on("value",s=>{
+      const v=s.val()||{};
+      const arr=Object.entries(v).map(([id,m])=>({id,...m})).sort((a,b)=>b.finishedAt-a.finishedAt);
+      setList(arr);
+    });
+    return ()=>ref.off("value",cb);
+  },[]);
+  const del=(id,e)=>{ e.stopPropagation(); if(confirm("Delete this match permanently? This cannot be undone.")) DB.ref("history/"+id).remove(); };
+
+  if(list===undefined) return <Centered emoji="📚" title="Loading history…" onExit={onExit}/>;
+  if(!list||list.length===0) return <Centered emoji="📭" title="No matches yet" sub="Completed matches will appear here." onExit={onExit}/>;
+
+  const opened=openId?list.find(m=>m.id===openId):null;
+  if(opened) return <MatchDetailView match={opened} role={role} onBack={()=>setOpenId(null)} onDelete={(id)=>{DB.ref("history/"+id).remove();setOpenId(null);}}/>;
+
+  return(
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+      <div style={{maxWidth:480,margin:"0 auto"}}>
+        <div className="flex items-center justify-between" style={{marginBottom:18}}>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700}}>📚 Match History</h1>
+          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+        </div>
+        {list.map(m=>{
+          const d=new Date(m.finishedAt);
+          const r=m.result||{};
+          return(
+            <div key={m.id} className="mini-card" style={{marginBottom:10,cursor:"pointer",transition:"all .15s"}}
+              onClick={()=>setOpenId(m.id)}
+              onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(99,102,241,.5)"}
+              onMouseLeave={e=>e.currentTarget.style.borderColor=""}>
+              <div className="flex items-center justify-between" style={{marginBottom:6}}>
+                <span style={{fontSize:10,background:m.format==="T20"?"rgba(245,158,11,.18)":"rgba(99,102,241,.18)",color:m.format==="T20"?"#fbbf24":"#a5b4fc",borderRadius:6,padding:"2px 8px",fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{m.format==="T20"?"🏟️ T20":`🎾 ${m.overs}ov`}</span>
+                <span style={{fontSize:10,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace"}}>{d.toLocaleDateString()} {d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</span>
+              </div>
+              <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>{r.winner?`🏆 ${r.winner} won${r.margin?" by "+r.margin:""}`:"Match Tied"}</div>
+              {m.inn1&&<div style={{fontSize:12,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn1.battingTeam}: {m.inn1.totalRuns}/{m.inn1.wickets} ({ovStr(m.inn1.totalBalls)})</div>}
+              {m.inn2&&<div style={{fontSize:12,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn2.battingTeam}: {m.inn2.totalRuns}/{m.inn2.wickets} ({ovStr(m.inn2.totalBalls)})</div>}
+              <div className="flex items-center justify-between" style={{marginTop:6}}>
+                <span style={{fontSize:10,color:"#4338ca",fontFamily:"'JetBrains Mono',monospace"}}>{m.venue}</span>
+                <span style={{fontSize:11,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>View scorecard →</span>
+              </div>
+              {role==="admin"&&<button onClick={(e)=>del(m.id,e)} style={{marginTop:8,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",borderRadius:10,padding:"6px 12px",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>🗑️ Delete</button>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Full scorecard for a completed match (from history) ──────────────────────
+function MatchDetailView({match:m,role,onBack,onDelete}){
+  const[tab,setTab]=React.useState("summary");
+  const d=new Date(m.finishedAt);
+  const r=m.result||{};
+  return(
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+      <div style={{maxWidth:520,margin:"0 auto"}}>
+        <div className="flex items-center justify-between" style={{marginBottom:14}}>
+          <button onClick={onBack} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← all matches</button>
+          {role==="admin"&&<button onClick={()=>{if(confirm("Delete this match permanently? This cannot be undone."))onDelete(m.id);}} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",borderRadius:10,padding:"6px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>🗑️ Delete Match</button>}
+        </div>
+
+        {/* Result header */}
+        <div className="card" style={{textAlign:"center",marginBottom:16}}>
+          <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".2em",marginBottom:8}}>
+            {d.toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"})} · {m.venue}
+          </p>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,marginBottom:6}}>
+            {r.winner?`🏆 ${r.winner} won`:"Match Tied"}
+          </h1>
+          {r.winner&&r.margin&&<p style={{color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>by {r.margin}</p>}
+          <div className="divider" style={{margin:"14px 0"}}/>
+          {m.inn1&&<div className="score-summary-row"><span style={{fontWeight:600,fontSize:14}}>{m.inn1.battingTeam}</span><span style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:"#a5b4fc"}}>{m.inn1.totalRuns}/{m.inn1.wickets} <span style={{fontSize:12,color:"#6b7280"}}>({ovStr(m.inn1.totalBalls)})</span></span></div>}
+          {m.inn2&&<div className="score-summary-row"><span style={{fontWeight:600,fontSize:14}}>{m.inn2.battingTeam}</span><span style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:"#a5b4fc"}}>{m.inn2.totalRuns}/{m.inn2.wickets} <span style={{fontSize:12,color:"#6b7280"}}>({ovStr(m.inn2.totalBalls)})</span></span></div>}
+        </div>
+
+        {/* Innings tabs */}
+        <div className="tabs" style={{margin:"0 0 16px"}}>
+          {[["summary","Summary"],m.inn1?["inn1",`${m.inn1.battingTeam} Inn`]:null,m.inn2?["inn2",`${m.inn2.battingTeam} Inn`]:null].filter(Boolean).map(([id,lbl])=>(
+            <button key={id} className={`tab${tab===id?" active":""}`} onClick={()=>setTab(id)}>{lbl}</button>
+          ))}
+        </div>
+
+        {tab==="summary"&&(
+          <div className="mini-card">
+            <p className="section-title">Match Info</p>
+            <div style={{fontSize:13,color:"#d1d5db",lineHeight:1.8}}>
+              <div>📍 {m.venue}</div>
+              <div>🏏 {m.format==="T20"?`T20 · 20 overs · ${m.maxWkts||10} wickets`:`${m.overs} overs · ${m.maxWkts} wickets`}</div>
+              {m.tossSummary&&<div>🪙 {m.tossSummary}</div>}
+              <div>📅 {d.toLocaleString()}</div>
+              {r.winner?<div>🏆 {r.winner} won by {r.margin}</div>:<div>🤝 Match tied</div>}
+            </div>
+          </div>
+        )}
+        {tab==="inn1"&&m.inn1&&<><BattingTab inn={m.inn1}/><div style={{marginTop:14}}/><BowlingTab inn={m.inn1}/></>}
+        {tab==="inn2"&&m.inn2&&<><BattingTab inn={m.inn2}/><div style={{marginTop:14}}/><BowlingTab inn={m.inn2}/></>}
+      </div>
+    </div>
+  );
+}
+
+function PinGate({title,pin,altPin,verify,hint,onOk,onCancel}){
+  const[val,setVal]=React.useState("");
+  const[err,setErr]=React.useState(false);
+  const[errMsg,setErrMsg]=React.useState("");
+  const submit=()=>{
+    if(verify){
+      const r=verify(val);
+      if(r.ok){onOk();}else{setErr(true);setErrMsg(r.msg||"❌ Wrong PIN");setVal("");}
+    } else {
+      if(val===pin||(altPin&&val===altPin)){onOk();}else{setErr(true);setErrMsg("❌ Wrong PIN, try again");setVal("");}
+    }
+  };
+  return(
+    <div className="result-screen"><div className="result-card" style={{maxWidth:360,textAlign:"center"}}>
+      <div style={{fontSize:44,marginBottom:10}}>🔒</div>
+      <h2 style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:700,marginBottom:4}}>{title}</h2>
+      <p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:hint?6:18}}>Enter PIN to continue</p>
+      {hint&&<p style={{color:"#34d399",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:16}}>● {hint}</p>}
+      <input type="password" inputMode="numeric" value={val} autoFocus
+        onChange={e=>{setVal(e.target.value);setErr(false);}}
+        onKeyDown={e=>e.key==="Enter"&&submit()}
+        placeholder="••••"
+        style={{width:"100%",textAlign:"center",letterSpacing:"0.5em",fontSize:22,background:"rgba(7,5,15,.8)",border:`1.5px solid ${err?"#ef4444":"rgba(99,102,241,.4)"}`,borderRadius:14,padding:"12px",color:"#fff",fontFamily:"'JetBrains Mono',monospace",outline:"none",marginBottom:12}}/>
+      {err&&<p style={{color:"#f87171",fontSize:12,marginBottom:12,fontFamily:"'Inter',sans-serif",lineHeight:1.4}}>{errMsg}</p>}
+      <div className="grid-2">
+        <button className="btn btn-ghost w-full" onClick={onCancel}>Cancel</button>
+        <button className="btn btn-primary w-full" onClick={submit}>Enter</button>
+      </div>
+    </div></div>
+  );
+}
+
+function CricketScene(){
+  const outcomes=React.useMemo(()=>[
+    {label:"SIX!",color:"#34d399",type:"six"},
+    {label:"FOUR!",color:"#fbbf24",type:"four"},
+    {label:"OUT!",color:"#f87171",type:"bowled"},
+    {label:"SIX!",color:"#34d399",type:"six"},
+  ],[]);
+  const[idx,setIdx]=React.useState(0);
+  const[k,setK]=React.useState(0);
+  React.useEffect(()=>{
+    const t=setInterval(()=>{ setIdx(i=>(i+1)%outcomes.length); setK(x=>x+1); },4000);
+    return ()=>clearInterval(t);
+  },[outcomes.length]);
+  const o=outcomes[idx];
+  const isBowled=o.type==="bowled";
+  const isSix=o.type==="six";
+  const swingAnim = isBowled ? "none" : isSix ? "swing6 4s ease-in-out" : "swing4 4s ease-in-out";
+  const ballAnim = isBowled ? "ballStumps" : isSix ? "ballHit6" : "ballHit4";
+  const S=(c)=>({stroke:c,strokeWidth:5,strokeLinecap:"round",fill:"none"});
+
+  // viewBox is 320x170: a dedicated top band (y 0-40) for the result word,
+  // and the pitch/figures live entirely below that (y 45-150) — no shared space, no overlap risk.
+  return(
+    <div style={{position:"relative",width:"100%",aspectRatio:"320/170",maxHeight:150,margin:"0 auto 2px"}}>
+      <svg viewBox="0 0 320 170" preserveAspectRatio="xMidYMid meet" style={{width:"100%",height:"100%",display:"block"}}>
+        {/* Result word — its own clear band at the very top, nothing else ever renders here */}
+        <text key={"r"+k} x="160" y="28" textAnchor="middle"
+          fontFamily="'Oswald',sans-serif" fontSize="28" fontWeight="700" letterSpacing="2"
+          fill={o.color} opacity="0.95" style={{animation:"resultPop 4s ease both"}}>{o.label}</text>
+
+        {/* Pitch + figures band, starts well below the text band */}
+        <line x1="14" y1="148" x2="306" y2="148" stroke="rgba(16,185,129,.55)" strokeWidth="3"/>
+        {/* Bowler */}
+        <g transform="translate(56,76)">
+          <circle cx="0" cy="0" r="11" {...S("#a5b4fc")}/>
+          <line x1="0" y1="11" x2="0" y2="49" {...S("#a5b4fc")}/>
+          <line x1="0" y1="49" x2="-12" y2="65" {...S("#a5b4fc")}/>
+          <line x1="0" y1="49" x2="12" y2="65" {...S("#a5b4fc")}/>
+          <g key={"a"+k} style={{transformOrigin:"0px 19px",animation:"bowlArm 4s ease-in-out"}}>
+            <line x1="0" y1="19" x2="19" y2="9" {...S("#a5b4fc")}/>
+          </g>
+        </g>
+        {/* Batsman */}
+        <g transform="translate(264,76)">
+          <circle cx="0" cy="0" r="11" {...S("#fbbf24")}/>
+          <line x1="0" y1="11" x2="0" y2="49" {...S("#fbbf24")}/>
+          <line x1="0" y1="49" x2="-12" y2="65" {...S("#fbbf24")}/>
+          <line x1="0" y1="49" x2="12" y2="65" {...S("#fbbf24")}/>
+          <g key={"b"+k} style={{transformOrigin:"0px 19px",animation:swingAnim}}>
+            <line x1="0" y1="19" x2="-7" y2="31" {...S("#fbbf24")}/>
+            <line x1="-7" y1="31" x2="-7" y2="62" stroke="#e8c39a" strokeWidth="7" strokeLinecap="round"/>
+          </g>
+        </g>
+        {/* Stumps */}
+        <g transform="translate(286,117)">
+          {[0,5,10].map(dx=>(
+            <line key={dx} x1={dx} y1="0" x2={dx} y2="24" stroke={isBowled?"#f87171":"rgba(226,232,240,.55)"} strokeWidth="3"
+              style={isBowled?{transformOrigin:`${dx}px 24px`,animation:"stumpFall 4s ease-in-out"}:{}}/>
+          ))}
+        </g>
+        {/* Ball */}
+        <g key={"ball"+k} style={{animation:`${ballAnim} 4s ease-in-out`}}>
+          <circle cx="0" cy="0" r="6" fill="#ef4444" stroke="#fca5a5" strokeWidth="2"/>
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function Landing({onPick}){
+  const tile=(emoji,title,sub,color,glow,onClick,idx)=>(
+    <button onClick={onClick} style={{
+      aspectRatio:"1/1",borderRadius:22,cursor:"pointer",
+      display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"space-between",
+      padding:"18px 16px",position:"relative",overflow:"hidden",
+      background:"rgba(20,17,55,.72)",border:`1.5px solid ${color}`,transition:"all .2s",
+      color:"#fff",fontFamily:"'Inter',sans-serif",backdropFilter:"blur(10px)",
+      animation:`slideInUp .5s ease ${0.12*idx+0.25}s both`,
+      boxShadow:`0 6px 28px ${glow}`,textAlign:"left"
+    }}
+    onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-4px) scale(1.03)";e.currentTarget.style.boxShadow=`0 12px 36px ${glow}`;}}
+    onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=`0 6px 28px ${glow}`;}}>
+      <span style={{fontSize:34,filter:"drop-shadow(0 2px 6px rgba(0,0,0,.5))"}}>{emoji}</span>
+      <span>
+        <span style={{display:"block",fontWeight:700,fontSize:16,marginBottom:3,lineHeight:1.1}}>{title}</span>
+        <span style={{display:"block",fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.3}}>{sub}</span>
+      </span>
+    </button>
+  );
+  return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 20px 28px",position:"relative",overflow:"hidden",
+      background:"linear-gradient(150deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#1c1150,#0a2540,#022c1e)",backgroundSize:"400% 400%",animation:"bgShift 22s ease infinite"}}>
+      <div style={{width:"100%",maxWidth:400,position:"relative",zIndex:1,paddingTop:"max(8px, env(safe-area-inset-top))"}}>
+        {/* LCC title block — sits up top, tight spacing */}
+        <div className="text-center" style={{marginBottom:4}}>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:58,fontWeight:700,letterSpacing:"-2px",lineHeight:1,background:"linear-gradient(135deg,#fff,#c7d2fe 35%,#fbbf24 75%,#f59e0b)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"shimmer 4s linear infinite,glowText 3s ease-in-out infinite",marginBottom:2}}>LCC</h1>
+          <p style={{color:"rgba(167,180,248,.7)",fontSize:14,fontWeight:500,animation:"slideInUp .5s ease .1s both"}}>Lindenhurst Cricket Club</p>
+        </div>
+
+        {/* Cricket scene — sits below the title, tightly spaced, no wasted gap */}
+        <CricketScene/>
+
+        {/* 2x2 grid */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:-4}}>
+          {tile("👁️","Watch Live","Live scoreboard","rgba(16,185,129,.4)","rgba(16,185,129,.15)",()=>onPick("viewer"),0)}
+          {tile("🏏","Score","Team scorers · PIN","rgba(245,158,11,.4)","rgba(245,158,11,.15)",()=>onPick("scorer"),1)}
+          {tile("📚","History","Past LCC matches","rgba(99,102,241,.4)","rgba(99,102,241,.15)",()=>onPick("history"),2)}
+          {tile("👑","Admin","Manage · PIN","rgba(239,68,68,.4)","rgba(239,68,68,.15)",()=>onPick("admin"),3)}
+        </div>
+
+        <p style={{textAlign:"center",marginTop:22,marginBottom:4,color:"rgba(129,140,248,.4)",fontSize:11,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".05em"}}>Created by Rajesh</p>
+      </div>
+    </div>
+  );
+}
+
+function ScorerGate({onOk,onCancel}){
+  const[data,setData]=React.useState(undefined); // undefined=loading, null=no match, obj=match info
+  const[slotMsg,setSlotMsg]=React.useState(null); // transient message when a slot claim fails
+  React.useEffect(()=>{
+    if(!FB_OK||!DB){setData(null);return;}
+    const ref=DB.ref("live");
+    const cb=ref.on("value",s=>{
+      const v=s.val();
+      if(!v||!v.inn||!v.pinA||!v.pinB){setData(null);return;}
+      setData({pinA:v.pinA,pinB:v.pinB,teamA:v.teamA,teamB:v.teamB,battingTeam:v.battingTeam,
+        awaitingOpeners:!!v.inn.awaitingOpeners,ib:!!v.ib,mo:!!v.mo,
+        slotsA:Array.isArray(v.slotsA)?v.slotsA:[],slotsB:Array.isArray(v.slotsB)?v.slotsB:[]});
+    });
+    return ()=>ref.off("value",cb);
+  },[]);
+
+  if(data===undefined) return <Centered emoji="🔑" title="Checking match…" sub="Loading scorer access"/>;
+  if(data===null) return <Centered emoji="🏏" title="No active match yet" sub="Waiting for admin to start a match… this screen will update automatically once they do." onExit={onCancel}/>;
+  if(data.mo) return <Centered emoji="🏆" title="Match has ended" sub="Ask the admin to start a new match." onExit={onCancel}/>;
+
+  // Try to claim (or confirm an existing claim on) one of a team's 2 scorer slots for this device.
+  // Returns true if this device now has (or already had) a slot; false if both slots are taken by others.
+  const claimSlot=(teamKey, slotsField)=>{
+    const slots = data[slotsField];
+    if(slots.includes(DEVICE_ID)) return true; // already has a slot — always allowed back in
+    if(slots.length < 2){
+      const updated = [...slots, DEVICE_ID];
+      DB.ref(`live/${slotsField}`).set(updated).catch(e=>console.error("slot claim failed",e));
+      return true;
+    }
+    return false; // both slots full, and this device isn't one of them
+  };
+
+  const verify=(entered)=>{
+    if(entered===ADMIN_PIN) return {ok:true};  // admin master key — not subject to the 2-slot limit
+    const isTeamA=entered===data.pinA, isTeamB=entered===data.pinB;
+    if(!isTeamA&&!isTeamB) return {ok:false,msg:"❌ Wrong PIN, try again"};
+    const myTeam=isTeamA?data.teamA:data.teamB;
+
+    // Enforce max 2 scorers per team (tracked by device, so the same phone can always rejoin)
+    const slotOk = isTeamA ? claimSlot(myTeam,"slotsA") : claimSlot(myTeam,"slotsB");
+    if(!slotOk) return {ok:false,msg:`🚫 Already 2 scorers active for ${myTeam}. Ask one of them to hand off, or have admin reset the match.`};
+
+    // During opener setup OR innings break (new team about to bat), both team scorers may enter
+    if(data.awaitingOpeners||data.ib) return {ok:true};
+    // Otherwise only the currently-batting team can use the live scoring buttons
+    if(myTeam===data.battingTeam) return {ok:true};
+    return {ok:false,msg:`🔒 ${myTeam} isn't batting right now. ${data.battingTeam} is batting — wait for your innings.`};
+  };
+
+  return <PinGate title="Team Scorer Access" verify={verify} onOk={onOk} onCancel={onCancel}
+    hint={data.awaitingOpeners?"Setting up openers — both teams can enter":data.ib?"Innings break — new batting team can set up":`${data.battingTeam} is batting now`}/>;
+}
+
+function Root(){
+  const[screen,setScreen]=React.useState("landing"); // landing|viewer|scorer|admin|history
+  const[gate,setGate]=React.useState(null);          // null | "scorer" | "admin"
+  const[isAdmin,setIsAdmin]=React.useState(false);    // persists for this session once admin PIN is entered
+
+  const pick=(r)=>{
+    if(r==="scorer"){setGate("scorer");}
+    else if(r==="admin"){setGate("admin");}
+    else setScreen(r);
+  };
+  const home=()=>{setScreen("landing");setGate(null);};
+
+  if(gate==="scorer") return <ScorerGate onOk={()=>{setGate(null);setScreen("scorer");}} onCancel={home}/>;
+  if(gate==="admin")  return <PinGate title="Admin Access"  pin={ADMIN_PIN}  onOk={()=>{setGate(null);setIsAdmin(true);setScreen("admin");}}  onCancel={home}/>;
+
+  if(screen==="landing") return <Landing onPick={pick}/>;
+  if(screen==="viewer")  return <ViewerLive onExit={home}/>;
+  if(screen==="history") return <HistoryPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
+  if(screen==="scorer")  return <App role="scorer" onExit={home}/>;
+  if(screen==="admin")   return <App role="admin" onExit={home} onHistory={()=>setScreen("history")}/>;
+  return <Landing onPick={pick}/>;
+}
+
+class ErrorBoundary extends React.Component{
+  constructor(p){super(p);this.state={error:null};}
+  static getDerivedStateFromError(error){return{error};}
+  componentDidCatch(error,info){console.error("App crashed:",error,info);}
+  render(){
+    if(this.state.error){
+      return(
+        <div className="screen">
+          <div className="card" style={{maxWidth:420,textAlign:"center"}}>
+            <div style={{fontSize:44,marginBottom:12}}>⚠️</div>
+            <h2 style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700,marginBottom:10}}>Something went wrong</h2>
+            <p style={{color:"#9ca3af",fontSize:12,marginBottom:6,fontFamily:"'JetBrains Mono',monospace"}}>{String(this.state.error.message||this.state.error)}</p>
+            <p style={{color:"#6b7280",fontSize:12,marginBottom:18}}>This is usually caused by stale match data. Tap below to reset and go home — the live match (if any) is unaffected on the server.</p>
+            <button className="btn btn-primary w-full" onClick={()=>{this.setState({error:null});window.location.hash="";window.location.reload();}}>🔄 Reset & Reload</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+ReactDOM.render(<ErrorBoundary><Root/></ErrorBoundary>,document.getElementById("root"));
+</script>
+</body>
+</html>
