@@ -59,6 +59,7 @@
 
 @keyframes pulseGlow{0%,100%{box-shadow:0 0 20px rgba(245,158,11,.4)}50%{box-shadow:0 0 40px rgba(245,158,11,.8)}}
 @keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
+@keyframes slowDrift{0%{background-position:0% center}100%{background-position:-300% center}}
 @keyframes bounceIn{0%{transform:scale(0.3);opacity:0}50%{transform:scale(1.05)}70%{transform:scale(0.9)}100%{transform:scale(1);opacity:1}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 @keyframes drift{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-12px) rotate(4deg)}}
@@ -221,17 +222,19 @@ function chipClass(ev){
   if(ev.type==="WD") return "chip chip-WD";
   if(ev.type==="NB") return "chip chip-NB";
   if(ev.type==="0")  return "chip chip-0";
+  if(ev.type==="DECL") return "chip chip-6"; // reuse the boundary styling — visually distinct, no new CSS needed
   return "chip chip-run";
 }
 function chipLbl(ev){
   if(ev.type==="W")  return"W";
   if(ev.type==="WD") return ev.extraRuns>1?`wd+${ev.extraRuns-1}`:"wd";
   if(ev.type==="NB") return ev.extraRuns>1?`nb+${ev.extraRuns-1}`:"nb";
+  if(ev.type==="DECL") return `D${ev.runs||0}`;
   return ev.type;
 }
 
 // ── Setup (Admin only: teams, venue, toss — NO players) ──────────────────────
-function Setup({onStart,role,onExit,onHistory}){
+function Setup({onStart,role,onExit,onHistory,onPoll}){
   const rA=useRef(),rB=useRef();
   const[venue,setVenue]=useState(null);     // "lakes" | "millennium"
   const[overs,setOvers]=useState(8);
@@ -432,12 +435,18 @@ function Setup({onStart,role,onExit,onHistory}){
         </div>
         <div style={{display:"flex",gap:8,marginBottom:18}}>
           {onHistory&&<button onClick={onHistory} style={{flex:1,background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.35)",color:"#a5b4fc",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}}>📚 Match History</button>}
+          {onPoll&&<button onClick={onPoll} style={{flex:1,background:"rgba(167,139,250,.12)",border:"1px solid rgba(167,139,250,.35)",color:"#c4b5fd",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}}>📋 Roster & Poll</button>}
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:18}}>
           {FB_OK&&DB&&<button onClick={()=>{ if(confirm("Clear any stuck/corrupted live match data? This won't affect saved history.")){ DB.ref("live").remove().then(()=>alert("Live data cleared. You can start a fresh match now.")); } }} style={{flex:1,background:"transparent",border:"1px solid rgba(99,102,241,.25)",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}} title="Use this if scorers see a blank screen">🧹 Reset Live Data</button>}
         </div>
         <div className="text-center mb-6 animate-fade">
           <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:76,height:76,borderRadius:22,background:"linear-gradient(135deg,#f59e0b,#ef4444,#8b5cf6)",fontSize:38,marginBottom:14,boxShadow:"0 8px 32px rgba(245,158,11,.45)",animation:"pulseGlow 3s ease-in-out infinite"}}>🏏</div>
-          <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#818cf8",textTransform:"uppercase",letterSpacing:".3em",marginBottom:4}}>Official Match Scorer</p>
-          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:52,fontWeight:700,letterSpacing:"-2px",background:"linear-gradient(135deg,#fff,#c7d2fe 40%,#fbbf24)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"shimmer 3s linear infinite"}}>LCC</h1>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:52,fontWeight:700,letterSpacing:"-2px"}}>
+            <span style={{background:"linear-gradient(90deg,#FF9933,#ffb366,#FF9933)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>L</span>
+            <span style={{background:"linear-gradient(90deg,#ffffff,#a5b4fc,#ffffff)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
+            <span style={{background:"linear-gradient(90deg,#138808,#3fa340,#138808)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
+          </h1>
           <p style={{color:"rgba(129,140,248,.5)",fontSize:13,marginTop:2,fontWeight:500}}>Lindenhurst Cricket Club</p>
         </div>
         <div className="card space-y-4">
@@ -640,21 +649,27 @@ function Setup({onStart,role,onExit,onHistory}){
 }
 
 // ── App root ─────────────────────────────────────────────────────────────────
-function App({role,onExit,onHistory}){
+function App({role,onExit,onHistory,onPoll}){
   const isScorer=role==="scorer"||role==="admin";
   const[match,setMatch]=useState(null);
   const[tab,setTab]=useState("score");
   const[inn,setInn]=useState(null);
   const[hist,setHist]=useState([]);
-  const[pw,setPW]=useState(false);
+  // pw/nnb/pr are derived from inn.pending (NOT separate local state) so that the "we need a new
+  // batsman / new bowler / retire" prompt is visible to EVERY device sharing this match — including
+  // the second scorer on the same team — since inn.pending travels through the normal Firebase sync
+  // along with the rest of the innings. Before this fix these were local-only React state, so if one
+  // device triggered the new-bowler prompt and a DIFFERENT device (same team's other phone, or admin)
+  // scored the next ball, that second device never saw the prompt and silently kept the old bowler.
+  const pw = inn?.pending==="wicket"||inn?.pending==="wicketAndBowler";
+  const nnb = inn?.pending==="newBowler"||inn?.pending==="wicketAndBowler";
+  const pr = inn?.pending==="retire";
   const[nbn,setNBN]=useState("");
-  const[nnb,setNNB]=useState(false);
   const[nbwn,setNBWN]=useState("");
   const[ib,setIB]=useState(false);
   const[mo,setMO]=useState(null);
   const[flash,setFlash]=useState(false);
   const[inn1,setInn1]=useState(null);
-  const[pr,setPR]=useState(false);   // pending retire -> choose next batsman
   const[saved,setSaved]=useState(false);
   const[syncErr,setSyncErr]=useState(null);
   const[loaded,setLoaded]=useState(!FB_OK||!DB); // becomes true once we've checked Firebase for an existing match
@@ -784,7 +799,7 @@ function App({role,onExit,onHistory}){
     if(!hist.length)return;
     const prev=hist[hist.length-1];
     setHist(h=>h.slice(0,-1));
-    setInn(prev);setPW(false);setNNB(false);
+    setInn({...prev,pending:null});
     setFlash(true);setTimeout(()=>setFlash(false),500);
   };
 
@@ -800,13 +815,31 @@ function App({role,onExit,onHistory}){
     if(ev.type==="WD"){rT=ev.extraRuns;rB=ev.extraRuns;i.extras.wd+=ev.extraRuns;if((ev.extraRuns-1)>0&&(ev.extraRuns-1)%2===1)cross=true;}
     else if(ev.type==="NB"){rT=ev.extraRuns+ev.batRuns;rB=rT;rS=ev.batRuns;i.extras.nb+=ev.extraRuns;if(ev.batRuns%2===1)cross=true;}
     else if(ev.type==="B"||ev.type==="LB"){rT=ev.extraRuns;i.extras[ev.type==="B"?"b":"lb"]+=ev.extraRuns;if(ev.extraRuns%2===1)cross=true;}
-    else if(ev.type==="W"){rT=ev.extraRuns||0;bw.wickets++;i.wickets++;}
+    else if(ev.type==="W"){
+      // Run-outs are special: runs may have been completed BEFORE the dismissal (e.g. they ran a 1,
+      // then were caught short going for the 2nd). Those completed runs count normally — including
+      // normal odd/even strike-crossing for THOSE runs — same as if it had just been a clean single etc.
+      // Other dismissal types (bowled/caught/lbw/stumped) never have runs off the bat.
+      if(ev.dismissalType==="Run Out"){
+        const r=parseInt(ev.runOutRuns)||0;
+        rT=r;rS=r;rB=r;
+        if(r%2===1)cross=true; // the completed runs alone determine whether the batsmen have crossed ends
+      }else{
+        rT=ev.extraRuns||0;
+      }
+      bw.wickets++;i.wickets++;
+    }
+    else if(ev.type==="DECL"){
+      // Declared runs: admin/scorer manually credits runs when the ball can't be fielded normally
+      // (e.g. stuck against a fence). Goes to the striker's own score like a normal hit, counts as
+      // a legal ball bowled — but strike NEVER rotates, regardless of the run count being odd or even.
+      const r=parseInt(ev.runs)||0; rT=r;rS=r;rB=r;cross=false;
+    }
     else{const r=parseInt(ev.type);rT=r;rS=r;rB=r;if(r%2===1)cross=true;}
 
     i.totalRuns+=rT;bw.runs+=rB;bw.runsThisOver+=rB;
     if(isL){bw.ballsThisOver++;i.totalBalls++;}
     if(ev.type!=="WD"){st.runs+=rS;if(isL)st.balls++;if(ev.type==="4")st.fours++;if(ev.type==="6")st.sixes++;}
-    if(ev.type==="W"){st.out=true;st.howOut=ev.dismissal||`b ${i.bowlerName}`;}
     i.batsmen[i.strikerName]=st;i.bowlers[i.bowlerName]=bw;
     i.overEvents=[...i.overEvents,ev];
 
@@ -819,46 +852,74 @@ function App({role,onExit,onHistory}){
       overDone=true;if(!i.single)cross=!cross;
     }
     if(i.single)cross=false;  // single batsman always on strike
-    setInn(i);
+
     if(ev.type==="W"){
-      if(i.battingOrder.length>=i.maxWkts+1||i.wickets>=i.maxWkts||i.totalBalls>=i.overs*6){endInnings(i);return;}
-      setPW(true);
-      if(overDone)setNNB(true);  // wicket fell on the over's last ball — still need a new bowler too
+      // Apply the cross from completed runs (and a same-ball over-completion, if relevant) BEFORE
+      // figuring out who is physically at which end — for a run-out this matters because the two
+      // batsmen may have already swapped positions mid-run when the dismissal happened.
+      if(cross){ i=swap(i); }
+      if(ev.dismissalType==="Run Out" && ev.runOutEnd){
+        // runOutEnd refers to the END (striker's end / non-striker's end), not a fixed person —
+        // after the cross above, i.strikerName/i.nonStrikerName already reflect who is physically
+        // standing at each end right now, so we just read off whichever end was named.
+        const outName = ev.runOutEnd==="striker" ? i.strikerName : i.nonStrikerName;
+        const outBatsman={...i.batsmen[outName],out:true,howOut:ev.dismissal};
+        i.batsmen={...i.batsmen,[outName]:outBatsman};
+        i.pendingOutEnd = ev.runOutEnd; // remember which end is now vacant, for confBatsman to fill correctly
+      }else{
+        // Every other dismissal type always takes the striker (the only one facing the ball)
+        const outBatsman={...i.batsmen[i.strikerName],out:true,howOut:ev.dismissal||`b ${i.bowlerName}`};
+        i.batsmen={...i.batsmen,[i.strikerName]:outBatsman};
+        i.pendingOutEnd = "striker";
+      }
+      if(i.battingOrder.length>=i.maxWkts+1||i.wickets>=i.maxWkts||i.totalBalls>=i.overs*6){setInn(i);endInnings(i);return;}
+      // pending lives ON inn itself so it syncs to every device sharing this match (both team scorers + admin) —
+      // not local component state, which a SECOND device would never see, silently skipping the prompt.
+      i.pending = overDone ? "wicketAndBowler" : "wicket";
+      setInn(i);
       return;
     }
-    if(cross)setInn(p=>swap(p));
+    if(cross){ i=swap(i); }
+    setInn(i);
     if(i.totalBalls>=i.overs*6){endInnings(i);return;}
     if(i.target!==null&&i.totalRuns>=i.target){setMO({winner:i.battingTeam,margin:`${i.maxWkts-i.wickets} wicket${i.maxWkts-i.wickets===1?"":"s"}`});return;}
-    if(overDone)setNNB(true);
+    if(overDone){ setInn(p=>({...p,pending:"newBowler"})); }
   };
 
   const confBatsman=()=>{
     const nm=nbn.trim();if(!nm)return;
     setInn(p=>{
       const b={...p.batsmen};
+      const enteringAtStrikerEnd = (p.pendingOutEnd||"striker")==="striker";
       const existing=b[nm];
       if(existing){
         // returning retired batsman — keep their score, clear retired flag
-        b[nm]={...existing,onStrike:true,retired:false};
+        b[nm]={...existing,onStrike:enteringAtStrikerEnd,retired:false};
       }else{
-        b[nm]={...nb(nm),onStrike:true};
+        b[nm]={...nb(nm),onStrike:enteringAtStrikerEnd};
       }
       const order=p.battingOrder.includes(nm)?p.battingOrder:[...p.battingOrder,nm];
-      return{...p,batsmen:b,battingOrder:order,strikerName:nm};
+      // If a new bowler was ALSO needed (wicket fell on the over's last ball), keep that prompt
+      // showing after this one resolves — otherwise clear pending entirely.
+      const nextPending = p.pending==="wicketAndBowler" ? "newBowler" : null;
+      // The new batsman fills whichever end was actually vacated — for most dismissals that's always
+      // the striker's end, but for a run-out it could be EITHER end, set by pendingOutEnd above.
+      return enteringAtStrikerEnd
+        ? {...p,batsmen:b,battingOrder:order,strikerName:nm,pending:nextPending,pendingOutEnd:null}
+        : {...p,batsmen:b,battingOrder:order,nonStrikerName:nm,pending:nextPending,pendingOutEnd:null};
     });
-    setNBN("");setPW(false);setPR(false);
+    setNBN("");
   };
   const retire=()=>{
     // mark current striker as retired, prompt for next batsman
     setHist(h=>[...h,JSON.parse(JSON.stringify(inn))]);
-    setInn(p=>{const b={...p.batsmen};b[p.strikerName]={...b[p.strikerName],retired:true,onStrike:false};return{...p,batsmen:b};});
-    setPR(true);
+    setInn(p=>{const b={...p.batsmen};b[p.strikerName]={...b[p.strikerName],retired:true,onStrike:false};return{...p,batsmen:b,pending:"retire"};});
   };
   const confBowler=()=>{
     const nm=nbwn.trim();if(!nm)return;
     if(inn&&nm===inn.bowlerName){alert("A bowler cannot bowl two overs in a row. Pick a different bowler.");return;}
-    setInn(p=>{const b={...p.bowlers};if(!b[nm])b[nm]=nw(nm);return{...p,bowlers:b,bowlingOrder:p.bowlingOrder.includes(nm)?p.bowlingOrder:[...p.bowlingOrder,nm],bowlerName:nm};});
-    setNBWN("");setNNB(false);
+    setInn(p=>{const b={...p.bowlers};if(!b[nm])b[nm]=nw(nm);return{...p,bowlers:b,bowlingOrder:p.bowlingOrder.includes(nm)?p.bowlingOrder:[...p.bowlingOrder,nm],bowlerName:nm,pending:null};});
+    setNBWN("");
   };
   const start2=({striker,nonStriker,bowler})=>{
     setHist([]);
@@ -877,7 +938,7 @@ function App({role,onExit,onHistory}){
     if(role!=="admin"){
       return <Centered emoji="🏏" title="No active match yet" sub="Ask the admin to start a match first. This screen will update automatically once they do." onExit={onExit}/>;
     }
-    return<Setup onStart={startMatch} role={role} onExit={onExit} onHistory={onHistory}/>;
+    return<Setup onStart={startMatch} role={role} onExit={onExit} onHistory={onHistory} onPoll={onPoll}/>;
   }
   if(!inn)   return null;
   if(inn.awaitingOpeners) return<OpenersForm inn={inn} match={match} onSubmit={fillOpeners} role={role} onExit={onExit}/>;
@@ -912,6 +973,20 @@ function App({role,onExit,onHistory}){
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <span style={{color:"#4b5563",fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
             {role==="admin"&&onHistory&&<button onClick={onHistory} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.35)",color:"#a5b4fc",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>📚 History</button>}
+            <ManualFixButton inn={inn} onSave={({striker,nonStriker,bowler})=>setInn(p=>{
+              const b={...p.batsmen};
+              if(!b[striker]) b[striker]={...nb(striker)};
+              if(nonStriker&&!b[nonStriker]) b[nonStriker]={...nb(nonStriker)};
+              b[striker]={...b[striker],onStrike:true};
+              if(nonStriker) b[nonStriker]={...b[nonStriker],onStrike:false};
+              const bwlrs={...p.bowlers};
+              if(!bwlrs[bowler]) bwlrs[bowler]=nw(bowler);
+              const battingOrder=p.battingOrder.includes(striker)?p.battingOrder:[...p.battingOrder,striker];
+              const bo2=(nonStriker&&!battingOrder.includes(nonStriker))?[...battingOrder,nonStriker]:battingOrder;
+              const bowlingOrder=p.bowlingOrder.includes(bowler)?p.bowlingOrder:[...p.bowlingOrder,bowler];
+              return{...p,batsmen:b,bowlers:bwlrs,battingOrder:bo2,bowlingOrder,strikerName:striker,nonStrikerName:nonStriker,bowlerName:bowler};
+            })}/>
+            {role==="admin"&&<EditMatchButton inn={inn} onSave={({overs,maxWkts})=>setInn(p=>({...p,overs,maxWkts}))}/>}
             {role==="admin"&&<PinButton match={match} slotsA={slotsA} slotsB={slotsB} onClearSlots={()=>{
               setSlotsA([]); setSlotsB([]);
             }}/>}
@@ -961,24 +1036,44 @@ function App({role,onExit,onHistory}){
 // ── Score Tab ─────────────────────────────────────────────────────────────────
 function ScoreTab({inn,SK,NS,BW,record,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onEndInnings,onRevert,canRevert,role,onUndo,canUndo}){
   const[wt,setWT]=useState("Bowled");
+  const[fielder,setFielder]=useState("");
+  const[roRuns,setRoRuns]=useState(0);      // runs completed before the run-out happened
+  const[roEnd,setRoEnd]=useState(null);     // "striker" | "nonStriker" — which end the dismissal occurred at
   const[showW,setSW]=useState(false);
   const[em,setEM]=useState(null);
   const[er,setER]=useState(0);
   const dis=pw||nnb||pr;
   const retiredList=(inn.battingOrder||[]).filter(n=>inn.batsmen&&inn.batsmen[n]&&inn.batsmen[n].retired);
 
-  const wlbl=(t)=>{
+  const wlbl=(t,fielderName,runOutRuns,runOutEnd)=>{
     if(t==="Bowled")  return`b ${inn.bowlerName}`;
-    if(t==="Caught")  return`c & b ${inn.bowlerName}`;
+    if(t==="Caught"){
+      const f=(fielderName||"").trim();
+      // If no fielder name was given, or the scorer explicitly typed the bowler's own name,
+      // it's genuinely a caught-and-bowled — otherwise credit the fielder who actually took the catch.
+      if(!f || f.toLowerCase()===inn.bowlerName.toLowerCase()) return `c & b ${inn.bowlerName}`;
+      return `c ${f} b ${inn.bowlerName}`;
+    }
     if(t==="LBW")     return`lbw b ${inn.bowlerName}`;
-    if(t==="Run Out") return"run out";
+    if(t==="Run Out"){
+      const r=parseInt(runOutRuns)||0;
+      const endLbl = runOutEnd==="nonStriker" ? `(non-striker's end)` : `(striker's end)`;
+      return r>0 ? `run out ${endLbl} after ${r} run${r===1?"":"s"}` : `run out ${endLbl}`;
+    }
     if(t==="Stumped") return`st b ${inn.bowlerName}`;
     return t;
   };
-  const doW=()=>{record({type:"W",extraRuns:0,dismissal:wlbl(wt)});setSW(false);};
+  const doW=()=>{
+    if(wt==="Caught"&&!fielder.trim()){alert("Enter who took the catch (or the bowler's own name if it was caught & bowled).");return;}
+    if(wt==="Run Out"&&!inn.single&&!roEnd){alert("Select which end the run-out happened at.");return;}
+    const effectiveEnd = inn.single ? "striker" : roEnd; // single-batsman mode has only one end
+    record({type:"W",extraRuns:0,dismissal:wlbl(wt,fielder,roRuns,effectiveEnd),dismissalType:wt,runOutRuns:roRuns,runOutEnd:effectiveEnd});
+    setSW(false);setFielder("");setRoRuns(0);setRoEnd(null);
+  };
   const doEx=()=>{
     if(em==="WD")record({type:"WD",extraRuns:1+er});
     else if(em==="NB")record({type:"NB",extraRuns:1,batRuns:er});
+    else if(em==="DECL")record({type:"DECL",runs:er||1});
     else record({type:em,extraRuns:er||1});
     setEM(null);setER(0);
   };
@@ -1077,6 +1172,7 @@ function ScoreTab({inn,SK,NS,BW,record,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBW
           <button className="btn btn-outline-amber" onClick={()=>setEM("NB")} style={{borderRadius:14,fontSize:13,borderColor:"#ca8a04",color:"#facc15"}}>No Ball</button>
           <button className="btn btn-outline-gray" onClick={()=>setEM("B")} style={{borderRadius:14,fontSize:13}}>Bye</button>
         </div>
+        <button className="btn w-full" onClick={()=>setEM("DECL")} style={{borderRadius:14,fontSize:12,padding:"10px",background:"transparent",border:"1.5px solid rgba(167,139,250,.4)",color:"#c4b5fd"}} title="Use when the ball can't be fielded normally (e.g. stuck at the fence) — runs go to the striker, strike does not rotate">📍 Declare Runs</button>
         <button className="btn w-full" onClick={onRetire} style={{borderRadius:14,fontSize:13,padding:"12px",background:"transparent",border:"1.5px solid rgba(139,92,246,.5)",color:"#c4b5fd",marginTop:8}}>🔁 Retire {inn.single?"Batsman":"Striker"}</button>
       </div>
 
@@ -1087,18 +1183,44 @@ function ScoreTab({inn,SK,NS,BW,record,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBW
       </div>
 
       {/* Wicket modal */}
-      {showW&&<Modal onClose={()=>setSW(false)} title="🏏 How Out?">
+      {showW&&<Modal onClose={()=>{setSW(false);setFielder("");}} title="🏏 How Out?">
         <div className="grid-2 mb-4">
           {["Bowled","Caught","LBW","Run Out","Stumped"].map(w=>(
             <button key={w} onClick={()=>setWT(w)} style={{padding:"10px 8px",borderRadius:12,border:`1.5px solid ${wt===w?"transparent":"#374151"}`,background:wt===w?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:wt===w?"#fff":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:13,fontFamily:"'Inter',sans-serif",marginBottom:4}}>{w}</button>
           ))}
         </div>
+        {wt==="Caught"&&(
+          <div style={{marginBottom:14}}>
+            <label>Caught by</label>
+            <input value={fielder} onChange={e=>setFielder(e.target.value)} placeholder="Fielder's name (or bowler's, if c&b)" autoFocus/>
+          </div>
+        )}
+        {wt==="Run Out"&&(<>
+          <div style={{marginBottom:14}}>
+            <label>Runs completed before the run-out</label>
+            <div className="grid-4" style={{gridTemplateColumns:"repeat(4,1fr)"}}>
+              {[0,1,2,3].map(r=>(
+                <button key={r} onClick={()=>setRoRuns(r)} style={{padding:"10px",borderRadius:12,border:`1.5px solid ${roRuns===r?"transparent":"#374151"}`,background:roRuns===r?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:roRuns===r?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>{r}</button>
+              ))}
+            </div>
+          </div>
+          {!inn.single&&(
+            <div style={{marginBottom:14}}>
+              <label>Which end was the wicket?</label>
+              <p style={{color:"#6b7280",fontSize:11,marginTop:-4,marginBottom:8}}>This decides where the new batsman comes in — pick the end the fielders actually hit, not who was originally batting there.</p>
+              <div className="grid-2">
+                <button onClick={()=>setRoEnd("striker")} style={{padding:"11px 6px",borderRadius:12,border:`1.5px solid ${roEnd==="striker"?"transparent":"#374151"}`,background:roEnd==="striker"?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:roEnd==="striker"?"#fff":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>🏏 Striker's end</button>
+                <button onClick={()=>setRoEnd("nonStriker")} style={{padding:"11px 6px",borderRadius:12,border:`1.5px solid ${roEnd==="nonStriker"?"transparent":"#374151"}`,background:roEnd==="nonStriker"?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:roEnd==="nonStriker"?"#fff":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>⚪ Non-striker's end</button>
+              </div>
+            </div>
+          )}
+        </>)}
         <button className="btn btn-danger w-full" style={{borderRadius:14}} onClick={doW}>Confirm Wicket</button>
       </Modal>}
 
       {/* Extra modal */}
-      {em&&<Modal onClose={()=>setEM(null)} title={em==="WD"?"Wide":em==="NB"?"No Ball":em==="B"?"Byes":"Leg Byes"}>
-        <p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:12}}>{em==="NB"?"Runs off the bat:":"Additional runs:"}</p>
+      {em&&<Modal onClose={()=>setEM(null)} title={em==="WD"?"Wide":em==="NB"?"No Ball":em==="B"?"Byes":em==="DECL"?"📍 Declare Runs":"Leg Byes"}>
+        <p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:12}}>{em==="NB"?"Runs off the bat:":em==="DECL"?"Runs to credit the striker (strike will NOT rotate):":"Additional runs:"}</p>
         <div className="grid-4 mb-4" style={{gridTemplateColumns:"repeat(3,1fr)"}}>
           {[0,1,2,3,4,6].map(r=>(
             <button key={r} onClick={()=>setER(r)} style={{padding:"10px",borderRadius:12,border:`1.5px solid ${er===r?"transparent":"#374151"}`,background:er===r?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:er===r?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:14,marginBottom:6}}>{r}</button>
@@ -1125,6 +1247,73 @@ function Modal({children,onClose,title}){
 }
 
 // ── PIN Viewer — admin can check both team PINs anytime during the match ──────
+function ManualFixButton({inn,onSave}){
+  const[open,setOpen]=React.useState(false);
+  const[sk,setSk]=React.useState("");
+  const[ns,setNs]=React.useState("");
+  const[bw,setBw]=React.useState("");
+  if(!inn) return null;
+  const openModal=()=>{ setSk(inn.strikerName||""); setNs(inn.nonStrikerName||""); setBw(inn.bowlerName||""); setOpen(true); };
+  const save=()=>{
+    const s=sk.trim(), n=ns.trim(), b=bw.trim();
+    if(!s){alert("Striker name can't be empty.");return;}
+    if(!inn.single&&!n){alert("Non-striker name can't be empty.");return;}
+    if(!b){alert("Bowler name can't be empty.");return;}
+    if(!inn.single&&s.toLowerCase()===n.toLowerCase()){alert("Striker and non-striker can't be the same person.");return;}
+    onSave({striker:s,nonStriker:inn.single?null:n,bowler:b});
+    setOpen(false);
+  };
+  return(<>
+    <button onClick={openModal} style={{background:"rgba(52,211,153,.12)",border:"1px solid rgba(52,211,153,.35)",color:"#6ee7b7",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>🔧 Fix Players</button>
+    {open&&(
+      <Modal onClose={()=>setOpen(false)} title="🔧 Correct Striker / Bowler">
+        <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Use this if a name was entered wrong (e.g. wrong bowler typed in) or strike rotation needs a manual correction. Scores already recorded are not affected — this only changes who's currently at the crease/bowling.</p>
+        <label>{inn.single?"Batsman":"Striker (on strike now)"}</label>
+        <input value={sk} onChange={e=>setSk(e.target.value)} placeholder="Striker's name" style={{marginBottom:12}}/>
+        {!inn.single&&(<>
+          <label>Non-striker</label>
+          <input value={ns} onChange={e=>setNs(e.target.value)} placeholder="Non-striker's name" style={{marginBottom:12}}/>
+        </>)}
+        <label>Current bowler</label>
+        <input value={bw} onChange={e=>setBw(e.target.value)} placeholder="Bowler's name" style={{marginBottom:14}}/>
+        <button className="btn btn-primary w-full" onClick={save}>Save Correction</button>
+      </Modal>
+    )}
+  </>);
+}
+
+function EditMatchButton({inn,onSave}){
+  const[open,setOpen]=React.useState(false);
+  const[ov,setOv]=React.useState(inn?.overs||0);
+  const[wk,setWk]=React.useState(inn?.maxWkts||0);
+  if(!inn) return null;
+  const minOv = Math.ceil((inn.totalBalls||0)/6)||1; // can't set below overs already bowled
+  const minWk = (inn.wickets||0)+1;                  // can't set below wickets already fallen
+  const openModal=()=>{ setOv(inn.overs); setWk(inn.maxWkts); setOpen(true); };
+  const save=()=>{
+    const o=Number(ov), w=Number(wk);
+    if(!o||o<minOv){alert(`Overs can't be less than ${minOv} (overs already bowled).`);return;}
+    if(!w||w<minWk){alert(`Wickets can't be less than ${minWk} (wickets already fallen).`);return;}
+    onSave({overs:o,maxWkts:w});
+    setOpen(false);
+  };
+  return(<>
+    <button onClick={openModal} style={{background:"rgba(139,92,246,.12)",border:"1px solid rgba(139,92,246,.35)",color:"#c4b5fd",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>✏️ Edit Match</button>
+    {open&&(
+      <Modal onClose={()=>setOpen(false)} title="✏️ Edit Match Settings">
+        <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Correct overs or wickets if they were set wrong at the start. Can't go below what's already happened in this innings.</p>
+        <label>Overs per side</label>
+        <input type="number" min={minOv} value={ov} onChange={e=>setOv(e.target.value)} style={{marginBottom:12}}/>
+        <p style={{color:"#4b5563",fontSize:10,marginTop:-8,marginBottom:12}}>{Math.ceil((inn.totalBalls||0)/6)} overs already bowled this innings</p>
+        <label>Wickets per side</label>
+        <input type="number" min={minWk} value={wk} onChange={e=>setWk(e.target.value)} style={{marginBottom:12}}/>
+        <p style={{color:"#4b5563",fontSize:10,marginTop:-8,marginBottom:14}}>{inn.wickets||0} wicket{inn.wickets===1?"":"s"} already fallen</p>
+        <button className="btn btn-primary w-full" onClick={save}>Save Changes</button>
+      </Modal>
+    )}
+  </>);
+}
+
 function PinButton({match,slotsA,slotsB,onClearSlots}){
   const[open,setOpen]=React.useState(false);
   if(!match||!match.pinA||!match.pinB) return null;
@@ -1525,6 +1714,7 @@ function MatchOver({result,inn,inn1,match,role,onRevert,canRevert,onNew}){
 // ════════════════════════════════════════════════════════════════════
 function ViewerLive({onExit}){
   const[snap,setSnap]=React.useState(undefined);
+  const[tab,setTab]=React.useState("live"); // "live" | "scorecard"
   React.useEffect(()=>{
     if(!FB_OK||!DB){setSnap(null);return;}
     const ref=DB.ref("live");
@@ -1595,6 +1785,27 @@ function ViewerLive({onExit}){
         </div>
       </div>
       <div className="content" style={{paddingTop:16}}>
+        {/* Live / Full Scorecard tabs — lets anyone watching check every batsman and bowler, not just the current pair */}
+        <div className="tabs" style={{marginBottom:16}}>
+          <button className={`tab${tab==="live"?" active":""}`} onClick={()=>setTab("live")}>📡 Live</button>
+          <button className={`tab${tab==="scorecard"?" active":""}`} onClick={()=>setTab("scorecard")}>📋 Full Scorecard</button>
+        </div>
+
+        {tab==="scorecard"?(
+          <>
+            {inn.inningsNum===2&&inn1&&(<>
+              <p className="section-title">1st Innings — {inn1.battingTeam}</p>
+              <BattingTab inn={inn1}/>
+              <div style={{marginTop:14}}/>
+              <BowlingTab inn={inn1}/>
+              <div className="divider" style={{margin:"18px 0"}}/>
+            </>)}
+            <p className="section-title">{inn.inningsNum===2?"2nd Innings — ":""}{inn.battingTeam}</p>
+            <BattingTab inn={inn}/>
+            <div style={{marginTop:14}}/>
+            <BowlingTab inn={inn}/>
+          </>
+        ):(<>
         {inn.inningsNum===2&&inn1&&(
           <div style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",borderRadius:14,padding:"10px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span style={{fontSize:12,color:"#a5b4fc",fontFamily:"'Inter',sans-serif"}}><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"#818cf8"}}>1ST INN</span>  {inn1.battingTeam}</span>
@@ -1626,6 +1837,7 @@ function ViewerLive({onExit}){
             ?<span style={{color:"#2d2a6a",fontFamily:"'JetBrains Mono',monospace",fontSize:12,alignSelf:"center"}}>— new over —</span>
             :inn.overEvents.map((ev,i)=><div key={i} className={chipClass(ev)}>{chipLbl(ev)}</div>)}
         </div>
+        </>)}
         <p style={{textAlign:"center",color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginTop:16}}>🔄 Updates automatically · {inn.venue}</p>
       </div>
     </div>
@@ -1806,29 +2018,45 @@ function CricketScene(){
     {label:"BOWLED!",color:"#f87171",type:"bowled"},
   ],[]);
   const[idx,setIdx]=React.useState(0);
-  const[k,setK]=React.useState(0);
   // phase: "approach" (ball traveling toward the bat) -> "contact" (the moment of truth — bat, ball,
   // AND result text all flip to their "hit" pose in this SAME React state update, so they are
-  // mathematically guaranteed to change in the same render/paint, not three separate CSS clocks
-  // hoping to land on the same millisecond) -> "settle" (everything eases back to rest)
+  // mathematically guaranteed to change in the same render/paint) -> "settle" (everything eases back).
   const[phase,setPhase]=React.useState("approach");
-  const APPROACH_MS=1900;   // bowler runs in, ball travels — this is the only part driven by CSS transition
+  const APPROACH_MS=1900;   // bowler runs in, ball travels
   const SETTLE_MS=2400;     // after contact: follow-through, ball flies away, result fades
   const CYCLE_MS=APPROACH_MS+SETTLE_MS+200; // small gap before next outcome starts
 
+  // SINGLE recursive setTimeout chain — NOT a setInterval running alongside separate setTimeouts.
+  // The previous version had setInterval(runCycle, CYCLE_MS) AND a setTimeout both firing around the
+  // same moment as two independent timers; if they landed even a few ms apart, the new outcome's label
+  // would render in the OLD "settle" pose for a flash before phase reset to "approach" caught up —
+  // that flash was the literal cause of "result shows up first, then flickers". This pattern guarantees
+  // the outcome change and the phase reset happen in the exact same callback, same tick, every time.
   React.useEffect(()=>{
-    let t1,t2,t3;
-    function runCycle(){
-      setPhase("approach");
-      t1=setTimeout(()=>{ setPhase("contact"); },APPROACH_MS); // <- the single source of truth for "now"
-      t2=setTimeout(()=>{ setPhase("settle"); },APPROACH_MS+120);
-      t3=setTimeout(()=>{
-        setIdx(i=>(i+1)%outcomes.length); setK(x=>x+1);
-      },CYCLE_MS);
+    let alive=true;
+    let timers=[];
+    let raf=null;
+    function step(){
+      if(!alive)return;
+      // "reset": ball snaps instantly (no transition) back to the bowler's hand, invisible.
+      // Then on the NEXT animation frame we switch to "approach", which has a real transition —
+      // so the browser animates FROM this reset position TO the contact point, guaranteeing every
+      // single outcome (including six and caught, whose settle points are far from the bowler)
+      // visibly starts its ball-travel from the bowler's hand, never from wherever the last ball settled.
+      setPhase("reset");
+      raf=requestAnimationFrame(()=>{
+        raf=requestAnimationFrame(()=>{ if(alive) setPhase("approach"); });
+      });
+      timers.push(setTimeout(()=>{ if(alive) setPhase("contact"); },APPROACH_MS));
+      timers.push(setTimeout(()=>{ if(alive) setPhase("settle"); },APPROACH_MS+120));
+      timers.push(setTimeout(()=>{
+        if(!alive)return;
+        setIdx(i=>(i+1)%outcomes.length); // change outcome...
+        step();                            // ...and immediately chain the next cycle's reset, atomically
+      },CYCLE_MS));
     }
-    runCycle();
-    const loop=setInterval(runCycle,CYCLE_MS);
-    return ()=>{ clearInterval(loop); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    step();
+    return ()=>{ alive=false; timers.forEach(clearTimeout); if(raf)cancelAnimationFrame(raf); };
   },[outcomes.length]);
 
   const o=outcomes[idx];
@@ -1842,12 +2070,9 @@ function CricketScene(){
   // ── Ball position, computed directly from `phase` in JS (not a CSS keyframe %) ──
   // This is what guarantees sync: the ball's rendered position THIS render is derived from
   // the exact same `phase` value that also controls the bat pose and the result text.
-  const ballPos = (()=>{
-    const start={x:70,y:110};
-    const contactPt = isWide?{x:252,y:140}:isCaught?{x:248,y:108}:isBowled?{x:284,y:118}:{x:252,y:118};
-    if(phase==="approach") return start; // CSS-transitioned toward contactPt, see style below
-    if(phase==="contact") return contactPt;
-    // settle: outcome-specific flight path away from contact
+  const BOWLER_HAND={x:70,y:110};
+  const contactPt = isWide?{x:252,y:140}:isCaught?{x:248,y:108}:isBowled?{x:284,y:118}:{x:252,y:118};
+  const settlePt = (()=>{
     if(isSix) return {x:60,y:42};
     if(isFour) return {x:8,y:112};
     if(isBowled) return {x:291,y:130};
@@ -1855,10 +2080,13 @@ function CricketScene(){
     if(isRunOut) return {x:56,y:108};
     return {x:305,y:142}; // wide drifts off
   })();
-  const ballTarget = (()=>{
-    const contactPt = isWide?{x:252,y:140}:isCaught?{x:248,y:108}:isBowled?{x:284,y:118}:{x:252,y:118};
-    return phase==="approach" ? contactPt : ballPos;
-  })();
+  // phase==="reset" is a one-frame state inserted right before "approach" starts: it snaps the ball
+  // back to the bowler's hand with NO transition, so the very next frame (approach) can then transition
+  // smoothly FROM the bowler's hand TO the contact point. Without this explicit reset frame, the browser
+  // would transition from wherever the ball settled in the PREVIOUS cycle (which for six/caught is far
+  // from the bowler) straight toward this cycle's contact point — visually looking like the ball started
+  // its journey from near the batsman/fielder instead of the bowler. This was the actual root cause.
+  const ballTarget = phase==="reset" ? BOWLER_HAND : phase==="approach" ? contactPt : phase==="contact" ? contactPt : settlePt;
 
   const swingRotation = settled ? 0 : contactOrAfter ? (isSix?-160:isFour?-100:0) : 0;
   const bowlArmRotation = phase==="approach" ? -360 : -360;
@@ -1868,14 +2096,19 @@ function CricketScene(){
   return(
     <div style={{position:"relative",width:"100%",aspectRatio:"320/170",maxHeight:150,margin:"0 auto 2px"}}>
       <svg viewBox="0 0 320 170" preserveAspectRatio="xMidYMid meet" style={{width:"100%",height:"100%",display:"block"}}>
-        {/* Result word — appears in the EXACT same render where phase becomes "contact", driven by JS not a CSS % */}
+        {/* Result word — appears in the EXACT same render where phase becomes "contact", driven by JS not a CSS %.
+            IMPORTANT: the transition for going BACK to invisible (start of next cycle) must be fast, not slow —
+            a slow fade-out here was the cause of the old label still being visible (mid-fade) at the same moment
+            the new outcome's word had already swapped in via {o.label}, which looked exactly like duplication. */}
         <text x="160" y="28" textAnchor="middle"
           fontFamily="'Oswald',sans-serif" fontSize="28" fontWeight="700" letterSpacing="2"
           fill={o.color}
           opacity={contactOrAfter ? (settled?0.55:0.95) : 0}
           style={{transform:contactOrAfter?(settled?"scale(0.95)":"scale(1.1)"):"scale(0.5)",
                   transformOrigin:"160px 28px",
-                  transition:contactOrAfter&&!settled?"opacity .15s ease-out, transform .15s cubic-bezier(.34,1.56,.64,1)":"opacity 1.8s ease-out, transform 1.8s ease-out"}}>
+                  transition:phase==="contact"?"opacity .15s ease-out, transform .15s cubic-bezier(.34,1.56,.64,1)"
+                            :phase==="settle"?"opacity .6s ease-out, transform .6s ease-out"
+                            :"opacity 0s, transform 0s"}}>
           {o.label}
         </text>
 
@@ -1894,14 +2127,10 @@ function CricketScene(){
         </g>
 
         {/* Batsman 1 (striker) */}
-        <g transform={isRunOut||isSix?"translate(0,0)":"translate(264,76)"}>
+        <g transform={isRunOut?"translate(0,0)":"translate(264,76)"}>
           <g style={{
-            transform:isRunOut?(settled?"translate(56px,76px)":contactOrAfter?"translate(150px,76px)":"translate(264px,76px)")
-                     :isSix?(settled?"translate(264px,76px) translateY(0px) scale(1)":contactOrAfter?"translate(264px,76px) translateY(-22px) scale(1.12)":"translate(264px,76px)")
-                     :"none",
-            transition:isRunOut?`transform ${contactOrAfter?(settled?'1100ms':'900ms'):'0ms'} ease-in-out`
-                      :isSix?`transform ${contactOrAfter?(settled?'1200ms':'250ms cubic-bezier(.34,1.56,.64,1)'):'0ms'} ease-in-out`
-                      :"none"
+            transform:isRunOut?(settled?"translate(56px,76px)":contactOrAfter?"translate(150px,76px)":"translate(264px,76px)"):"none",
+            transition:isRunOut?`transform ${contactOrAfter?(settled?'1100ms':'900ms'):'0ms'} ease-in-out`:"none"
           }}>
             <circle cx="0" cy="0" r="11" {...S("#fbbf24")}/>
             <line x1="0" y1="11" x2="0" y2="49" {...S("#fbbf24")}/>
@@ -1909,29 +2138,17 @@ function CricketScene(){
               <line x1="0" y1="49" x2="-12" y2="65" {...S("#fbbf24")}/>
               <line x1="0" y1="49" x2="12" y2="65" {...S("#fbbf24")}/>
             </g>
-            {/* Non-celebrating arm/bat: swings in the SAME phase-driven transform that controls everything else */}
-            {!isSix&&(
-              <g style={{transformOrigin:"0px 19px",
-                transform:`rotate(${isHit?swingRotation:0}deg)`,
-                transition:`transform ${phase==="approach"?'250ms':contactOrAfter?(settled?'900ms':'90ms'):'0ms'} ease-in-out`}}>
-                <line x1="0" y1="19" x2="-7" y2="31" {...S("#fbbf24")}/>
-                <line x1="-7" y1="31" x2="-7" y2="62" stroke="#e8c39a" strokeWidth="7" strokeLinecap="round"/>
-              </g>
-            )}
-            {/* Celebration: triggers at the exact same `contactOrAfter` flip as the result text and ball */}
-            {isSix&&(<>
-              <g style={{transformOrigin:"0px 19px",
-                transform:`rotate(${contactOrAfter?-165:0}deg)`,
-                transition:`transform ${contactOrAfter?(settled?'900ms':'180ms cubic-bezier(.34,1.56,.64,1)'):'0ms'} ease-in-out`}}>
-                <line x1="0" y1="19" x2="10" y2="-2" {...S("#fbbf24")}/>
-                <line x1="10" y1="-2" x2="10" y2="-30" stroke="#e8c39a" strokeWidth="7" strokeLinecap="round"/>
-              </g>
-              <g style={{transformOrigin:"0px 19px",
-                transform:contactOrAfter?"translate(2px,-15px) rotate(-28deg)":"translate(0,0) rotate(0deg)",
-                transition:`transform ${contactOrAfter?(settled?'900ms':'180ms cubic-bezier(.34,1.56,.64,1)'):'0ms'} ease-in-out`}}>
-                <line x1="0" y1="19" x2="-14" y2="6" {...S("#fbbf24")}/>
-              </g>
-            </>)}
+            {/* Bat swing — same simple motion for every outcome that involves a swing (six and four alike).
+                A six is distinguished by the BALL flying further/higher afterward, not by a separate
+                celebration animation — keeps the scene simple and avoids any extra moving parts to desync.
+                The contact-transition duration (150ms) is matched EXACTLY to the result text's pop-in duration
+                below, so the bat finishes its swing at the same visual instant the word finishes appearing. */}
+            <g style={{transformOrigin:"0px 19px",
+              transform:`rotate(${isHit?swingRotation:0}deg)`,
+              transition:`transform ${phase==="approach"?'250ms':contactOrAfter?(settled?'900ms':'150ms'):'0ms'} ease-in-out`}}>
+              <line x1="0" y1="19" x2="-7" y2="31" {...S("#fbbf24")}/>
+              <line x1="-7" y1="31" x2="-7" y2="62" stroke="#e8c39a" strokeWidth="7" strokeLinecap="round"/>
+            </g>
           </g>
         </g>
 
@@ -1977,11 +2194,15 @@ function CricketScene(){
           ))}
         </g>
 
-        {/* Ball — position computed directly from `phase` (the single source of truth), not an independent CSS keyframe */}
+        {/* Ball — position computed directly from `phase` (the single source of truth), not an independent CSS keyframe.
+            Contact-transition duration (150ms) matched exactly to the bat swing and result text above, so all
+            three visually land together at the same instant — this is the actual definition of "bat hits ball,
+            then result shows, in sync": all three numbers must be identical, not just close. */}
         <circle cx={ballTarget.x} cy={ballTarget.y} r="6" fill="#ef4444" stroke="#fca5a5" strokeWidth="2"
-          opacity={settled&&(isSix||isFour||isBowled||isCaught||isRunOut||isWide)?0:1}
-          style={{transition:phase==="approach"?`cx ${APPROACH_MS}ms ease-in-out, cy ${APPROACH_MS}ms ease-in-out`
-                  :contactOrAfter?`cx ${settled?'1100ms':'120ms'} ease-in-out, cy ${settled?'1100ms':'120ms'} ease-in-out, opacity ${settled?'600ms':'0ms'} ease-out`
+          opacity={phase==="reset"?0:(settled&&(isSix||isFour||isBowled||isCaught||isRunOut||isWide)?0:1)}
+          style={{transition:phase==="reset"?"none"
+                  :phase==="approach"?`cx ${APPROACH_MS}ms ease-in-out, cy ${APPROACH_MS}ms ease-in-out, opacity 200ms ease-in`
+                  :contactOrAfter?`cx ${settled?'1100ms':'150ms'} ease-in-out, cy ${settled?'1100ms':'150ms'} ease-in-out, opacity ${settled?'600ms':'0ms'} ease-out`
                   :"none"}}/>
       </svg>
     </div>
@@ -2014,7 +2235,11 @@ function Landing({onPick}){
       <div style={{width:"100%",maxWidth:400,position:"relative",zIndex:1,paddingTop:"max(8px, env(safe-area-inset-top))"}}>
         {/* LCC title block — sits up top, tight spacing */}
         <div className="text-center" style={{marginBottom:4}}>
-          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:58,fontWeight:700,letterSpacing:"-2px",lineHeight:1,background:"linear-gradient(135deg,#fff,#c7d2fe 35%,#fbbf24 75%,#f59e0b)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"shimmer 4s linear infinite,glowText 3s ease-in-out infinite",marginBottom:2}}>LCC</h1>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:58,fontWeight:700,letterSpacing:"-2px",lineHeight:1,marginBottom:2,animation:"glowText 3s ease-in-out infinite"}}>
+            <span style={{background:"linear-gradient(90deg,#FF9933,#ffb366,#FF9933)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>L</span>
+            <span style={{background:"linear-gradient(90deg,#ffffff,#a5b4fc,#ffffff)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
+            <span style={{background:"linear-gradient(90deg,#138808,#3fa340,#138808)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
+          </h1>
           <p style={{color:"rgba(167,180,248,.7)",fontSize:14,fontWeight:500,animation:"slideInUp .5s ease .1s both"}}>Lindenhurst Cricket Club</p>
         </div>
 
@@ -2028,6 +2253,22 @@ function Landing({onPick}){
           {tile("📚","History","Past LCC matches","rgba(99,102,241,.4)","rgba(99,102,241,.15)",()=>onPick("history"),2)}
           {tile("👑","Admin","Manage · PIN","rgba(239,68,68,.4)","rgba(239,68,68,.15)",()=>onPick("admin"),3)}
         </div>
+
+        {/* Weekend poll — full width, public, no PIN needed */}
+        <button onClick={()=>onPick("poll")} style={{
+          width:"100%",marginTop:12,padding:"16px 18px",borderRadius:20,cursor:"pointer",
+          display:"flex",alignItems:"center",gap:14,textAlign:"left",
+          background:"rgba(20,17,55,.72)",border:"1.5px solid rgba(167,139,250,.4)",
+          color:"#fff",fontFamily:"'Inter',sans-serif",backdropFilter:"blur(10px)",
+          animation:"slideInUp .5s ease .73s both",boxShadow:"0 6px 28px rgba(167,139,250,.15)"
+        }}>
+          <span style={{fontSize:30}}>📋</span>
+          <span style={{flex:1}}>
+            <span style={{display:"block",fontWeight:700,fontSize:16,marginBottom:2}}>Weekend Poll</span>
+            <span style={{display:"block",fontSize:11,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace"}}>Vote Yes / No / +1 for this week's match</span>
+          </span>
+          <span style={{color:"#818cf8",fontSize:13}}>→</span>
+        </button>
 
         <p style={{textAlign:"center",marginTop:22,marginBottom:4,color:"rgba(129,140,248,.4)",fontSize:11,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".05em"}}>Created by Rajesh Arigela</p>
       </div>
@@ -2089,6 +2330,329 @@ function ScorerGate({onOk,onCancel}){
     hint={data.awaitingOpeners?"Setting up openers — both teams can enter":data.ib?"Innings break — new batting team can set up":`${data.battingTeam} is batting now`}/>;
 }
 
+// ── Weekend Poll: roster, RSVP voting, and captain-led team building ──────────
+function PollPage({role,onExit}){
+  const[tab,setTab]=React.useState("vote"); // "vote" | "roster" | "teams"
+  const[roster,setRoster]=React.useState(undefined);   // {playerId: {name,role,keeper,bat,bowl}}
+  const[poll,setPoll]=React.useState(undefined);        // {venue,date,time,createdAt} | null
+  const[votes,setVotes]=React.useState({});             // {playerId: "yes"|"no"|"plus1"}
+  const[teams,setTeams]=React.useState(null);            // {teamA:[ids],teamB:[ids],captainA,captainB,published}
+
+  React.useEffect(()=>{
+    if(!FB_OK||!DB){setRoster({});setPoll(null);return;}
+    const rRef=DB.ref("roster"), pRef=DB.ref("poll/current"), vRef=DB.ref("poll/votes"), tRef=DB.ref("poll/teams");
+    const cb1=rRef.on("value",s=>setRoster(s.val()||{}));
+    const cb2=pRef.on("value",s=>setPoll(s.val()||null));
+    const cb3=vRef.on("value",s=>setVotes(s.val()||{}));
+    const cb4=tRef.on("value",s=>setTeams(s.val()||null));
+    return ()=>{ rRef.off("value",cb1); pRef.off("value",cb2); vRef.off("value",cb3); tRef.off("value",cb4); };
+  },[]);
+
+  if(roster===undefined||poll===undefined) return <Centered emoji="📋" title="Loading poll…" onExit={onExit}/>;
+
+  return(
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+      <div style={{maxWidth:480,margin:"0 auto"}}>
+        <div className="flex items-center justify-between" style={{marginBottom:16}}>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📋 Weekend Poll</h1>
+          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+        </div>
+        <div className="tabs" style={{marginBottom:18}}>
+          <button className={`tab${tab==="vote"?" active":""}`} onClick={()=>setTab("vote")}>🗳️ Vote</button>
+          <button className={`tab${tab==="teams"?" active":""}`} onClick={()=>setTab("teams")}>🏏 Teams</button>
+          {role==="admin"&&<button className={`tab${tab==="roster"?" active":""}`} onClick={()=>setTab("roster")}>👥 Roster</button>}
+        </div>
+        {tab==="vote"&&<PollVoteTab role={role} roster={roster} poll={poll} votes={votes}/>}
+        {tab==="roster"&&role==="admin"&&<PollRosterTab roster={roster} poll={poll}/>}
+        {tab==="teams"&&<PollTeamsTab role={role} roster={roster} poll={poll} votes={votes} teams={teams}/>}
+      </div>
+    </div>
+  );
+}
+
+// ── Roster management (admin only) ─────────────────────────────────────────
+function PollRosterTab({roster,poll}){
+  const[name,setName]=React.useState("");
+  const[prole,setProle]=React.useState("Batsman"); // Batsman | Bowler | All-rounder
+  const[keeper,setKeeper]=React.useState(false);
+  const[bat,setBat]=React.useState("Right");
+  const[bowl,setBowl]=React.useState("Seam");
+  const[editingId,setEditingId]=React.useState(null);
+
+  const needsBowlStyle = prole==="Bowler"||prole==="All-rounder";
+  const resetForm=()=>{ setName("");setProle("Batsman");setKeeper(false);setBat("Right");setBowl("Seam");setEditingId(null); };
+  const startEdit=(id,p)=>{
+    setEditingId(id); setName(p.name); setProle(p.role); setKeeper(!!p.keeper); setBat(p.bat||"Right"); setBowl(p.bowl||"Seam");
+  };
+  const save=()=>{
+    const nm=name.trim(); if(!nm){alert("Enter a player name.");return;}
+    if(!FB_OK||!DB){alert("Offline — can't save right now.");return;}
+    const id=editingId||("p_"+Math.random().toString(36).slice(2)+Date.now().toString(36));
+    const data={name:nm,role:prole,keeper,bat,bowl:needsBowlStyle?bowl:null};
+    DB.ref("roster/"+id).set(JSON.parse(JSON.stringify(data))).then(resetForm).catch(e=>alert("Save failed: "+e.message));
+  };
+  const del=(id)=>{
+    if(!confirm("Remove this player from the roster?"))return;
+    DB.ref("roster/"+id).remove();
+  };
+
+  const entries=Object.entries(roster||{}).sort((a,b)=>a[1].name.localeCompare(b[1].name));
+
+  return(
+    <div>
+      {poll&&<div style={{background:"rgba(167,139,250,.08)",border:"1px solid rgba(167,139,250,.25)",borderRadius:12,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#c4b5fd",fontFamily:"'JetBrains Mono',monospace"}}>
+        Active poll: {poll.venue} · {poll.date} {poll.time}
+      </div>}
+      <div className="mini-card" style={{marginBottom:16}}>
+        <p className="section-title">{editingId?"✏️ Edit Player":"➕ Add Player"}</p>
+        <label>Name</label>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Player name" style={{marginBottom:12}}/>
+        <label>Role</label>
+        <div className="grid-3" style={{marginBottom:12}}>
+          {["Batsman","Bowler","All-rounder"].map(r=>(
+            <button key={r} onClick={()=>setProle(r)} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${prole===r?"transparent":"#374151"}`,background:prole===r?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:prole===r?"#111":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:11,fontFamily:"'Inter',sans-serif"}}>{r}</button>
+          ))}
+        </div>
+        <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",marginBottom:12,textTransform:"none",letterSpacing:0,fontFamily:"'Inter',sans-serif",fontSize:13,color:"#d1d5db"}}>
+          <input type="checkbox" checked={keeper} onChange={e=>setKeeper(e.target.checked)} style={{width:"auto",margin:0}}/>
+          🧤 Also keeps wicket
+        </label>
+        <label>Batting style</label>
+        <div className="grid-2" style={{marginBottom:12}}>
+          <button onClick={()=>setBat("Left")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bat==="Left"?"transparent":"#374151"}`,background:bat==="Left"?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:bat==="Left"?"#fff":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Left-handed</button>
+          <button onClick={()=>setBat("Right")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bat==="Right"?"transparent":"#374151"}`,background:bat==="Right"?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:bat==="Right"?"#fff":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Right-handed</button>
+        </div>
+        {needsBowlStyle&&(<>
+          <label>Bowling style</label>
+          <div className="grid-2" style={{marginBottom:12}}>
+            <button onClick={()=>setBowl("Spin")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bowl==="Spin"?"transparent":"#374151"}`,background:bowl==="Spin"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:bowl==="Spin"?"#111":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Spin</button>
+            <button onClick={()=>setBowl("Seam")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bowl==="Seam"?"transparent":"#374151"}`,background:bowl==="Seam"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:bowl==="Seam"?"#111":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Seam</button>
+          </div>
+        </>)}
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn btn-primary" style={{flex:1}} onClick={save}>{editingId?"Save Changes":"➕ Add Player"}</button>
+          {editingId&&<button className="btn" onClick={resetForm} style={{background:"transparent",border:"1px solid #374151",color:"#9ca3af"}}>Cancel</button>}
+        </div>
+      </div>
+
+      <p className="section-title">Roster ({entries.length})</p>
+      {entries.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No players added yet.</p>}
+      {entries.map(([id,p])=>(
+        <div key={id} className="mini-card" style={{marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div>
+            <div style={{fontWeight:600,fontSize:14}}>{p.name} {p.keeper&&<span title="Wicketkeeper">🧤</span>}</div>
+            <div style={{fontSize:11,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>
+              {p.role==="Batsman"?"🏏":p.role==="Bowler"?"🎯":"⭐"} {p.role} · {p.bat==="Left"?"LH":"RH"}{p.bowl?` · ${p.bowl}`:""}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>startEdit(id,p)} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.3)",color:"#a5b4fc",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>✏️</button>
+            <button onClick={()=>del(id)} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.3)",color:"#f87171",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>🗑️</button>
+          </div>
+        </div>
+      ))}
+
+      <div className="divider" style={{margin:"20px 0"}}/>
+      <PollCreateForm poll={poll}/>
+    </div>
+  );
+}
+
+// ── Create / update the active poll (venue + date + time picker, no manual typing) ──
+function PollCreateForm({poll}){
+  const[venue,setVenue]=React.useState(poll?.venue||"Lakes High School");
+  const[customVenue,setCustomVenue]=React.useState(poll&&!["Lakes High School","Millennium Park"].includes(poll.venue)?poll.venue:"");
+  const[isCustom,setIsCustom]=React.useState(poll&&!["Lakes High School","Millennium Park"].includes(poll.venue));
+  const[date,setDate]=React.useState(poll?.date||"");
+  const[time,setTime]=React.useState(poll?.time||"10:00");
+
+  const create=()=>{
+    const v=isCustom?customVenue.trim():venue;
+    if(!v){alert("Enter a venue name.");return;}
+    if(!date){alert("Pick a date.");return;}
+    if(!FB_OK||!DB){alert("Offline — can't publish right now.");return;}
+    const data={venue:v,date,time,createdAt:Date.now()};
+    // Starting a new poll clears old votes/teams so this week starts fresh
+    DB.ref("poll").set({current:data}).then(()=>alert("Poll published! Share the Weekend Poll link with the group.")).catch(e=>alert("Failed: "+e.message));
+  };
+  const closePoll=()=>{
+    if(!confirm("Close this week's poll? Votes and team selections will be cleared."))return;
+    DB.ref("poll").remove();
+  };
+
+  return(
+    <div className="mini-card">
+      <p className="section-title">{poll?"📋 Update This Week's Poll":"📋 Create This Week's Poll"}</p>
+      <label>Venue</label>
+      <div className="grid-2" style={{marginBottom:isCustom?8:12}}>
+        <button onClick={()=>{setIsCustom(false);setVenue("Lakes High School")}} style={{padding:"10px 4px",borderRadius:10,border:`1.5px solid ${!isCustom&&venue==="Lakes High School"?"transparent":"#374151"}`,background:!isCustom&&venue==="Lakes High School"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:!isCustom&&venue==="Lakes High School"?"#111":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>🎾 Lakes High School</button>
+        <button onClick={()=>{setIsCustom(false);setVenue("Millennium Park")}} style={{padding:"10px 4px",borderRadius:10,border:`1.5px solid ${!isCustom&&venue==="Millennium Park"?"transparent":"#374151"}`,background:!isCustom&&venue==="Millennium Park"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:!isCustom&&venue==="Millennium Park"?"#111":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>🏟️ Millennium Park</button>
+      </div>
+      <button onClick={()=>setIsCustom(true)} style={{width:"100%",padding:"9px",borderRadius:10,border:`1.5px dashed ${isCustom?"#f59e0b":"#374151"}`,background:isCustom?"rgba(245,158,11,.1)":"transparent",color:isCustom?"#fbbf24":"#6b7280",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif",marginBottom:isCustom?8:12}}>📍✨ Other venue</button>
+      {isCustom&&<input value={customVenue} onChange={e=>setCustomVenue(e.target.value)} placeholder="Ground name" style={{marginBottom:12}}/>}
+      <label>Date</label>
+      <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{marginBottom:12}}/>
+      <label>Time</label>
+      <input type="time" value={time} onChange={e=>setTime(e.target.value)} style={{marginBottom:14}}/>
+      <button className="btn btn-primary w-full" onClick={create}>{poll?"Update Poll":"📋 Publish Poll"}</button>
+      {poll&&<button onClick={closePoll} style={{width:"100%",marginTop:8,padding:"9px",borderRadius:10,border:"1px solid rgba(239,68,68,.4)",background:"rgba(239,68,68,.1)",color:"#f87171",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',sans-serif"}}>Close This Week's Poll</button>}
+    </div>
+  );
+}
+
+// ── Public voting tab — tap your name, pick Yes/No/+1, one vote per device ──
+function PollVoteTab({roster,poll,votes}){
+  const[myVote,setMyVote]=React.useState(null); // playerId this device voted as
+  React.useEffect(()=>{
+    try{
+      const saved=localStorage.getItem("lcc_poll_voted_as");
+      if(saved) setMyVote(saved);
+    }catch(e){}
+  },[]);
+
+  if(!poll) return <Centered emoji="📋" title="No poll open right now" sub="Ask the admin to publish this week's poll."/>;
+
+  const entries=Object.entries(roster||{}).sort((a,b)=>a[1].name.localeCompare(b[1].name));
+  const cast=(playerId,choice)=>{
+    if(!FB_OK||!DB)return;
+    DB.ref("poll/votes/"+playerId).set(choice);
+    try{ localStorage.setItem("lcc_poll_voted_as",playerId); }catch(e){}
+    setMyVote(playerId);
+  };
+
+  const counts={yes:0,no:0,plus1:0};
+  Object.values(votes||{}).forEach(v=>{ if(counts[v]!==undefined) counts[v]++; });
+
+  return(
+    <div>
+      <div className="mini-card" style={{marginBottom:16,textAlign:"center"}}>
+        <p style={{color:"#fbbf24",fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:700,marginBottom:4}}>{poll.venue}</p>
+        <p style={{color:"#a5b4fc",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>{new Date(poll.date+"T"+poll.time).toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"})} · {poll.time}</p>
+        <div style={{display:"flex",justifyContent:"center",gap:18,marginTop:12}}>
+          <span style={{color:"#34d399",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>✅ {counts.yes} Yes</span>
+          <span style={{color:"#f87171",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>❌ {counts.no} No</span>
+          <span style={{color:"#fbbf24",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>➕1 {counts.plus1}</span>
+        </div>
+      </div>
+      <p className="section-title">Tap your name to vote</p>
+      {entries.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No players in the roster yet — ask admin to add the team.</p>}
+      {entries.map(([id,p])=>{
+        const v=votes?.[id];
+        const isMe=myVote===id;
+        return(
+          <div key={id} className="mini-card" style={{marginBottom:8,border:isMe?"1.5px solid rgba(245,158,11,.5)":undefined}}>
+            <div className="flex items-center justify-between" style={{marginBottom:v?8:0}}>
+              <span style={{fontWeight:600,fontSize:14}}>{p.name} {p.keeper&&"🧤"}{isMe&&<span style={{color:"#fbbf24",fontSize:10,marginLeft:6}}>(you)</span>}</span>
+              <span style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>{p.role}</span>
+            </div>
+            <div className="grid-3" style={{gridTemplateColumns:"1fr 1fr 1fr"}}>
+              <button onClick={()=>cast(id,"yes")} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v==="yes"?"transparent":"#374151"}`,background:v==="yes"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:v==="yes"?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>✅ Yes</button>
+              <button onClick={()=>cast(id,"no")} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v==="no"?"transparent":"#374151"}`,background:v==="no"?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:v==="no"?"#fff":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>❌ No</button>
+              <button onClick={()=>cast(id,"plus1")} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v==="plus1"?"transparent":"#374151"}`,background:v==="plus1"?"linear-gradient(135deg,#f59e0b,#d97706)":"transparent",color:v==="plus1"?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>➕1 Kid</button>
+            </div>
+          </div>
+        );
+      })}
+      <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:14}}>Anyone can vote on behalf of any name — tap the right name for you.</p>
+    </div>
+  );
+}
+
+// ── Captain-led team builder — anyone can open this and assign players, then publish ──
+function PollTeamsTab({roster,poll,votes,teams}){
+  const[capA,setCapA]=React.useState(teams?.captainA||"");
+  const[capB,setCapB]=React.useState(teams?.captainB||"");
+  const[teamA,setTeamA]=React.useState(teams?.teamA||[]);
+  const[teamB,setTeamB]=React.useState(teams?.teamB||[]);
+
+  React.useEffect(()=>{
+    setCapA(teams?.captainA||""); setCapB(teams?.captainB||"");
+    setTeamA(teams?.teamA||[]); setTeamB(teams?.teamB||[]);
+  },[teams]);
+
+  if(!poll) return <Centered emoji="🏏" title="No poll open right now" sub="Teams are built from this week's poll responses."/>;
+
+  const yesIds=Object.entries(votes||{}).filter(([,v])=>v==="yes"||v==="plus1").map(([id])=>id);
+  const yesPlayers=yesIds.map(id=>({id,...(roster?.[id]||{name:"(removed player)"})})).sort((a,b)=>a.name.localeCompare(b.name));
+  const assigned=new Set([...teamA,...teamB]);
+  const unassigned=yesPlayers.filter(p=>!assigned.has(p.id));
+
+  const moveTo=(id,team)=>{
+    setTeamA(a=>a.filter(x=>x!==id));
+    setTeamB(b=>b.filter(x=>x!==id));
+    if(team==="A") setTeamA(a=>[...a.filter(x=>x!==id),id]);
+    if(team==="B") setTeamB(b=>[...b.filter(x=>x!==id),id]);
+  };
+  const remove=(id)=>{ setTeamA(a=>a.filter(x=>x!==id)); setTeamB(b=>b.filter(x=>x!==id)); };
+
+  const publish=()=>{
+    if(!capA.trim()||!capB.trim()){alert("Enter both captains' names.");return;}
+    if(teamA.length===0||teamB.length===0){alert("Both teams need at least one player.");return;}
+    if(!FB_OK||!DB){alert("Offline — can't publish right now.");return;}
+    DB.ref("poll/teams").set({captainA:capA.trim(),captainB:capB.trim(),teamA,teamB,published:true,publishedAt:Date.now()})
+      .then(()=>alert("Teams published! Everyone can now see the lineup."))
+      .catch(e=>alert("Failed: "+e.message));
+  };
+
+  const nameOf=(id)=>roster?.[id]?.name||"(removed player)";
+
+  return(
+    <div>
+      <div className="mini-card" style={{marginBottom:16}}>
+        <p className="section-title">👑 Captains for this week</p>
+        <div className="grid-2">
+          <div>
+            <label>Team A Captain</label>
+            <input value={capA} onChange={e=>setCapA(e.target.value)} placeholder="Captain A's name"/>
+          </div>
+          <div>
+            <label>Team B Captain</label>
+            <input value={capB} onChange={e=>setCapB(e.target.value)} placeholder="Captain B's name"/>
+          </div>
+        </div>
+      </div>
+
+      <p className="section-title">Available (voted Yes) — {unassigned.length} unassigned</p>
+      {unassigned.length===0&&yesPlayers.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"14px 0"}}>No Yes votes yet — check the Vote tab.</p>}
+      {unassigned.map(p=>(
+        <div key={p.id} className="mini-card" style={{marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:13,fontWeight:600}}>{p.name} {p.keeper&&"🧤"} <span style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>{p.role}</span></span>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>moveTo(p.id,"A")} style={{background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.4)",color:"#fbbf24",borderRadius:8,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>→ A</button>
+            <button onClick={()=>moveTo(p.id,"B")} style={{background:"rgba(52,211,153,.15)",border:"1px solid rgba(52,211,153,.4)",color:"#6ee7b7",borderRadius:8,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>→ B</button>
+          </div>
+        </div>
+      ))}
+
+      <div className="divider" style={{margin:"18px 0"}}/>
+      <div className="grid-2" style={{gap:12}}>
+        <div>
+          <p className="section-title" style={{color:"#fbbf24"}}>🟡 Team A ({teamA.length}){capA&&` · ${capA}`}</p>
+          {teamA.map(id=>(
+            <div key={id} className="mini-card" style={{marginBottom:6,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:12}}>{nameOf(id)}</span>
+              <button onClick={()=>remove(id)} style={{background:"none",border:"none",color:"#6b7280",cursor:"pointer",fontSize:14}}>×</button>
+            </div>
+          ))}
+        </div>
+        <div>
+          <p className="section-title" style={{color:"#6ee7b7"}}>⚡ Team B ({teamB.length}){capB&&` · ${capB}`}</p>
+          {teamB.map(id=>(
+            <div key={id} className="mini-card" style={{marginBottom:6,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:12}}>{nameOf(id)}</span>
+              <button onClick={()=>remove(id)} style={{background:"none",border:"none",color:"#6b7280",cursor:"pointer",fontSize:14}}>×</button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button className="btn btn-primary w-full" style={{marginTop:18}} onClick={publish}>📢 Publish Teams</button>
+      {teams?.published&&<p style={{color:"#34d399",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:10}}>✓ Published — visible to everyone</p>}
+      <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:10}}>Even after the match starts, you can come back here and adjust who's on which team if plans change.</p>
+    </div>
+  );
+}
+
 function Root(){
   const[screen,setScreen]=React.useState("landing"); // landing|viewer|scorer|admin|history
   const[gate,setGate]=React.useState(null);          // null | "scorer" | "admin"
@@ -2107,8 +2671,9 @@ function Root(){
   if(screen==="landing") return <Landing onPick={pick}/>;
   if(screen==="viewer")  return <ViewerLive onExit={home}/>;
   if(screen==="history") return <HistoryPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
+  if(screen==="poll")    return <PollPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
   if(screen==="scorer")  return <App role="scorer" onExit={home}/>;
-  if(screen==="admin")   return <App role="admin" onExit={home} onHistory={()=>setScreen("history")}/>;
+  if(screen==="admin")   return <App role="admin" onExit={home} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("poll")}/>;
   return <Landing onPick={pick}/>;
 }
 
