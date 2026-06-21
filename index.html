@@ -234,7 +234,7 @@ function chipLbl(ev){
 }
 
 // ── Setup (Admin only: teams, venue, toss — NO players) ──────────────────────
-function Setup({onStart,role,onExit,onHistory,onPoll}){
+function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
   const rA=useRef(),rB=useRef();
   const[venue,setVenue]=useState(null);     // "lakes" | "millennium"
   const[overs,setOvers]=useState(8);
@@ -433,9 +433,10 @@ function Setup({onStart,role,onExit,onHistory,onPoll}){
           </div>
           {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
         </div>
-        <div style={{display:"flex",gap:8,marginBottom:18}}>
-          {onHistory&&<button onClick={onHistory} style={{flex:1,background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.35)",color:"#a5b4fc",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}}>📚 Match History</button>}
-          {onPoll&&<button onClick={onPoll} style={{flex:1,background:"rgba(167,139,250,.12)",border:"1px solid rgba(167,139,250,.35)",color:"#c4b5fd",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}}>📋 Roster & Poll</button>}
+        <div style={{display:"flex",gap:8,marginBottom:8}}>
+          {onHistory&&<button onClick={onHistory} style={{flex:1,background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.35)",color:"#a5b4fc",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}}>📚 History</button>}
+          {onRoster&&<button onClick={onRoster} style={{flex:1,background:"rgba(52,211,153,.12)",border:"1px solid rgba(52,211,153,.35)",color:"#6ee7b7",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}}>👥 Roster</button>}
+          {onPoll&&<button onClick={onPoll} style={{flex:1,background:"rgba(167,139,250,.12)",border:"1px solid rgba(167,139,250,.35)",color:"#c4b5fd",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}}>📋 Poll</button>}
         </div>
         <div style={{display:"flex",gap:8,marginBottom:18}}>
           {FB_OK&&DB&&<button onClick={()=>{ if(confirm("Clear any stuck/corrupted live match data? This won't affect saved history.")){ DB.ref("live").remove().then(()=>alert("Live data cleared. You can start a fresh match now.")); } }} style={{flex:1,background:"transparent",border:"1px solid rgba(99,102,241,.25)",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}} title="Use this if scorers see a blank screen">🧹 Reset Live Data</button>}
@@ -649,7 +650,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll}){
 }
 
 // ── App root ─────────────────────────────────────────────────────────────────
-function App({role,onExit,onHistory,onPoll}){
+function App({role,onExit,onHistory,onPoll,onRoster}){
   const isScorer=role==="scorer"||role==="admin";
   const[match,setMatch]=useState(null);
   const[tab,setTab]=useState("score");
@@ -938,7 +939,7 @@ function App({role,onExit,onHistory,onPoll}){
     if(role!=="admin"){
       return <Centered emoji="🏏" title="No active match yet" sub="Ask the admin to start a match first. This screen will update automatically once they do." onExit={onExit}/>;
     }
-    return<Setup onStart={startMatch} role={role} onExit={onExit} onHistory={onHistory} onPoll={onPoll}/>;
+    return<Setup onStart={startMatch} role={role} onExit={onExit} onHistory={onHistory} onPoll={onPoll} onRoster={onRoster}/>;
   }
   if(!inn)   return null;
   if(inn.awaitingOpeners) return<OpenersForm inn={inn} match={match} onSubmit={fillOpeners} role={role} onExit={onExit}/>;
@@ -2332,7 +2333,7 @@ function ScorerGate({onOk,onCancel}){
 
 // ── Weekend Poll: roster, RSVP voting, and captain-led team building ──────────
 function PollPage({role,onExit}){
-  const[tab,setTab]=React.useState("vote"); // "vote" | "roster" | "teams"
+  const[tab,setTab]=React.useState("vote"); // "vote" | "teams"
   const[roster,setRoster]=React.useState(undefined);   // {playerId: {name,role,keeper,bat,bowl}}
   const[poll,setPoll]=React.useState(undefined);        // {venue,date,time,createdAt} | null
   const[votes,setVotes]=React.useState({});             // {playerId: "yes"|"no"|"plus1"}
@@ -2357,21 +2358,109 @@ function PollPage({role,onExit}){
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📋 Weekend Poll</h1>
           <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
         </div>
-        <div className="tabs" style={{marginBottom:18}}>
+        <div className="tabs" style={{marginBottom:18,gridTemplateColumns:"1fr 1fr"}}>
           <button className={`tab${tab==="vote"?" active":""}`} onClick={()=>setTab("vote")}>🗳️ Vote</button>
           <button className={`tab${tab==="teams"?" active":""}`} onClick={()=>setTab("teams")}>🏏 Teams</button>
-          {role==="admin"&&<button className={`tab${tab==="roster"?" active":""}`} onClick={()=>setTab("roster")}>👥 Roster</button>}
         </div>
         {tab==="vote"&&<PollVoteTab role={role} roster={roster} poll={poll} votes={votes}/>}
-        {tab==="roster"&&role==="admin"&&<PollRosterTab roster={roster} poll={poll}/>}
         {tab==="teams"&&<PollTeamsTab role={role} roster={roster} poll={poll} votes={votes} teams={teams}/>}
       </div>
     </div>
   );
 }
 
+// ── Roster management — its own standalone page (admin only) ────────────────
+function RosterPage({onExit}){
+  const[roster,setRoster]=React.useState(undefined);
+  const[poll,setPoll]=React.useState(undefined);
+
+  React.useEffect(()=>{
+    if(!FB_OK||!DB){setRoster({});setPoll(null);return;}
+    const rRef=DB.ref("roster"), pRef=DB.ref("poll/current");
+    const cb1=rRef.on("value",s=>setRoster(s.val()||{}));
+    const cb2=pRef.on("value",s=>setPoll(s.val()||null));
+    return ()=>{ rRef.off("value",cb1); pRef.off("value",cb2); };
+  },[]);
+
+  if(roster===undefined) return <Centered emoji="👥" title="Loading roster…" onExit={onExit}/>;
+
+  return(
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+      <div style={{maxWidth:480,margin:"0 auto"}}>
+        <div className="flex items-center justify-between" style={{marginBottom:18}}>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>👥 Club Roster</h1>
+          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+        </div>
+        <PollRosterTab roster={roster}/>
+      </div>
+    </div>
+  );
+}
+
+// ── The weekly poll itself (venue/date/time + open/close) — its own standalone page ──
+function PollAdminPage({onExit}){
+  const[poll,setPoll]=React.useState(undefined);
+  React.useEffect(()=>{
+    if(!FB_OK||!DB){setPoll(null);return;}
+    const pRef=DB.ref("poll/current");
+    const cb=pRef.on("value",s=>setPoll(s.val()||null));
+    return ()=>pRef.off("value",cb);
+  },[]);
+  if(poll===undefined) return <Centered emoji="📋" title="Loading…" onExit={onExit}/>;
+  return(
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+      <div style={{maxWidth:480,margin:"0 auto"}}>
+        <div className="flex items-center justify-between" style={{marginBottom:18}}>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📋 This Week's Poll</h1>
+          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+        </div>
+        <PollCreateForm poll={poll}/>
+        {poll&&<PollResultsList poll={poll}/>}
+      </div>
+    </div>
+  );
+}
+
+// ── Grouped vote results — who said Yes/No/+1, scannable at a glance ────────
+function PollResultsList({poll}){
+  const[roster,setRoster]=React.useState({});
+  const[votes,setVotes]=React.useState({});
+  React.useEffect(()=>{
+    if(!FB_OK||!DB)return;
+    const rRef=DB.ref("roster"), vRef=DB.ref("poll/votes");
+    const cb1=rRef.on("value",s=>setRoster(s.val()||{}));
+    const cb2=vRef.on("value",s=>setVotes(s.val()||{}));
+    return ()=>{ rRef.off("value",cb1); vRef.off("value",cb2); };
+  },[]);
+  const byChoice=(choice)=>Object.entries(votes||{})
+    .filter(([,v])=>v?.choice===choice)
+    .map(([id])=>roster?.[id]?.name||"(removed player)")
+    .sort((a,b)=>a.localeCompare(b));
+  const plus1List=Object.entries(votes||{})
+    .filter(([,v])=>v?.plus1)
+    .map(([id,v])=>`${roster?.[id]?.name||"(removed player)"} → ${v.kidName||"unnamed"}`)
+    .sort((a,b)=>a.localeCompare(b));
+  const yes=byChoice("yes"), no=byChoice("no");
+  const Group=({emoji,label,color,names})=>(
+    <div className="mini-card" style={{marginBottom:10}}>
+      <p style={{color,fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,marginBottom:names.length?8:0}}>{emoji} {label} ({names.length})</p>
+      {names.length===0
+        ? <p style={{color:"#4b5563",fontSize:12}}>No one yet</p>
+        : names.map(n=><div key={n} style={{fontSize:13,padding:"3px 0",color:"#d1d5db"}}>{n}</div>)}
+    </div>
+  );
+  return(
+    <div style={{marginTop:20}}>
+      <p className="section-title">Responses</p>
+      <Group emoji="✅" label="Yes" color="#34d399" names={yes}/>
+      <Group emoji="❌" label="No" color="#f87171" names={no}/>
+      <Group emoji="➕" label="Bringing a kid" color="#fbbf24" names={plus1List}/>
+    </div>
+  );
+}
+
 // ── Roster management (admin only) ─────────────────────────────────────────
-function PollRosterTab({roster,poll}){
+function PollRosterTab({roster}){
   const[name,setName]=React.useState("");
   const[prole,setProle]=React.useState("Batsman"); // Batsman | Bowler | All-rounder
   const[keeper,setKeeper]=React.useState(false);
@@ -2400,9 +2489,6 @@ function PollRosterTab({roster,poll}){
 
   return(
     <div>
-      {poll&&<div style={{background:"rgba(167,139,250,.08)",border:"1px solid rgba(167,139,250,.25)",borderRadius:12,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#c4b5fd",fontFamily:"'JetBrains Mono',monospace"}}>
-        Active poll: {poll.venue} · {poll.date} {poll.time}
-      </div>}
       <div className="mini-card" style={{marginBottom:16}}>
         <p className="section-title">{editingId?"✏️ Edit Player":"➕ Add Player"}</p>
         <label>Name</label>
@@ -2451,9 +2537,6 @@ function PollRosterTab({roster,poll}){
           </div>
         </div>
       ))}
-
-      <div className="divider" style={{margin:"20px 0"}}/>
-      <PollCreateForm poll={poll}/>
     </div>
   );
 }
@@ -2503,6 +2586,7 @@ function PollCreateForm({poll}){
 // ── Public voting tab — tap your name, pick Yes/No/+1, one vote per device ──
 function PollVoteTab({roster,poll,votes}){
   const[myVote,setMyVote]=React.useState(null); // playerId this device voted as
+  const[kidDraft,setKidDraft]=React.useState({}); // {playerId: "typed kid name, not yet saved"}
   React.useEffect(()=>{
     try{
       const saved=localStorage.getItem("lcc_poll_voted_as");
@@ -2513,15 +2597,37 @@ function PollVoteTab({roster,poll,votes}){
   if(!poll) return <Centered emoji="📋" title="No poll open right now" sub="Ask the admin to publish this week's poll."/>;
 
   const entries=Object.entries(roster||{}).sort((a,b)=>a[1].name.localeCompare(b[1].name));
-  const cast=(playerId,choice)=>{
+
+  // Each vote record is {choice:"yes"|"no", plus1:boolean, kidName:string}.
+  // choice is mutually exclusive (a person is in exactly one of Yes/No, never both, never neither
+  // once they've voted). plus1 is completely independent of choice — it can be true alongside
+  // EITHER yes or no, since a parent might bring their kid regardless of their own attendance.
+  const setChoice=(playerId,choice)=>{
     if(!FB_OK||!DB)return;
-    DB.ref("poll/votes/"+playerId).set(choice);
+    const existing=votes?.[playerId]||{};
+    DB.ref("poll/votes/"+playerId).set(JSON.parse(JSON.stringify({...existing,choice})));
     try{ localStorage.setItem("lcc_poll_voted_as",playerId); }catch(e){}
     setMyVote(playerId);
   };
+  const togglePlus1=(playerId)=>{
+    if(!FB_OK||!DB)return;
+    const existing=votes?.[playerId]||{};
+    const turningOn=!existing.plus1;
+    if(turningOn){
+      const nm=(kidDraft[playerId]||"").trim();
+      if(!nm){ alert("Enter your kid's name first."); return; }
+      DB.ref("poll/votes/"+playerId).set(JSON.parse(JSON.stringify({...existing,plus1:true,kidName:nm})));
+    }else{
+      DB.ref("poll/votes/"+playerId).set(JSON.parse(JSON.stringify({...existing,plus1:false,kidName:null})));
+    }
+  };
 
   const counts={yes:0,no:0,plus1:0};
-  Object.values(votes||{}).forEach(v=>{ if(counts[v]!==undefined) counts[v]++; });
+  Object.values(votes||{}).forEach(v=>{
+    if(v?.choice==="yes")counts.yes++;
+    if(v?.choice==="no")counts.no++;
+    if(v?.plus1)counts.plus1++;
+  });
 
   return(
     <div>
@@ -2531,29 +2637,40 @@ function PollVoteTab({roster,poll,votes}){
         <div style={{display:"flex",justifyContent:"center",gap:18,marginTop:12}}>
           <span style={{color:"#34d399",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>✅ {counts.yes} Yes</span>
           <span style={{color:"#f87171",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>❌ {counts.no} No</span>
-          <span style={{color:"#fbbf24",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>➕1 {counts.plus1}</span>
+          <span style={{color:"#fbbf24",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>➕ {counts.plus1} Kids</span>
         </div>
       </div>
       <p className="section-title">Tap your name to vote</p>
       {entries.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No players in the roster yet — ask admin to add the team.</p>}
       {entries.map(([id,p])=>{
-        const v=votes?.[id];
+        const v=votes?.[id]||{};
         const isMe=myVote===id;
         return(
           <div key={id} className="mini-card" style={{marginBottom:8,border:isMe?"1.5px solid rgba(245,158,11,.5)":undefined}}>
-            <div className="flex items-center justify-between" style={{marginBottom:v?8:0}}>
+            <div className="flex items-center justify-between" style={{marginBottom:8}}>
               <span style={{fontWeight:600,fontSize:14}}>{p.name} {p.keeper&&"🧤"}{isMe&&<span style={{color:"#fbbf24",fontSize:10,marginLeft:6}}>(you)</span>}</span>
               <span style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>{p.role}</span>
             </div>
-            <div className="grid-3" style={{gridTemplateColumns:"1fr 1fr 1fr"}}>
-              <button onClick={()=>cast(id,"yes")} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v==="yes"?"transparent":"#374151"}`,background:v==="yes"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:v==="yes"?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>✅ Yes</button>
-              <button onClick={()=>cast(id,"no")} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v==="no"?"transparent":"#374151"}`,background:v==="no"?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:v==="no"?"#fff":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>❌ No</button>
-              <button onClick={()=>cast(id,"plus1")} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v==="plus1"?"transparent":"#374151"}`,background:v==="plus1"?"linear-gradient(135deg,#f59e0b,#d97706)":"transparent",color:v==="plus1"?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>➕1 Kid</button>
+            <div className="grid-2" style={{marginBottom:10}}>
+              <button onClick={()=>setChoice(id,"yes")} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v.choice==="yes"?"transparent":"#374151"}`,background:v.choice==="yes"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:v.choice==="yes"?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>✅ Yes</button>
+              <button onClick={()=>setChoice(id,"no")} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v.choice==="no"?"transparent":"#374151"}`,background:v.choice==="no"?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:v.choice==="no"?"#fff":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>❌ No</button>
             </div>
+            {/* +1 is independent of Yes/No — a parent can bring a kid regardless of their own choice */}
+            {v.plus1 ? (
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(245,158,11,.1)",border:"1px solid rgba(245,158,11,.35)",borderRadius:10,padding:"8px 10px"}}>
+                <span style={{fontSize:12,color:"#fbbf24",fontFamily:"'Inter',sans-serif"}}>➕ Bringing {v.kidName}</span>
+                <button onClick={()=>togglePlus1(id)} style={{background:"none",border:"none",color:"#92753a",cursor:"pointer",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>remove</button>
+              </div>
+            ) : (
+              <div style={{display:"flex",gap:6}}>
+                <input value={kidDraft[id]||""} onChange={e=>setKidDraft(d=>({...d,[id]:e.target.value}))} placeholder="Kid's name (optional)" style={{flex:1,fontSize:12,padding:"8px 10px"}}/>
+                <button onClick={()=>togglePlus1(id)} style={{padding:"8px 12px",borderRadius:10,border:"1.5px solid rgba(245,158,11,.4)",background:"transparent",color:"#fbbf24",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif",whiteSpace:"nowrap"}}>➕ Add</button>
+              </div>
+            )}
           </div>
         );
       })}
-      <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:14}}>Anyone can vote on behalf of any name — tap the right name for you.</p>
+      <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:14}}>Anyone can vote on behalf of any name — tap the right name for you. +1 works alongside either Yes or No.</p>
     </div>
   );
 }
@@ -2572,7 +2689,7 @@ function PollTeamsTab({roster,poll,votes,teams}){
 
   if(!poll) return <Centered emoji="🏏" title="No poll open right now" sub="Teams are built from this week's poll responses."/>;
 
-  const yesIds=Object.entries(votes||{}).filter(([,v])=>v==="yes"||v==="plus1").map(([id])=>id);
+  const yesIds=Object.entries(votes||{}).filter(([,v])=>v?.choice==="yes").map(([id])=>id);
   const yesPlayers=yesIds.map(id=>({id,...(roster?.[id]||{name:"(removed player)"})})).sort((a,b)=>a.name.localeCompare(b.name));
   const assigned=new Set([...teamA,...teamB]);
   const unassigned=yesPlayers.filter(p=>!assigned.has(p.id));
@@ -2672,8 +2789,10 @@ function Root(){
   if(screen==="viewer")  return <ViewerLive onExit={home}/>;
   if(screen==="history") return <HistoryPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
   if(screen==="poll")    return <PollPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
+  if(screen==="roster")  return <RosterPage onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
+  if(screen==="pollAdmin") return <PollAdminPage onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
   if(screen==="scorer")  return <App role="scorer" onExit={home}/>;
-  if(screen==="admin")   return <App role="admin" onExit={home} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("poll")}/>;
+  if(screen==="admin")   return <App role="admin" onExit={home} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("pollAdmin")} onRoster={()=>setScreen("roster")}/>;
   return <Landing onPick={pick}/>;
 }
 
