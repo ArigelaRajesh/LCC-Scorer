@@ -2007,7 +2007,7 @@ function PinGate({title,pin,altPin,verify,hint,onOk,onCancel}){
   );
 }
 
-function CricketScene(){
+function CricketScene({hideText}){
   // Jumbled order — no two same outcomes back to back where possible
   const outcomes=React.useMemo(()=>[
     {label:"SIX!",color:"#34d399",type:"six"},
@@ -2066,7 +2066,7 @@ function CricketScene(){
   const isHit = isSix||isFour;
   const contactOrAfter = phase==="contact"||phase==="settle";
   const settled = phase==="settle";
-  const S=(c)=>({stroke:c,strokeWidth:5,strokeLinecap:"round",fill:"none"});
+  const S=(c)=>({stroke:c,strokeWidth:6,strokeLinecap:"round",fill:"none"});
 
   // ── Ball position, computed directly from `phase` in JS (not a CSS keyframe %) ──
   // This is what guarantees sync: the ball's rendered position THIS render is derived from
@@ -2095,23 +2095,25 @@ function CricketScene(){
   // viewBox is 320x170: a dedicated top band (y 0-40) for the result word,
   // and the pitch/figures live entirely below that (y 45-150) — no shared space, no overlap risk.
   return(
-    <div style={{position:"relative",width:"100%",aspectRatio:"320/170",maxHeight:150,margin:"0 auto 2px"}}>
+    <div style={{position:"relative",width:"100%",aspectRatio:"320/170",margin:"0 auto 2px"}}>
       <svg viewBox="0 0 320 170" preserveAspectRatio="xMidYMid meet" style={{width:"100%",height:"100%",display:"block"}}>
         {/* Result word — appears in the EXACT same render where phase becomes "contact", driven by JS not a CSS %.
             IMPORTANT: the transition for going BACK to invisible (start of next cycle) must be fast, not slow —
             a slow fade-out here was the cause of the old label still being visible (mid-fade) at the same moment
             the new outcome's word had already swapped in via {o.label}, which looked exactly like duplication. */}
-        <text x="160" y="28" textAnchor="middle"
-          fontFamily="'Oswald',sans-serif" fontSize="28" fontWeight="700" letterSpacing="2"
-          fill={o.color}
-          opacity={contactOrAfter ? (settled?0.55:0.95) : 0}
-          style={{transform:contactOrAfter?(settled?"scale(0.95)":"scale(1.1)"):"scale(0.5)",
-                  transformOrigin:"160px 28px",
-                  transition:phase==="contact"?"opacity .15s ease-out, transform .15s cubic-bezier(.34,1.56,.64,1)"
+        {!hideText&&(
+          <text x="160" y="28" textAnchor="middle"
+            fontFamily="'Oswald',sans-serif" fontSize="28" fontWeight="700" letterSpacing="2"
+            fill={o.color}
+            opacity={contactOrAfter ? (settled?0.55:0.95) : 0}
+            style={{transform:contactOrAfter?(settled?"scale(0.95)":"scale(1.1)"):"scale(0.5)",
+                    transformOrigin:"160px 28px",
+                    transition:phase==="contact"?"opacity .15s ease-out, transform .15s cubic-bezier(.34,1.56,.64,1)"
                             :phase==="settle"?"opacity .6s ease-out, transform .6s ease-out"
                             :"opacity 0s, transform 0s"}}>
-          {o.label}
-        </text>
+            {o.label}
+          </text>
+        )}
 
         {/* Pitch + figures band */}
         <line x1="14" y1="148" x2="306" y2="148" stroke="rgba(16,185,129,.55)" strokeWidth="3"/>
@@ -2231,24 +2233,29 @@ function Landing({onPick}){
     </button>
   );
   return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 20px 28px",position:"relative",overflow:"hidden",
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"12px 20px 28px",position:"relative",overflow:"hidden",
       background:"linear-gradient(150deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#1c1150,#0a2540,#022c1e)",backgroundSize:"400% 400%",animation:"bgShift 22s ease infinite"}}>
       <div style={{width:"100%",maxWidth:400,position:"relative",zIndex:1,paddingTop:"max(8px, env(safe-area-inset-top))"}}>
-        {/* LCC title block — sits up top, tight spacing */}
-        <div className="text-center" style={{marginBottom:4}}>
-          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:58,fontWeight:700,letterSpacing:"-2px",lineHeight:1,marginBottom:2,animation:"glowText 3s ease-in-out infinite"}}>
-            <span style={{background:"linear-gradient(90deg,#FF9933,#ffb366,#FF9933)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>L</span>
-            <span style={{background:"linear-gradient(90deg,#ffffff,#a5b4fc,#ffffff)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
-            <span style={{background:"linear-gradient(90deg,#138808,#3fa340,#138808)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
-          </h1>
-          <p style={{color:"rgba(167,180,248,.7)",fontSize:14,fontWeight:500,animation:"slideInUp .5s ease .1s both"}}>Lindenhurst Cricket Club</p>
+        {/* LCC title block — cricket scene sits BEHIND it as a subtle backdrop (not in its own
+            block below anymore), so the home screen no longer pays a separate chunk of vertical
+            space for the animation. The scene is faded down and the title has a solid text-shadow
+            so it stays fully readable on top, regardless of what the figures are doing underneath. */}
+        <div className="text-center" style={{position:"relative",marginBottom:4,height:212}}>
+          <div style={{position:"absolute",inset:0,opacity:.5,pointerEvents:"none"}}>
+            <CricketScene hideText/>
+          </div>
+          <div style={{position:"relative",zIndex:1,paddingTop:48}}>
+            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:58,fontWeight:700,letterSpacing:"-2px",lineHeight:1,marginBottom:2,animation:"glowText 3s ease-in-out infinite",filter:"drop-shadow(0 2px 10px rgba(2,4,15,.9)) drop-shadow(0 0 24px rgba(2,4,15,.7))"}}>
+              <span style={{background:"linear-gradient(90deg,#FF9933,#ffb366,#FF9933)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>L</span>
+              <span style={{background:"linear-gradient(90deg,#ffffff,#a5b4fc,#ffffff)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
+              <span style={{background:"linear-gradient(90deg,#138808,#3fa340,#138808)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
+            </h1>
+            <p style={{color:"#fff",fontSize:14,fontWeight:600,animation:"slideInUp .5s ease .1s both",textShadow:"0 2px 8px rgba(2,4,15,.95), 0 0 16px rgba(2,4,15,.8)"}}>Lindenhurst Cricket Club</p>
+          </div>
         </div>
 
-        {/* Cricket scene — sits below the title, tightly spaced, no wasted gap */}
-        <CricketScene/>
-
         {/* 2x2 grid */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:-4}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:8}}>
           {tile("👁️","Watch Live","Live scoreboard","rgba(16,185,129,.4)","rgba(16,185,129,.15)",()=>onPick("viewer"),0)}
           {tile("🏏","Score","Team scorers · PIN","rgba(245,158,11,.4)","rgba(245,158,11,.15)",()=>onPick("scorer"),1)}
           {tile("📚","History","Past LCC matches","rgba(99,102,241,.4)","rgba(99,102,241,.15)",()=>onPick("history"),2)}
@@ -2700,6 +2707,7 @@ function PollVoteTab({roster,poll,votes}){
   const[unlockTarget,setUnlockTarget]=React.useState(null); // {id,player,pendingAction:fn} — waiting on a PIN
   const[unlockPin,setUnlockPin]=React.useState("");
   const[unlockErr,setUnlockErr]=React.useState("");
+  const[plus1Open,setPlus1Open]=React.useState(null); // playerId currently showing the kid-name input
 
   React.useEffect(()=>{
     try{
@@ -2783,40 +2791,62 @@ function PollVoteTab({roster,poll,votes}){
           return txt;
         }}/>
       </div>
-      <p className="section-title">Tap your name to vote</p>
+      <p className="section-title">Tap a name to vote</p>
       {entries.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No players in the roster yet — ask admin to add the team.</p>}
       {entries.map(([id,p])=>{
         const v=votes?.[id]||{};
         const isMe=myVote===id;
         const hasVoted=v.choice==="yes"||v.choice==="no";
         const isUnlocked=unlockedIds.has(id);
+        const showKidInput=plus1Open===id;
         return(
-          <div key={id} className="mini-card" style={{marginBottom:8,border:isMe?"1.5px solid rgba(245,158,11,.5)":undefined}}>
-            <div className="flex items-center justify-between" style={{marginBottom:4}}>
-              <span style={{fontWeight:600,fontSize:14}}>{!isUnlocked&&<span style={{fontSize:11,marginRight:4}} title="PIN required to vote for this person">🔒</span>}{p.name} {p.keeper&&"🧤"}{isMe&&<span style={{color:"#fbbf24",fontSize:10,marginLeft:6}}>(you)</span>}</span>
-              <span style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>{p.role}</span>
+          <div key={id} className="mini-card" style={{marginBottom:6,padding:"10px 12px",border:isMe?"1.5px solid rgba(245,158,11,.5)":undefined}}>
+            <div className="flex items-center justify-between">
+              <span style={{fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:4,minWidth:0}}>
+                {!isUnlocked&&<span style={{fontSize:10}} title="PIN required to vote for this person">🔒</span>}
+                <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>
+                {p.keeper&&<span style={{fontSize:11}}>🧤</span>}
+                {isMe&&<span style={{color:"#fbbf24",fontSize:9}}>(you)</span>}
+              </span>
+
+              {/* Default: compact icon row. After voting: a single tappable badge showing the choice. */}
+              {hasVoted ? (
+                <button onClick={()=>setChoice(id,p,v.choice)} style={{
+                  flexShrink:0,padding:"4px 10px",borderRadius:20,border:"none",cursor:"pointer",fontWeight:700,fontSize:11,fontFamily:"'Inter',sans-serif",
+                  background:v.choice==="yes"?"linear-gradient(135deg,#34d399,#10b981)":"linear-gradient(135deg,#dc2626,#991b1b)",
+                  color:v.choice==="yes"?"#111":"#fff"
+                }} title="Tap to change">{v.choice==="yes"?"✅ Yes":"❌ No"} ✕</button>
+              ) : (
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  <button onClick={()=>setChoice(id,p,"yes")} style={{width:30,height:30,borderRadius:"50%",border:"1.5px solid rgba(52,211,153,.4)",background:"rgba(52,211,153,.1)",color:"#34d399",cursor:"pointer",fontSize:14}}>✅</button>
+                  <button onClick={()=>setChoice(id,p,"no")} style={{width:30,height:30,borderRadius:"50%",border:"1.5px solid rgba(239,68,68,.4)",background:"rgba(239,68,68,.1)",color:"#f87171",cursor:"pointer",fontSize:14}}>❌</button>
+                </div>
+              )}
+
+              {/* +1 toggle — always available regardless of Yes/No, sits to the right of the choice */}
+              <button onClick={()=>{
+                  if(v.plus1){ togglePlus1(id,p); return; } // already on -> tapping removes it directly
+                  setPlus1Open(plus1Open===id?null:id); // not on yet -> reveal the name field
+                }}
+                style={{flexShrink:0,marginLeft:8,width:30,height:30,borderRadius:"50%",border:`1.5px solid ${v.plus1?"transparent":"rgba(245,158,11,.4)"}`,
+                background:v.plus1?"linear-gradient(135deg,#f59e0b,#d97706)":"rgba(245,158,11,.1)",color:v.plus1?"#111":"#fbbf24",cursor:"pointer",fontSize:14}}
+                title={v.plus1?`Bringing ${v.kidName} — tap to remove`:"Bringing a kid?"}>➕</button>
             </div>
-            {!hasVoted&&<p style={{fontSize:10,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Not voted yet</p>}
-            <div className="grid-2" style={{marginBottom:10}}>
-              <button onClick={()=>setChoice(id,p,"yes")} title={v.choice==="yes"?"Tap again to remove your vote":""} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v.choice==="yes"?"transparent":"#374151"}`,background:v.choice==="yes"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:v.choice==="yes"?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>✅ Yes</button>
-              <button onClick={()=>setChoice(id,p,"no")} title={v.choice==="no"?"Tap again to remove your vote":""} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v.choice==="no"?"transparent":"#374151"}`,background:v.choice==="no"?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:v.choice==="no"?"#fff":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>❌ No</button>
-            </div>
-            {/* +1 is independent of Yes/No — a parent can bring a kid regardless of their own choice */}
-            {v.plus1 ? (
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(245,158,11,.1)",border:"1px solid rgba(245,158,11,.35)",borderRadius:10,padding:"8px 10px"}}>
-                <span style={{fontSize:12,color:"#fbbf24",fontFamily:"'Inter',sans-serif"}}>➕ Bringing {v.kidName}</span>
-                <button onClick={()=>togglePlus1(id,p)} style={{background:"none",border:"none",color:"#92753a",cursor:"pointer",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>remove</button>
-              </div>
-            ) : (
-              <div style={{display:"flex",gap:6}}>
-                <input value={kidDraft[id]||""} onChange={e=>setKidDraft(d=>({...d,[id]:e.target.value}))} placeholder="Kid's name (optional)" style={{flex:1,fontSize:12,padding:"8px 10px"}}/>
-                <button onClick={()=>togglePlus1(id,p)} style={{padding:"8px 12px",borderRadius:10,border:"1.5px solid rgba(245,158,11,.4)",background:"transparent",color:"#fbbf24",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif",whiteSpace:"nowrap"}}>➕ Add</button>
+
+            {/* Kid's name field — only appears the moment you tap ➕ and haven't set one yet */}
+            {showKidInput&&!v.plus1&&(
+              <div style={{display:"flex",gap:6,marginTop:8}}>
+                <input value={kidDraft[id]||""} onChange={e=>setKidDraft(d=>({...d,[id]:e.target.value}))}
+                  onKeyDown={e=>e.key==="Enter"&&togglePlus1(id,p)} placeholder="Kid's name" autoFocus
+                  style={{flex:1,fontSize:12,padding:"7px 10px"}}/>
+                <button onClick={()=>togglePlus1(id,p)} style={{padding:"7px 12px",borderRadius:10,border:"1.5px solid rgba(245,158,11,.4)",background:"transparent",color:"#fbbf24",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Add</button>
               </div>
             )}
+            {v.plus1&&<p style={{fontSize:11,color:"#fbbf24",marginTop:6}}>➕ Bringing {v.kidName}</p>}
           </div>
         );
       })}
-      <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:14}}>🔒 means you'll need that person's PIN to vote for them — enter it once per device. Tap your selected Yes/No again to remove your vote anytime.</p>
+      <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:14}}>🔒 means you'll need that person's PIN the first time — stays unlocked after. Tap your colored badge to change your vote.</p>
 
       {unlockTarget&&(
         <Modal onClose={()=>setUnlockTarget(null)} title={`🔒 Enter ${unlockTarget.player.name}'s PIN`}>
