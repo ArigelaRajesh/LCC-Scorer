@@ -2689,6 +2689,18 @@ function ShareButton({label,buildText}){
 function PollVoteTab({roster,poll,votes}){
   const[myVote,setMyVote]=React.useState(null); // playerId this device voted as
   const[kidDraft,setKidDraft]=React.useState({}); // {playerId: "typed kid name, not yet saved"}
+  const[unlockedIds,setUnlockedIds]=React.useState(()=>{
+    // Restore which players this device has already unlocked, so people don't have to re-type
+    // their PIN every single time they tap Yes/No — just once per device, like the scoring PINs.
+    try{
+      const saved=localStorage.getItem("lcc_poll_unlocked");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    }catch(e){ return new Set(); }
+  });
+  const[unlockTarget,setUnlockTarget]=React.useState(null); // {id,player,pendingAction:fn} — waiting on a PIN
+  const[unlockPin,setUnlockPin]=React.useState("");
+  const[unlockErr,setUnlockErr]=React.useState("");
+
   React.useEffect(()=>{
     try{
       const saved=localStorage.getItem("lcc_poll_voted_as");
@@ -2700,30 +2712,49 @@ function PollVoteTab({roster,poll,votes}){
 
   const entries=Object.entries(roster||{}).sort((a,b)=>a[1].name.localeCompare(b[1].name));
 
+  const persistUnlocked=(set)=>{ try{ localStorage.setItem("lcc_poll_unlocked",JSON.stringify([...set])); }catch(e){} };
+
+  // Every vote action now goes through this gate first: if this device hasn't already proven it's
+  // THAT person (by entering their roster PIN once), it asks for the PIN before doing anything.
+  // This closes the exact gap from the screenshot — anyone could tap Yes/No on ANY name before this.
+  const withUnlock=(id,player,action)=>{
+    if(unlockedIds.has(id)){ action(); return; }
+    if(!player.pin){ alert(`${player.name} doesn't have a PIN set yet (added before this protection existed) — ask admin to help, or have them re-add themselves with a PIN.`); return; }
+    setUnlockTarget({id,player,pendingAction:action}); setUnlockPin(""); setUnlockErr("");
+  };
+  const confirmUnlock=()=>{
+    if(!unlockTarget)return;
+    if(unlockPin!==unlockTarget.player.pin){ setUnlockErr("Wrong PIN — try again, or ask admin for help."); return; }
+    const next=new Set(unlockedIds); next.add(unlockTarget.id);
+    setUnlockedIds(next); persistUnlocked(next);
+    unlockTarget.pendingAction();
+    setUnlockTarget(null);
+  };
+
   // Each vote record is {choice:"yes"|"no"|null, plus1:boolean, kidName:string}.
   // choice is mutually exclusive (a person is in exactly one of Yes/No, or has withdrawn — never both).
   // Tapping the SAME choice again clears it back to null, so anyone can opt out of their vote entirely
   // at any time, not just switch between Yes and No.
-  const setChoice=(playerId,choice)=>{
+  const setChoice=(id,player,choice)=>withUnlock(id,player,()=>{
     if(!FB_OK||!DB)return;
-    const existing=votes?.[playerId]||{};
+    const existing=votes?.[id]||{};
     const next = existing.choice===choice ? null : choice; // tapping the active choice again clears it
-    DB.ref("poll/votes/"+playerId).set(JSON.parse(JSON.stringify({...existing,choice:next})));
-    try{ localStorage.setItem("lcc_poll_voted_as",playerId); }catch(e){}
-    setMyVote(playerId);
-  };
-  const togglePlus1=(playerId)=>{
+    DB.ref("poll/votes/"+id).set(JSON.parse(JSON.stringify({...existing,choice:next})));
+    try{ localStorage.setItem("lcc_poll_voted_as",id); }catch(e){}
+    setMyVote(id);
+  });
+  const togglePlus1=(id,player)=>withUnlock(id,player,()=>{
     if(!FB_OK||!DB)return;
-    const existing=votes?.[playerId]||{};
+    const existing=votes?.[id]||{};
     const turningOn=!existing.plus1;
     if(turningOn){
-      const nm=(kidDraft[playerId]||"").trim();
+      const nm=(kidDraft[id]||"").trim();
       if(!nm){ alert("Enter your kid's name first."); return; }
-      DB.ref("poll/votes/"+playerId).set(JSON.parse(JSON.stringify({...existing,plus1:true,kidName:nm})));
+      DB.ref("poll/votes/"+id).set(JSON.parse(JSON.stringify({...existing,plus1:true,kidName:nm})));
     }else{
-      DB.ref("poll/votes/"+playerId).set(JSON.parse(JSON.stringify({...existing,plus1:false,kidName:null})));
+      DB.ref("poll/votes/"+id).set(JSON.parse(JSON.stringify({...existing,plus1:false,kidName:null})));
     }
-  };
+  });
 
   const counts={yes:0,no:0,plus1:0};
   Object.values(votes||{}).forEach(v=>{
@@ -2758,33 +2789,43 @@ function PollVoteTab({roster,poll,votes}){
         const v=votes?.[id]||{};
         const isMe=myVote===id;
         const hasVoted=v.choice==="yes"||v.choice==="no";
+        const isUnlocked=unlockedIds.has(id);
         return(
           <div key={id} className="mini-card" style={{marginBottom:8,border:isMe?"1.5px solid rgba(245,158,11,.5)":undefined}}>
             <div className="flex items-center justify-between" style={{marginBottom:4}}>
-              <span style={{fontWeight:600,fontSize:14}}>{p.name} {p.keeper&&"🧤"}{isMe&&<span style={{color:"#fbbf24",fontSize:10,marginLeft:6}}>(you)</span>}</span>
+              <span style={{fontWeight:600,fontSize:14}}>{!isUnlocked&&<span style={{fontSize:11,marginRight:4}} title="PIN required to vote for this person">🔒</span>}{p.name} {p.keeper&&"🧤"}{isMe&&<span style={{color:"#fbbf24",fontSize:10,marginLeft:6}}>(you)</span>}</span>
               <span style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>{p.role}</span>
             </div>
             {!hasVoted&&<p style={{fontSize:10,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Not voted yet</p>}
             <div className="grid-2" style={{marginBottom:10}}>
-              <button onClick={()=>setChoice(id,"yes")} title={v.choice==="yes"?"Tap again to remove your vote":""} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v.choice==="yes"?"transparent":"#374151"}`,background:v.choice==="yes"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:v.choice==="yes"?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>✅ Yes</button>
-              <button onClick={()=>setChoice(id,"no")} title={v.choice==="no"?"Tap again to remove your vote":""} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v.choice==="no"?"transparent":"#374151"}`,background:v.choice==="no"?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:v.choice==="no"?"#fff":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>❌ No</button>
+              <button onClick={()=>setChoice(id,p,"yes")} title={v.choice==="yes"?"Tap again to remove your vote":""} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v.choice==="yes"?"transparent":"#374151"}`,background:v.choice==="yes"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:v.choice==="yes"?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>✅ Yes</button>
+              <button onClick={()=>setChoice(id,p,"no")} title={v.choice==="no"?"Tap again to remove your vote":""} style={{padding:"8px 4px",borderRadius:10,border:`1.5px solid ${v.choice==="no"?"transparent":"#374151"}`,background:v.choice==="no"?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:v.choice==="no"?"#fff":"#9ca3af",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>❌ No</button>
             </div>
             {/* +1 is independent of Yes/No — a parent can bring a kid regardless of their own choice */}
             {v.plus1 ? (
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(245,158,11,.1)",border:"1px solid rgba(245,158,11,.35)",borderRadius:10,padding:"8px 10px"}}>
                 <span style={{fontSize:12,color:"#fbbf24",fontFamily:"'Inter',sans-serif"}}>➕ Bringing {v.kidName}</span>
-                <button onClick={()=>togglePlus1(id)} style={{background:"none",border:"none",color:"#92753a",cursor:"pointer",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>remove</button>
+                <button onClick={()=>togglePlus1(id,p)} style={{background:"none",border:"none",color:"#92753a",cursor:"pointer",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>remove</button>
               </div>
             ) : (
               <div style={{display:"flex",gap:6}}>
                 <input value={kidDraft[id]||""} onChange={e=>setKidDraft(d=>({...d,[id]:e.target.value}))} placeholder="Kid's name (optional)" style={{flex:1,fontSize:12,padding:"8px 10px"}}/>
-                <button onClick={()=>togglePlus1(id)} style={{padding:"8px 12px",borderRadius:10,border:"1.5px solid rgba(245,158,11,.4)",background:"transparent",color:"#fbbf24",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif",whiteSpace:"nowrap"}}>➕ Add</button>
+                <button onClick={()=>togglePlus1(id,p)} style={{padding:"8px 12px",borderRadius:10,border:"1.5px solid rgba(245,158,11,.4)",background:"transparent",color:"#fbbf24",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif",whiteSpace:"nowrap"}}>➕ Add</button>
               </div>
             )}
           </div>
         );
       })}
-      <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:14}}>Tap the right name for you. Tap your selected Yes/No again to remove your vote anytime. +1 works alongside either Yes or No.</p>
+      <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:14}}>🔒 means you'll need that person's PIN to vote for them — enter it once per device. Tap your selected Yes/No again to remove your vote anytime.</p>
+
+      {unlockTarget&&(
+        <Modal onClose={()=>setUnlockTarget(null)} title={`🔒 Enter ${unlockTarget.player.name}'s PIN`}>
+          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>This is the same PIN they set when adding themselves to the club list. Once unlocked, this device can vote for them again without re-entering it.</p>
+          <input value={unlockPin} onChange={e=>{setUnlockPin(e.target.value.replace(/\D/g,"").slice(0,4));setUnlockErr("");}} placeholder="••••" inputMode="numeric" maxLength={4} autoFocus onKeyDown={e=>e.key==="Enter"&&confirmUnlock()} style={{marginBottom:8,letterSpacing:"0.4em",textAlign:"center",fontSize:18}}/>
+          {unlockErr&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{unlockErr}</p>}
+          <button className="btn btn-primary w-full" onClick={confirmUnlock}>Confirm</button>
+        </Modal>
+      )}
     </div>
   );
 }
