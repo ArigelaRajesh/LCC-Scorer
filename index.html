@@ -2255,9 +2255,25 @@ function Landing({onPick}){
           {tile("👑","Admin","Manage · PIN","rgba(239,68,68,.4)","rgba(239,68,68,.15)",()=>onPick("admin"),3)}
         </div>
 
+        {/* Join the Club — full width, public, no PIN needed; this is the player roster */}
+        <button onClick={()=>onPick("roster")} style={{
+          width:"100%",marginTop:12,padding:"16px 18px",borderRadius:20,cursor:"pointer",
+          display:"flex",alignItems:"center",gap:14,textAlign:"left",
+          background:"rgba(20,17,55,.72)",border:"1.5px solid rgba(52,211,153,.4)",
+          color:"#fff",fontFamily:"'Inter',sans-serif",backdropFilter:"blur(10px)",
+          animation:"slideInUp .5s ease .68s both",boxShadow:"0 6px 28px rgba(52,211,153,.15)"
+        }}>
+          <span style={{fontSize:30}}>🏏</span>
+          <span style={{flex:1}}>
+            <span style={{display:"block",fontWeight:700,fontSize:16,marginBottom:2}}>Join the Club</span>
+            <span style={{display:"block",fontSize:11,color:"#6ee7b7",fontFamily:"'JetBrains Mono',monospace"}}>Add your name & playing style</span>
+          </span>
+          <span style={{color:"#34d399",fontSize:13}}>→</span>
+        </button>
+
         {/* Weekend poll — full width, public, no PIN needed */}
         <button onClick={()=>onPick("poll")} style={{
-          width:"100%",marginTop:12,padding:"16px 18px",borderRadius:20,cursor:"pointer",
+          width:"100%",marginTop:10,padding:"16px 18px",borderRadius:20,cursor:"pointer",
           display:"flex",alignItems:"center",gap:14,textAlign:"left",
           background:"rgba(20,17,55,.72)",border:"1.5px solid rgba(167,139,250,.4)",
           color:"#fff",fontFamily:"'Inter',sans-serif",backdropFilter:"blur(10px)",
@@ -2370,7 +2386,7 @@ function PollPage({role,onExit}){
 }
 
 // ── Roster management — its own standalone page (admin only) ────────────────
-function RosterPage({onExit}){
+function RosterPage({role,onExit}){
   const[roster,setRoster]=React.useState(undefined);
   const[poll,setPoll]=React.useState(undefined);
 
@@ -2382,16 +2398,17 @@ function RosterPage({onExit}){
     return ()=>{ rRef.off("value",cb1); pRef.off("value",cb2); };
   },[]);
 
-  if(roster===undefined) return <Centered emoji="👥" title="Loading roster…" onExit={onExit}/>;
+  if(roster===undefined) return <Centered emoji="🏏" title="Loading…" onExit={onExit}/>;
 
   return(
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
       <div style={{maxWidth:480,margin:"0 auto"}}>
-        <div className="flex items-center justify-between" style={{marginBottom:18}}>
-          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>👥 Club Roster</h1>
+        <div className="flex items-center justify-between" style={{marginBottom:4}}>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>🏏 Join the Club</h1>
           <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
         </div>
-        <PollRosterTab roster={roster}/>
+        <p style={{color:"#a5b4fc",fontSize:12,fontFamily:"'JetBrains Mono',monospace",marginBottom:18}}>Add your name & playing style</p>
+        <PollRosterTab roster={roster} canDelete={role==="admin"}/>
       </div>
     </div>
   );
@@ -2460,29 +2477,59 @@ function PollResultsList({poll}){
 }
 
 // ── Roster management (admin only) ─────────────────────────────────────────
-function PollRosterTab({roster}){
+function PollRosterTab({roster,canDelete}){
   const[name,setName]=React.useState("");
   const[prole,setProle]=React.useState("Batsman"); // Batsman | Bowler | All-rounder
   const[keeper,setKeeper]=React.useState(false);
   const[bat,setBat]=React.useState("Right");
   const[bowl,setBowl]=React.useState("Seam");
+  const[pin,setPin]=React.useState("");          // PIN being SET when adding a new entry
   const[editingId,setEditingId]=React.useState(null);
+  const[unlockTarget,setUnlockTarget]=React.useState(null); // {id,player} — pending PIN check before edit/delete
+  const[unlockPin,setUnlockPin]=React.useState("");
+  const[unlockErr,setUnlockErr]=React.useState("");
+  const[unlockAction,setUnlockAction]=React.useState(null); // "edit" | "delete"
+  const[pinHelpTarget,setPinHelpTarget]=React.useState(null); // {id,player} — admin viewing/resetting a PIN
+  const[pinHelpNew,setPinHelpNew]=React.useState("");
 
   const needsBowlStyle = prole==="Bowler"||prole==="All-rounder";
-  const resetForm=()=>{ setName("");setProle("Batsman");setKeeper(false);setBat("Right");setBowl("Seam");setEditingId(null); };
-  const startEdit=(id,p)=>{
-    setEditingId(id); setName(p.name); setProle(p.role); setKeeper(!!p.keeper); setBat(p.bat||"Right"); setBowl(p.bowl||"Seam");
-  };
+  const resetForm=()=>{ setName("");setProle("Batsman");setKeeper(false);setBat("Right");setBowl("Seam");setPin("");setEditingId(null); };
+
   const save=()=>{
-    const nm=name.trim(); if(!nm){alert("Enter a player name.");return;}
+    const nm=name.trim(); if(!nm){alert("Enter your name.");return;}
+    if(!editingId && (!pin||pin.length!==4||!/^\d{4}$/.test(pin))){alert("Set a 4-digit PIN so only you can edit or remove this entry later.");return;}
     if(!FB_OK||!DB){alert("Offline — can't save right now.");return;}
     const id=editingId||("p_"+Math.random().toString(36).slice(2)+Date.now().toString(36));
-    const data={name:nm,role:prole,keeper,bat,bowl:needsBowlStyle?bowl:null};
+    // PIN is only set on first creation and never overwritten by a later edit, so it can't be
+    // silently changed by someone editing the entry (they already proved ownership to get here).
+    const existingPin=editingId?roster?.[editingId]?.pin:pin;
+    const data={name:nm,role:prole,keeper,bat,bowl:needsBowlStyle?bowl:null,pin:existingPin};
     DB.ref("roster/"+id).set(JSON.parse(JSON.stringify(data))).then(resetForm).catch(e=>alert("Save failed: "+e.message));
   };
-  const del=(id)=>{
-    if(!confirm("Remove this player from the roster?"))return;
+
+  // Tapping ✏️ or 🗑️ on someone's entry always asks for THEIR pin first (unless admin, who bypasses).
+  const requestUnlock=(id,p,action)=>{
+    if(canDelete){ // admin: skip the PIN check entirely, go straight to the action
+      if(action==="edit") doEdit(id,p); else doDelete(id);
+      return;
+    }
+    setUnlockTarget({id,player:p}); setUnlockAction(action); setUnlockPin(""); setUnlockErr("");
+  };
+  const doEdit=(id,p)=>{
+    setEditingId(id); setName(p.name); setProle(p.role); setKeeper(!!p.keeper); setBat(p.bat||"Right"); setBowl(p.bowl||"Seam");
+  };
+  const doDelete=(id)=>{
+    if(!confirm("Remove this entry from the club list?"))return;
     DB.ref("roster/"+id).remove();
+  };
+  const confirmUnlock=()=>{
+    if(!unlockTarget)return;
+    const correct=unlockTarget.player.pin;
+    if(!correct){ setUnlockErr("This entry has no PIN set (added before this feature) — ask admin to fix it for you."); return; }
+    if(unlockPin!==correct){ setUnlockErr("Wrong PIN — try again, or ask admin for help."); return; }
+    if(unlockAction==="edit") doEdit(unlockTarget.id,unlockTarget.player);
+    else doDelete(unlockTarget.id);
+    setUnlockTarget(null);
   };
 
   const entries=Object.entries(roster||{}).sort((a,b)=>a[1].name.localeCompare(b[1].name));
@@ -2490,9 +2537,9 @@ function PollRosterTab({roster}){
   return(
     <div>
       <div className="mini-card" style={{marginBottom:16}}>
-        <p className="section-title">{editingId?"✏️ Edit Player":"➕ Add Player"}</p>
-        <label>Name</label>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Player name" style={{marginBottom:12}}/>
+        <p className="section-title">{editingId?"✏️ Edit Your Details":"➕ Add Yourself"}</p>
+        <label>Your name</label>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Rajesh" style={{marginBottom:12}}/>
         <label>Role</label>
         <div className="grid-3" style={{marginBottom:12}}>
           {["Batsman","Bowler","All-rounder"].map(r=>(
@@ -2515,14 +2562,19 @@ function PollRosterTab({roster}){
             <button onClick={()=>setBowl("Seam")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bowl==="Seam"?"transparent":"#374151"}`,background:bowl==="Seam"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:bowl==="Seam"?"#111":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Seam</button>
           </div>
         </>)}
+        {!editingId&&(<>
+          <label>Set a 4-digit PIN</label>
+          <p style={{color:"#6b7280",fontSize:11,marginTop:-8,marginBottom:8}}>You'll need this to edit or remove your entry later — remember it!</p>
+          <input value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="••••" inputMode="numeric" maxLength={4} style={{marginBottom:12,letterSpacing:"0.4em",textAlign:"center",fontSize:18}}/>
+        </>)}
         <div style={{display:"flex",gap:8}}>
-          <button className="btn btn-primary" style={{flex:1}} onClick={save}>{editingId?"Save Changes":"➕ Add Player"}</button>
+          <button className="btn btn-primary" style={{flex:1}} onClick={save}>{editingId?"Save Changes":"➕ Add Me"}</button>
           {editingId&&<button className="btn" onClick={resetForm} style={{background:"transparent",border:"1px solid #374151",color:"#9ca3af"}}>Cancel</button>}
         </div>
       </div>
 
-      <p className="section-title">Roster ({entries.length})</p>
-      {entries.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No players added yet.</p>}
+      <p className="section-title">Who's in ({entries.length})</p>
+      {entries.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No one's added themselves yet — be the first!</p>}
       {entries.map(([id,p])=>(
         <div key={id} className="mini-card" style={{marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div>
@@ -2532,11 +2584,39 @@ function PollRosterTab({roster}){
             </div>
           </div>
           <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>startEdit(id,p)} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.3)",color:"#a5b4fc",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>✏️</button>
-            <button onClick={()=>del(id)} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.3)",color:"#f87171",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>🗑️</button>
+            {canDelete&&<button onClick={()=>{setPinHelpTarget({id,player:p});setPinHelpNew("");}} style={{background:"rgba(245,158,11,.12)",border:"1px solid rgba(245,158,11,.3)",color:"#fbbf24",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}} title="View or reset this player's PIN">🔑</button>}
+            <button onClick={()=>requestUnlock(id,p,"edit")} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.3)",color:"#a5b4fc",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>✏️</button>
+            {canDelete&&<button onClick={()=>requestUnlock(id,p,"delete")} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.3)",color:"#f87171",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>🗑️</button>}
           </div>
         </div>
       ))}
+
+      {pinHelpTarget&&(
+        <Modal onClose={()=>setPinHelpTarget(null)} title={`🔑 ${pinHelpTarget.player.name}'s PIN`}>
+          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>If they forgot their PIN, you can read it to them, or reset it to a new one (let them know the new PIN afterward).</p>
+          <div style={{textAlign:"center",letterSpacing:"0.4em",fontSize:26,fontWeight:700,background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(245,158,11,.4)",borderRadius:12,padding:"12px",color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginBottom:16}}>
+            {pinHelpTarget.player.pin || "— none set —"}
+          </div>
+          <label>Reset to a new 4-digit PIN</label>
+          <input value={pinHelpNew} onChange={e=>setPinHelpNew(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="••••" inputMode="numeric" maxLength={4} style={{marginBottom:12,letterSpacing:"0.4em",textAlign:"center",fontSize:18}}/>
+          <button className="btn btn-primary w-full" onClick={()=>{
+            if(!pinHelpNew||pinHelpNew.length!==4){alert("Enter a 4-digit PIN.");return;}
+            if(!FB_OK||!DB){alert("Offline — can't save right now.");return;}
+            DB.ref("roster/"+pinHelpTarget.id+"/pin").set(pinHelpNew)
+              .then(()=>{alert(`PIN reset to ${pinHelpNew}. Let ${pinHelpTarget.player.name} know!`);setPinHelpTarget(null);})
+              .catch(e=>alert("Failed: "+e.message));
+          }}>Reset PIN</button>
+        </Modal>
+      )}
+
+      {unlockTarget&&(
+        <Modal onClose={()=>setUnlockTarget(null)} title={`🔒 Enter ${unlockTarget.player.name}'s PIN`}>
+          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>To {unlockAction==="delete"?"remove":"edit"} this entry, enter the 4-digit PIN that was set when it was added.</p>
+          <input value={unlockPin} onChange={e=>{setUnlockPin(e.target.value.replace(/\D/g,"").slice(0,4));setUnlockErr("");}} placeholder="••••" inputMode="numeric" maxLength={4} autoFocus onKeyDown={e=>e.key==="Enter"&&confirmUnlock()} style={{marginBottom:8,letterSpacing:"0.4em",textAlign:"center",fontSize:18}}/>
+          {unlockErr&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{unlockErr}</p>}
+          <button className="btn btn-primary w-full" onClick={confirmUnlock}>Confirm</button>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -2580,6 +2660,28 @@ function PollCreateForm({poll}){
       <button className="btn btn-primary w-full" onClick={create}>{poll?"Update Poll":"📋 Publish Poll"}</button>
       {poll&&<button onClick={closePoll} style={{width:"100%",marginTop:8,padding:"9px",borderRadius:10,border:"1px solid rgba(239,68,68,.4)",background:"rgba(239,68,68,.1)",color:"#f87171",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',sans-serif"}}>Close This Week's Poll</button>}
     </div>
+  );
+}
+
+// ── Reusable share button: native share sheet (mobile) with a copy-to-clipboard fallback ──
+function ShareButton({label,buildText}){
+  const[copied,setCopied]=React.useState(false);
+  const doShare=async()=>{
+    const text=buildText();
+    if(navigator.share){
+      try{ await navigator.share({text}); return; }catch(e){ /* user cancelled or share failed — fall through to copy */ }
+    }
+    try{
+      await navigator.clipboard.writeText(text);
+      setCopied(true); setTimeout(()=>setCopied(false),2000);
+    }catch(e){
+      alert(text); // last-resort fallback so the content is at least visible to copy manually
+    }
+  };
+  return(
+    <button onClick={doShare} style={{background:"rgba(52,211,153,.12)",border:"1px solid rgba(52,211,153,.35)",color:"#6ee7b7",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',sans-serif",borderRadius:10,padding:"8px 16px"}}>
+      {copied?"✓ Copied!":label}
+    </button>
   );
 }
 
@@ -2635,11 +2737,20 @@ function PollVoteTab({roster,poll,votes}){
       <div className="mini-card" style={{marginBottom:16,textAlign:"center"}}>
         <p style={{color:"#fbbf24",fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:700,marginBottom:4}}>{poll.venue}</p>
         <p style={{color:"#a5b4fc",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>{new Date(poll.date+"T"+poll.time).toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"})} · {poll.time}</p>
-        <div style={{display:"flex",justifyContent:"center",gap:18,marginTop:12}}>
+        <div style={{display:"flex",justifyContent:"center",gap:18,marginTop:12,marginBottom:14}}>
           <span style={{color:"#34d399",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>✅ {counts.yes} Yes</span>
           <span style={{color:"#f87171",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>❌ {counts.no} No</span>
           <span style={{color:"#fbbf24",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>➕ {counts.plus1} Kids</span>
         </div>
+        <ShareButton label="📤 Share Poll" buildText={()=>{
+          const yesNames=Object.entries(votes||{}).filter(([,v])=>v?.choice==="yes").map(([id])=>roster?.[id]?.name).filter(Boolean).sort();
+          const noNames=Object.entries(votes||{}).filter(([,v])=>v?.choice==="no").map(([id])=>roster?.[id]?.name).filter(Boolean).sort();
+          const kidLines=Object.entries(votes||{}).filter(([,v])=>v?.plus1).map(([id,v])=>`${roster?.[id]?.name||"?"} +1 (${v.kidName})`).sort();
+          const dateStr=new Date(poll.date+"T"+poll.time).toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"});
+          let txt=`🏏 LCC Weekend Match\n📍 ${poll.venue}\n📅 ${dateStr} · ${poll.time}\n\n✅ Yes (${yesNames.length}): ${yesNames.join(", ")||"—"}\n❌ No (${noNames.length}): ${noNames.join(", ")||"—"}`;
+          if(kidLines.length) txt+=`\n➕ Bringing kids: ${kidLines.join(", ")}`;
+          return txt;
+        }}/>
       </div>
       <p className="section-title">Tap your name to vote</p>
       {entries.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No players in the roster yet — ask admin to add the team.</p>}
@@ -2684,6 +2795,10 @@ function PollTeamsTab({roster,poll,votes,teams}){
   const[capB,setCapB]=React.useState(teams?.captainB||"");
   const[teamA,setTeamA]=React.useState(teams?.teamA||[]);
   const[teamB,setTeamB]=React.useState(teams?.teamB||[]);
+  const[unlocked,setUnlocked]=React.useState(false);   // becomes true once the admin PIN has been entered THIS session
+  const[pinPrompt,setPinPrompt]=React.useState(false);  // showing the "enter admin PIN to edit" modal
+  const[pinTry,setPinTry]=React.useState("");
+  const[pinErr,setPinErr]=React.useState("");
 
   React.useEffect(()=>{
     setCapA(teams?.captainA||""); setCapB(teams?.captainB||"");
@@ -2692,42 +2807,62 @@ function PollTeamsTab({roster,poll,votes,teams}){
 
   if(!poll) return <Centered emoji="🏏" title="No poll open right now" sub="Teams are built from this week's poll responses."/>;
 
+  // Once a lineup is published, it's "live" and shouldn't be casually rearranged by anyone with the
+  // link — that's the actual bug being fixed here. Editing controls are locked behind the admin PIN
+  // until unlocked for this session; admin can share the PIN with whichever captain needs to make a
+  // change, same as they already do for scoring access.
+  const isLocked = teams?.published && !unlocked;
+  const requireUnlock=(action)=>{
+    if(!isLocked){ action(); return; }
+    setPinPrompt(true);
+  };
+  const confirmPin=()=>{
+    if(pinTry!==ADMIN_PIN){ setPinErr("Wrong PIN."); return; }
+    setUnlocked(true); setPinPrompt(false); setPinTry(""); setPinErr("");
+  };
+
   const yesIds=Object.entries(votes||{}).filter(([,v])=>v?.choice==="yes").map(([id])=>id);
   const yesPlayers=yesIds.map(id=>({id,...(roster?.[id]||{name:"(removed player)"})})).sort((a,b)=>a.name.localeCompare(b.name));
   const assigned=new Set([...teamA,...teamB]);
   const unassigned=yesPlayers.filter(p=>!assigned.has(p.id));
 
-  const moveTo=(id,team)=>{
+  const moveTo=(id,team)=>requireUnlock(()=>{
     setTeamA(a=>a.filter(x=>x!==id));
     setTeamB(b=>b.filter(x=>x!==id));
     if(team==="A") setTeamA(a=>[...a.filter(x=>x!==id),id]);
     if(team==="B") setTeamB(b=>[...b.filter(x=>x!==id),id]);
-  };
-  const remove=(id)=>{ setTeamA(a=>a.filter(x=>x!==id)); setTeamB(b=>b.filter(x=>x!==id)); };
+  });
+  const remove=(id)=>requireUnlock(()=>{ setTeamA(a=>a.filter(x=>x!==id)); setTeamB(b=>b.filter(x=>x!==id)); });
 
-  const publish=()=>{
+  const publish=()=>requireUnlock(()=>{
     if(!capA.trim()||!capB.trim()){alert("Enter both captains' names.");return;}
     if(teamA.length===0||teamB.length===0){alert("Both teams need at least one player.");return;}
     if(!FB_OK||!DB){alert("Offline — can't publish right now.");return;}
     DB.ref("poll/teams").set({captainA:capA.trim(),captainB:capB.trim(),teamA,teamB,published:true,publishedAt:Date.now()})
       .then(()=>alert("Teams published! Everyone can now see the lineup."))
       .catch(e=>alert("Failed: "+e.message));
-  };
+  });
 
   const nameOf=(id)=>roster?.[id]?.name||"(removed player)";
 
   return(
     <div>
-      <div className="mini-card" style={{marginBottom:16}}>
+      {isLocked&&(
+        <div style={{background:"rgba(245,158,11,.1)",border:"1px solid rgba(245,158,11,.35)",borderRadius:14,padding:"12px 14px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          <span style={{fontSize:12,color:"#fbbf24",fontFamily:"'Inter',sans-serif"}}>🔒 Teams are published — ask admin for the PIN to make changes.</span>
+          <button onClick={()=>setPinPrompt(true)} style={{background:"rgba(245,158,11,.2)",border:"1px solid rgba(245,158,11,.5)",color:"#fbbf24",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Unlock</button>
+        </div>
+      )}
+      <div className="mini-card" style={{marginBottom:16,opacity:isLocked?.6:1}}>
         <p className="section-title">👑 Captains for this week</p>
         <div className="grid-2">
           <div>
             <label>Team A Captain</label>
-            <input value={capA} onChange={e=>setCapA(e.target.value)} placeholder="Captain A's name"/>
+            <input value={capA} onChange={e=>requireUnlock(()=>setCapA(e.target.value))} readOnly={isLocked} placeholder="Captain A's name"/>
           </div>
           <div>
             <label>Team B Captain</label>
-            <input value={capB} onChange={e=>setCapB(e.target.value)} placeholder="Captain B's name"/>
+            <input value={capB} onChange={e=>requireUnlock(()=>setCapB(e.target.value))} readOnly={isLocked} placeholder="Captain B's name"/>
           </div>
         </div>
       </div>
@@ -2735,7 +2870,7 @@ function PollTeamsTab({roster,poll,votes,teams}){
       <p className="section-title">Available (voted Yes) — {unassigned.length} unassigned</p>
       {unassigned.length===0&&yesPlayers.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"14px 0"}}>No Yes votes yet — check the Vote tab.</p>}
       {unassigned.map(p=>(
-        <div key={p.id} className="mini-card" style={{marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div key={p.id} className="mini-card" style={{marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between",opacity:isLocked?.6:1}}>
           <span style={{fontSize:13,fontWeight:600}}>{p.name} {p.keeper&&"🧤"} <span style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>{p.role}</span></span>
           <div style={{display:"flex",gap:6}}>
             <button onClick={()=>moveTo(p.id,"A")} style={{background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.4)",color:"#fbbf24",borderRadius:8,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>→ A</button>
@@ -2745,7 +2880,7 @@ function PollTeamsTab({roster,poll,votes,teams}){
       ))}
 
       <div className="divider" style={{margin:"18px 0"}}/>
-      <div className="grid-2" style={{gap:12}}>
+      <div className="grid-2" style={{gap:12,opacity:isLocked?.6:1}}>
         <div>
           <p className="section-title" style={{color:"#fbbf24"}}>🟡 Team A ({teamA.length}){capA&&` · ${capA}`}</p>
           {teamA.map(id=>(
@@ -2766,9 +2901,27 @@ function PollTeamsTab({roster,poll,votes,teams}){
         </div>
       </div>
 
-      <button className="btn btn-primary w-full" style={{marginTop:18}} onClick={publish}>📢 Publish Teams</button>
-      {teams?.published&&<p style={{color:"#34d399",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:10}}>✓ Published — visible to everyone</p>}
+      <button className="btn btn-primary w-full" style={{marginTop:18}} onClick={publish}>📢 {teams?.published?"Update & Re-publish":"Publish Teams"}</button>
+      {teams?.published&&(
+        <div style={{textAlign:"center",marginTop:10}}>
+          <p style={{color:"#34d399",fontSize:11,fontFamily:"'JetBrains Mono',monospace",marginBottom:10}}>✓ Published — visible to everyone</p>
+          <ShareButton label="📤 Share Lineup" buildText={()=>{
+            const dateStr=poll?new Date(poll.date+"T"+poll.time).toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"}):"";
+            let txt=`🏏 LCC Teams${poll?` — ${poll.venue} · ${dateStr} ${poll.time}`:""}\n\n🟡 Team A${capA?` (${capA})`:""}:\n${teamA.map(id=>"  • "+nameOf(id)).join("\n")||"  —"}\n\n⚡ Team B${capB?` (${capB})`:""}:\n${teamB.map(id=>"  • "+nameOf(id)).join("\n")||"  —"}`;
+            return txt;
+          }}/>
+        </div>
+      )}
       <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:10}}>Even after the match starts, you can come back here and adjust who's on which team if plans change.</p>
+
+      {pinPrompt&&(
+        <Modal onClose={()=>{setPinPrompt(false);setPinTry("");setPinErr("");}} title="🔒 Admin PIN required">
+          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Teams are already published. Enter the admin PIN to make further changes — ask admin if you don't have it.</p>
+          <input value={pinTry} onChange={e=>{setPinTry(e.target.value.replace(/\D/g,"").slice(0,4));setPinErr("");}} placeholder="••••" inputMode="numeric" maxLength={4} autoFocus onKeyDown={e=>e.key==="Enter"&&confirmPin()} style={{marginBottom:8,letterSpacing:"0.4em",textAlign:"center",fontSize:18}}/>
+          {pinErr&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{pinErr}</p>}
+          <button className="btn btn-primary w-full" onClick={confirmPin}>Unlock</button>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -2792,7 +2945,7 @@ function Root(){
   if(screen==="viewer")  return <ViewerLive onExit={home}/>;
   if(screen==="history") return <HistoryPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
   if(screen==="poll")    return <PollPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
-  if(screen==="roster")  return <RosterPage onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
+  if(screen==="roster")  return <RosterPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
   if(screen==="pollAdmin") return <PollAdminPage onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
   if(screen==="scorer")  return <App role="scorer" onExit={home}/>;
   if(screen==="admin")   return <App role="admin" onExit={home} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("pollAdmin")} onRoster={()=>setScreen("roster")}/>;
