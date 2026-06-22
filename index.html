@@ -24,7 +24,11 @@
     appId: "1:813330930410:web:e996dc941659e5fd6bd593"
   };
   // ── App PINs (admin is fixed; team PINs are set per-match by admin) ──
+  // ADMIN_PIN = Super Admin (full control: matches, scoring, everything).
+  // BASIC_ADMIN_PIN = Basic Admin helper (poll, roster/name fixes, teams — NO match control).
+  // To change either, just edit the 4 digits below.
   const ADMIN_PIN = "4821";
+  const BASIC_ADMIN_PIN = "1234";
 
   // Persistent per-device ID — survives refresh so the same phone re-entering a PIN
   // is recognized as the same scorer, not a new "3rd person".
@@ -2117,7 +2121,7 @@ function PinGate({title,pin,altPin,verify,hint,onOk,onCancel}){
   const submit=()=>{
     if(verify){
       const r=verify(val);
-      if(r.ok){onOk();}else{setErr(true);setErrMsg(r.msg||"❌ Wrong PIN");setVal("");}
+      if(r.ok){onOk(r);}else{setErr(true);setErrMsg(r.msg||"❌ Wrong PIN");setVal("");}
     } else {
       if(val===pin||(altPin&&val===altPin)){onOk();}else{setErr(true);setErrMsg("❌ Wrong PIN, try again");setVal("");}
     }
@@ -2409,7 +2413,7 @@ function Landing({onPick}){
             <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:9,textTransform:"uppercase",letterSpacing:".2em",marginBottom:10,paddingLeft:4}}>Club Menu</p>
             {menuItem("📊","Stats & Records","Leaderboard · player profiles","rgba(245,158,11,.35)",()=>onPick("stats"))}
             {menuItem("📚","History","Past LCC matches","rgba(99,102,241,.35)",()=>onPick("history"))}
-            {menuItem("👑","Admin","Manage · PIN","rgba(239,68,68,.35)",()=>onPick("admin"))}
+            {menuItem("👑","Admin","Super or Basic · PIN","rgba(239,68,68,.35)",()=>onPick("admin"))}
           </div>
         </>)}
 
@@ -3348,10 +3352,55 @@ function StatsPage({onExit}){
   );
 }
 
+// ── Basic Admin home — limited helper tools (no match control) ────────────────
+function BasicAdminHome({onPick,onExit}){
+  const tile=(emoji,title,sub,color,glow,screen,idx)=>(
+    <button onClick={()=>onPick(screen)} style={{
+      display:"flex",alignItems:"center",gap:14,textAlign:"left",width:"100%",
+      padding:"16px 18px",borderRadius:20,cursor:"pointer",marginBottom:10,
+      background:"rgba(20,17,55,.72)",border:`1.5px solid ${color}`,
+      color:"#fff",fontFamily:"'Inter',sans-serif",backdropFilter:"blur(10px)",
+      animation:`slideInUp .4s ease ${0.07*idx+0.1}s both`,boxShadow:`0 6px 24px ${glow}`,transition:"transform .15s"
+    }}
+    onMouseEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
+    onMouseLeave={e=>e.currentTarget.style.transform=""}>
+      <span style={{fontSize:28}}>{emoji}</span>
+      <span style={{flex:1}}>
+        <span style={{display:"block",fontWeight:700,fontSize:16,marginBottom:2}}>{title}</span>
+        <span style={{display:"block",fontSize:11,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace"}}>{sub}</span>
+      </span>
+      <span style={{color:"#6b7280",fontSize:14}}>→</span>
+    </button>
+  );
+  return(
+    <div style={{minHeight:"100vh",padding:"22px 18px",background:"linear-gradient(160deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)"}}>
+      <div style={{maxWidth:440,margin:"0 auto"}}>
+        <div className="flex items-center justify-between" style={{marginBottom:6}}>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>🛠️ Admin Tools</h1>
+          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>
+        </div>
+        <div style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",borderRadius:14,padding:"10px 14px",marginBottom:18}}>
+          <span style={{fontSize:12,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace"}}>👤 Basic admin · poll, roster & teams. Match scoring is super-admin only.</span>
+        </div>
+        {tile("📋","Manage Weekly Poll","Create · update · close poll","rgba(167,139,250,.4)","rgba(167,139,250,.12)","pollAdmin",0)}
+        {tile("👥","Votes & Team Builder","See responses · build teams","rgba(52,211,153,.4)","rgba(52,211,153,.12)","poll",1)}
+        {tile("🏏","Roster & Name Fixes","Add · edit · correct spellings","rgba(245,158,11,.4)","rgba(245,158,11,.12)","roster",2)}
+        {tile("📚","Match History","Browse past matches","rgba(99,102,241,.4)","rgba(99,102,241,.12)","history",3)}
+        {tile("📊","Stats & Records","Leaderboard · profiles","rgba(245,158,11,.4)","rgba(245,158,11,.12)","stats",4)}
+      </div>
+    </div>
+  );
+}
+
 function Root(){
-  const[screen,setScreen]=React.useState("landing"); // landing|viewer|scorer|admin|history
+  const[screen,setScreen]=React.useState("landing"); // landing|viewer|scorer|admin|basicAdmin|history|...
   const[gate,setGate]=React.useState(null);          // null | "scorer" | "admin"
-  const[isAdmin,setIsAdmin]=React.useState(false);    // persists for this session once admin PIN is entered
+  const[adminTier,setAdminTier]=React.useState(null);// null | "basic" | "super" — set once an admin PIN is entered
+
+  const isAdmin = adminTier!==null;          // any admin (basic or super)
+  const isSuper = adminTier==="super";       // full match control
+  // Where each role returns to when exiting a sub-page:
+  const adminHome = adminTier==="super"?"admin":adminTier==="basic"?"basicAdmin":"landing";
 
   const pick=(r)=>{
     if(r==="scorer"){setGate("scorer");}
@@ -3361,15 +3410,24 @@ function Root(){
   const home=()=>{setScreen("landing");setGate(null);};
 
   if(gate==="scorer") return <ScorerGate onOk={()=>{setGate(null);setScreen("scorer");}} onCancel={home}/>;
-  if(gate==="admin")  return <PinGate title="Admin Access"  pin={ADMIN_PIN}  onOk={()=>{setGate(null);setIsAdmin(true);setScreen("admin");}}  onCancel={home}/>;
+  if(gate==="admin")  return <PinGate title="Admin Access" hint="Super or Basic admin PIN"
+    verify={(v)=>{
+      if(v===ADMIN_PIN)       return {ok:true, tier:"super"};
+      if(v===BASIC_ADMIN_PIN) return {ok:true, tier:"basic"};
+      return {ok:false, msg:"❌ Wrong PIN, try again"};
+    }}
+    onOk={(r)=>{ setGate(null); setAdminTier(r.tier); setScreen(r.tier==="super"?"admin":"basicAdmin"); }}
+    onCancel={home}/>;
 
   if(screen==="landing") return <Landing onPick={pick}/>;
   if(screen==="viewer")  return <ViewerLive onExit={home}/>;
-  if(screen==="history") return <HistoryPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
-  if(screen==="poll")    return <PollPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
-  if(screen==="roster")  return <RosterPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
-  if(screen==="stats")   return <StatsPage onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
-  if(screen==="pollAdmin") return <PollAdminPage onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
+  if(screen==="basicAdmin") return <BasicAdminHome onPick={setScreen} onExit={home}/>;
+  // History delete is destructive → super-admin only; basic admin & viewers get read-only.
+  if(screen==="history") return <HistoryPage role={isSuper?"admin":"viewer"} onExit={()=>setScreen(adminHome)}/>;
+  if(screen==="poll")    return <PollPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(adminHome)}/>;
+  if(screen==="roster")  return <RosterPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(adminHome)}/>;
+  if(screen==="stats")   return <StatsPage onExit={()=>setScreen(adminHome)}/>;
+  if(screen==="pollAdmin") return <PollAdminPage onExit={()=>setScreen(adminHome)}/>;
   if(screen==="scorer")  return <App role="scorer" onExit={home}/>;
   if(screen==="admin")   return <App role="admin" onExit={home} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("pollAdmin")} onRoster={()=>setScreen("roster")}/>;
   return <Landing onPick={pick}/>;
