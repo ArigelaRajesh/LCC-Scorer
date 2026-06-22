@@ -734,7 +734,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
 }
 
 // ── App root ─────────────────────────────────────────────────────────────────
-function App({role,onExit,onHistory,onPoll,onRoster}){
+function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
   const isScorer=role==="scorer"||role==="admin";
   const[match,setMatch]=useState(null);
   const[tab,setTab]=useState("score");
@@ -849,6 +849,20 @@ function App({role,onExit,onHistory,onPoll,onRoster}){
 
   // Called once the batting team's scorer enters opening striker/non-striker
   // and the bowling team's scorer (or admin) enters the opening bowler.
+  const fixPlayers=({striker,nonStriker,bowler})=>setInn(p=>{
+    const b={...p.batsmen};
+    if(!b[striker]) b[striker]={...nb(striker,resolvePid(striker))};
+    if(nonStriker&&!b[nonStriker]) b[nonStriker]={...nb(nonStriker,resolvePid(nonStriker))};
+    b[striker]={...b[striker],onStrike:true};
+    if(nonStriker) b[nonStriker]={...b[nonStriker],onStrike:false};
+    const bwlrs={...p.bowlers};
+    if(!bwlrs[bowler]) bwlrs[bowler]=nw(bowler,resolvePid(bowler));
+    const battingOrder=p.battingOrder.includes(striker)?p.battingOrder:[...p.battingOrder,striker];
+    const bo2=(nonStriker&&!battingOrder.includes(nonStriker))?[...battingOrder,nonStriker]:battingOrder;
+    const bowlingOrder=p.bowlingOrder.includes(bowler)?p.bowlingOrder:[...p.bowlingOrder,bowler];
+    return{...p,batsmen:b,bowlers:bwlrs,battingOrder:bo2,bowlingOrder,strikerName:striker,nonStrikerName:nonStriker,bowlerName:bowler};
+  });
+
   const fillOpeners=({striker,nonStriker,bowler})=>{
     setInn(p=>{
       const single=p.single;
@@ -1077,20 +1091,10 @@ function App({role,onExit,onHistory,onPoll,onRoster}){
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <span style={{color:"#4b5563",fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
             {role==="admin"&&onHistory&&<button onClick={onHistory} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.35)",color:"#a5b4fc",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>📚 History</button>}
-            <ManualFixButton inn={inn} rosterNames={rosterNames} onSave={({striker,nonStriker,bowler})=>setInn(p=>{
-              const b={...p.batsmen};
-              if(!b[striker]) b[striker]={...nb(striker,resolvePid(striker))};
-              if(nonStriker&&!b[nonStriker]) b[nonStriker]={...nb(nonStriker,resolvePid(nonStriker))};
-              b[striker]={...b[striker],onStrike:true};
-              if(nonStriker) b[nonStriker]={...b[nonStriker],onStrike:false};
-              const bwlrs={...p.bowlers};
-              if(!bwlrs[bowler]) bwlrs[bowler]=nw(bowler,resolvePid(bowler));
-              const battingOrder=p.battingOrder.includes(striker)?p.battingOrder:[...p.battingOrder,striker];
-              const bo2=(nonStriker&&!battingOrder.includes(nonStriker))?[...battingOrder,nonStriker]:battingOrder;
-              const bowlingOrder=p.bowlingOrder.includes(bowler)?p.bowlingOrder:[...p.bowlingOrder,bowler];
-              return{...p,batsmen:b,bowlers:bwlrs,battingOrder:bo2,bowlingOrder,strikerName:striker,nonStrikerName:nonStriker,bowlerName:bowler};
-            })}/>
+            {role==="admin"&&onAnnounce&&<button onClick={onAnnounce} style={{background:"rgba(245,158,11,.12)",border:"1px solid rgba(245,158,11,.35)",color:"#fbbf24",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>📢 Notice</button>}
+            <ManualFixButton inn={inn} rosterNames={rosterNames} onSave={({striker,nonStriker,bowler})=>fixPlayers({striker,nonStriker,bowler})}/>
             {role==="admin"&&<EditMatchButton inn={inn} onSave={({overs,maxWkts})=>setInn(p=>({...p,overs,maxWkts}))}/>}
+            {role==="admin"&&<PinManagementButton/>}
             {role==="admin"&&<PinButton match={match} slotsA={slotsA} slotsB={slotsB} onClearSlots={()=>{
               setSlotsA([]); setSlotsB([]);
             }}/>}
@@ -1128,6 +1132,8 @@ function App({role,onExit,onHistory,onPoll,onRoster}){
           pw={pw} nbn={nbn} setNBN={setNBN} confBatsman={confBatsman}
           nnb={nnb} nbwn={nbwn} setNBWN={setNBWN} confBowler={confBowler}
           pr={pr} onRetire={retire}
+          onSwapStrike={()=>setInn(p=>(!p.single&&p.nonStrikerName)?swap(p):p)}
+          onFixPlayers={fixPlayers}
           onEndInnings={manualEndInnings} onRevert={revert} canRevert={!!preEnd} role={role}
           onUndo={undo} canUndo={hist.length>0}/>}
         {tab==="batting"&&<BattingTab inn={inn}/>}
@@ -1138,7 +1144,7 @@ function App({role,onExit,onHistory,onPoll,onRoster}){
 }
 
 // ── Score Tab ─────────────────────────────────────────────────────────────────
-function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onEndInnings,onRevert,canRevert,role,onUndo,canUndo}){
+function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onSwapStrike,onFixPlayers,onEndInnings,onRevert,canRevert,role,onUndo,canUndo}){
   const[wt,setWT]=useState("Bowled");
   const[fielder,setFielder]=useState("");
   const[roRuns,setRoRuns]=useState(0);      // runs completed before the run-out happened
@@ -1232,21 +1238,35 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb
 
       {/* Mini cards */}
       <div className="grid-2">
-        <div className="mini-card">
-          <p className="section-title">🟡 {inn.single?"Batsman":"Batting"}</p>
+        <div className="mini-card" style={{padding:"10px 12px"}}>
+          {/* Header row: title + quick-swap + edit */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <p className="section-title" style={{marginBottom:0}}>🟡 {inn.single?"Batsman":"Batting"}</p>
+            {!inn.single&&NS&&(
+              <div style={{display:"flex",gap:5}}>
+                <button onClick={onSwapStrike} title="Swap strike — instant, no modal" style={{
+                  padding:"3px 8px",borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:700,
+                  background:"rgba(99,102,241,.15)",border:"1px solid rgba(99,102,241,.4)",color:"#a5b4fc",
+                  fontFamily:"'JetBrains Mono',monospace"
+                }}>⇄</button>
+                <EditPlayersButton inn={inn} rosterNames={rosterNames} onSwap={onSwapStrike} onSave={onFixPlayers}/>
+              </div>
+            )}
+          </div>
           {(inn.single?[{p:SK,a:true}]:[{p:SK,a:true},{p:NS,a:false}]).map(({p,a},i)=>p?(
-            <div key={i} className="flex items-center justify-between" style={{padding:"3px 0"}}>
-              <span style={{fontSize:13,fontWeight:a?700:400,color:a?"#fff":"#9ca3af",display:"flex",alignItems:"center",gap:4,overflow:"hidden"}}>
+            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"3px 0"}}>
+              <span style={{fontSize:13,fontWeight:a?700:400,color:a?"#fff":"#9ca3af",display:"flex",alignItems:"center",gap:5,overflow:"hidden"}}>
                 {a&&<span style={{color:"#fbbf24",fontSize:10}}>●</span>}
                 <span className="truncate">{p.name}</span>
+                {a&&<span style={{fontSize:9,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",background:"rgba(245,158,11,.15)",borderRadius:4,padding:"1px 4px",flexShrink:0}}>STRIKE</span>}
               </span>
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0,marginLeft:8}}>{p.runs} ({p.balls})</span>
             </div>
           ):null)}
           {retiredList.length>0&&<p style={{fontSize:9,color:"#7c6aa8",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{retiredList.length} retired</p>}
         </div>
-        <div className="mini-card">
-          <p className="section-title">🎯 Bowling</p>
+        <div className="mini-card" style={{padding:"10px 12px"}}>
+          <p className="section-title" style={{marginBottom:8}}>🎯 Bowling</p>
           {BW&&<div className="flex items-center justify-between">
             <span style={{fontSize:13,fontWeight:700,color:"#fff"}} className="truncate">{BW.name}</span>
             <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0,marginLeft:8}}>{BW.overs}.{BW.ballsThisOver}-{BW.runs}-{BW.wickets}</span>
@@ -1384,6 +1404,131 @@ function Modal({children,onClose,title}){
 }
 
 // ── PIN Viewer — admin can check both team PINs anytime during the match ──────
+// ── Super Admin: PIN management — set Basic Admin PIN from inside the app ──────
+function PinManagementButton(){
+  const[open,setOpen]=React.useState(false);
+  const[basicPin,setBasicPin]=React.useState("");
+  const[superPin,setSuperPin]=React.useState("");
+  const[saved,setSaved]=React.useState(false);
+  const[err,setErr]=React.useState("");
+  const openModal=()=>{ setBasicPin(""); setSuperPin(""); setSaved(false); setErr(""); setOpen(true); };
+  const save=()=>{
+    setErr("");
+    const bp=basicPin.trim(), sp=superPin.trim();
+    if(bp&&(bp.length<4||!/^\d+$/.test(bp))){ setErr("Basic PIN must be 4 digits."); return; }
+    if(sp&&(sp.length<4||!/^\d+$/.test(sp))){ setErr("Super PIN must be 4 digits."); return; }
+    if(bp&&sp&&bp===sp){ setErr("The two PINs can't be the same."); return; }
+    if(!bp&&!sp){ setErr("Enter at least one PIN to update."); return; }
+    if(!FB_OK||!DB){ setErr("Offline — can't save right now."); return; }
+    const updates={};
+    if(bp) updates["adminPins/basic"]=bp;
+    if(sp) updates["adminPins/super"]=sp;
+    DB.ref().update(updates)
+      .then(()=>{ setSaved(true); setBasicPin(""); setSuperPin(""); })
+      .catch(e=>setErr("Save failed: "+e.message));
+  };
+  return(<>
+    <button onClick={openModal} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.35)",color:"#f87171",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>🔐 PINs</button>
+    {open&&<Modal onClose={()=>setOpen(false)} title="🔐 Manage Admin PINs">
+      <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Leave a field blank to keep the current PIN unchanged. Changes take effect for the next login — anyone already logged in stays active until they leave.</p>
+      <label>New Basic Admin PIN (4 digits)</label>
+      <input value={basicPin} onChange={e=>{setBasicPin(e.target.value.replace(/\D/g,"").slice(0,4));setSaved(false);setErr("");}} placeholder="Leave blank to keep current" inputMode="numeric" maxLength={4} style={{marginBottom:12,letterSpacing:"0.3em",textAlign:"center"}}/>
+      <label>New Super Admin PIN (4 digits)</label>
+      <input value={superPin} onChange={e=>{setSuperPin(e.target.value.replace(/\D/g,"").slice(0,4));setSaved(false);setErr("");}} placeholder="Leave blank to keep current" inputMode="numeric" maxLength={4} style={{marginBottom:14,letterSpacing:"0.3em",textAlign:"center"}}/>
+      {err&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{err}</p>}
+      {saved&&<p style={{color:"#34d399",fontSize:12,marginBottom:10}}>✓ PINs updated! Share the new Basic PIN with your helper.</p>}
+      <p style={{color:"#4338ca",fontSize:10,fontFamily:"'JetBrains Mono',monospace",marginBottom:12}}>Note: PINs are stored securely in Firebase. The hardcoded fallbacks in the file still work if Firebase is unreachable.</p>
+      <button className="btn btn-primary w-full" onClick={save}>Save PINs</button>
+    </Modal>}
+  </>);
+}
+
+// ── EditPlayersButton — redesigned player editor available to scorer AND admin ─
+// Accessible right from the batting card. Shows clear visual crease layout with
+// inline name editing and a swap button. ManualFixButton in the admin header
+// still works as a secondary entry point.
+function EditPlayersButton({inn,rosterNames,onSwap,onSave}){
+  const[open,setOpen]=React.useState(false);
+  const[sk,setSk]=React.useState("");
+  const[ns,setNs]=React.useState("");
+  const[bw,setBw]=React.useState("");
+  const[swapped,setSwapped]=React.useState(false);
+  if(!inn||!onSave) return null;
+  const openModal=()=>{ setSk(inn.strikerName||""); setNs(inn.nonStrikerName||""); setBw(inn.bowlerName||""); setSwapped(false); setOpen(true); };
+  const doSwap=()=>{ const t=sk; setSk(ns); setNs(t); setSwapped(s=>!s); };
+  const save=()=>{
+    const s=sk.trim(), n=ns.trim(), b=bw.trim();
+    if(!s){alert("Striker name can't be empty.");return;}
+    if(!inn.single&&!n){alert("Non-striker name can't be empty.");return;}
+    if(!b){alert("Bowler name can't be empty.");return;}
+    if(!inn.single&&s.toLowerCase()===n.toLowerCase()){alert("Striker and non-striker can't be the same person.");return;}
+    onSave({striker:s,nonStriker:inn.single?null:n,bowler:b});
+    setOpen(false);
+  };
+  const nameInputStyle=(accent)=>({
+    flex:1,background:"rgba(7,5,15,.8)",border:`1.5px solid ${accent}`,borderRadius:10,
+    padding:"9px 12px",color:"#fff",fontSize:14,fontFamily:"'Inter',sans-serif",outline:"none"
+  });
+  return(<>
+    <button onClick={openModal} title="Edit player names or swap strike" style={{
+      padding:"3px 8px",borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:600,
+      background:"rgba(52,211,153,.12)",border:"1px solid rgba(52,211,153,.35)",color:"#6ee7b7",
+      fontFamily:"'JetBrains Mono',monospace"
+    }}>✏️</button>
+    {open&&<Modal onClose={()=>setOpen(false)} title="🏏 Edit Players">
+      <p style={{color:"#6b7280",fontSize:11,fontFamily:"'JetBrains Mono',monospace",marginBottom:16}}>Fix names or swap strike · scores already recorded are not affected</p>
+
+      {/* AT THE CREASE section */}
+      <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em",marginBottom:10}}>At the Crease</p>
+
+      {/* Striker card */}
+      <div style={{background:"rgba(245,158,11,.08)",border:"1.5px solid rgba(245,158,11,.35)",borderRadius:14,padding:"10px 12px",marginBottom:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+          <span style={{fontSize:9,fontWeight:700,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",background:"rgba(245,158,11,.15)",borderRadius:4,padding:"2px 7px"}}>● ON STRIKE</span>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <input value={sk} onChange={e=>setSk(e.target.value)} list="epPlayers" placeholder="Striker's name" style={nameInputStyle("rgba(245,158,11,.5)")}/>
+        </div>
+      </div>
+
+      {/* Swap button */}
+      {!inn.single&&<div style={{display:"flex",justifyContent:"center",margin:"4px 0"}}>
+        <button onClick={doSwap} style={{
+          padding:"7px 22px",borderRadius:20,cursor:"pointer",border:"1.5px solid rgba(99,102,241,.5)",
+          background:swapped?"rgba(99,102,241,.25)":"rgba(99,102,241,.1)",color:"#a5b4fc",
+          fontSize:13,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",transition:"background .15s"
+        }} title="Swap striker and non-striker">⇄ Swap Strike</button>
+      </div>}
+
+      {/* Non-striker card */}
+      {!inn.single&&<div style={{background:"rgba(99,102,241,.07)",border:"1.5px solid rgba(99,102,241,.25)",borderRadius:14,padding:"10px 12px",marginTop:4,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+          <span style={{fontSize:9,fontWeight:700,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",background:"rgba(99,102,241,.15)",borderRadius:4,padding:"2px 7px"}}>○ NON-STRIKER</span>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <input value={ns} onChange={e=>setNs(e.target.value)} list="epPlayers" placeholder="Non-striker's name" style={nameInputStyle("rgba(99,102,241,.45)")}/>
+        </div>
+      </div>}
+
+      {/* Bowler section */}
+      <div style={{borderTop:"1px solid #1e1b4b",paddingTop:14,marginBottom:14}}>
+        <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em",marginBottom:8}}>Bowling This Over</p>
+        <div style={{background:"rgba(52,211,153,.07)",border:"1.5px solid rgba(52,211,153,.25)",borderRadius:14,padding:"10px 12px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+            <span style={{fontSize:9,fontWeight:700,color:"#34d399",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",background:"rgba(52,211,153,.15)",borderRadius:4,padding:"2px 7px"}}>🎯 BOWLER</span>
+          </div>
+          <input value={bw} onChange={e=>setBw(e.target.value)} list="epPlayers" placeholder="Bowler's name" style={nameInputStyle("rgba(52,211,153,.4)")}/>
+        </div>
+      </div>
+
+      <datalist id="epPlayers">{(rosterNames||[]).map(n=><option key={n} value={n}/>)}</datalist>
+      {swapped&&<p style={{color:"#a5b4fc",fontSize:11,fontFamily:"'JetBrains Mono',monospace",marginBottom:10,textAlign:"center"}}>⇄ Batsmen swapped — tap Save to confirm</p>}
+      <button className="btn btn-primary w-full" style={{borderRadius:14}} onClick={save}>Save Changes</button>
+    </Modal>}
+  </>);
+}
+
+// ── Super Admin: Fix current players / bowler mid-match ───────────────────────
 function ManualFixButton({inn,onSave,rosterNames}){
   const[open,setOpen]=React.useState(false);
   const[sk,setSk]=React.useState("");
@@ -2064,6 +2209,21 @@ function HistoryPage({role,onExit}){
 // ── Full scorecard for a completed match (from history) ──────────────────────
 function MatchDetailView({match:m,role,onBack,onDelete}){
   const[tab,setTab]=React.useState("summary");
+  const[editOpen,setEditOpen]=React.useState(false);
+  const[eWinner,setEWinner]=React.useState(m.result?.winner||"");
+  const[eMargin,setEMargin]=React.useState(m.result?.margin||"");
+  const[eToss,setEToss]=React.useState(m.tossSummary||"");
+  const[eSaving,setESaving]=React.useState(false);
+  const saveEdit=()=>{
+    if(!FB_OK||!DB) return;
+    setESaving(true);
+    const updates={};
+    updates["history/"+m.id+"/result"]={winner:eWinner.trim()||null,margin:eMargin.trim()||null};
+    updates["history/"+m.id+"/tossSummary"]=eToss.trim()||null;
+    DB.ref().update(updates)
+      .then(()=>{ setESaving(false); setEditOpen(false); alert("Match result updated."); })
+      .catch(e=>{ setESaving(false); alert("Save failed: "+e.message); });
+  };
   const d=new Date(m.finishedAt);
   const r=m.result||{};
   return(
@@ -2071,8 +2231,21 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
       <div style={{maxWidth:520,margin:"0 auto"}}>
         <div className="flex items-center justify-between" style={{marginBottom:14}}>
           <button onClick={onBack} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← all matches</button>
-          {role==="admin"&&<button onClick={()=>{if(confirm("Delete this match permanently? This cannot be undone."))onDelete(m.id);}} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",borderRadius:10,padding:"6px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>🗑️ Delete Match</button>}
+          {role==="admin"&&<div style={{display:"flex",gap:6}}>
+            <button onClick={()=>setEditOpen(true)} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.4)",color:"#a5b4fc",borderRadius:10,padding:"6px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>✏️ Edit Result</button>
+            <button onClick={()=>{if(confirm("Delete this match permanently? This cannot be undone."))onDelete(m.id);}} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",borderRadius:10,padding:"6px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>🗑️ Delete</button>
+          </div>}
         </div>
+        {editOpen&&<Modal onClose={()=>setEditOpen(false)} title="✏️ Edit Match Result">
+          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Correct the result, margin, or toss summary if something was recorded wrongly.</p>
+          <label>Winner (leave blank for a tie)</label>
+          <input value={eWinner} onChange={e=>setEWinner(e.target.value)} placeholder="e.g. Team A" style={{marginBottom:12}}/>
+          <label>Margin</label>
+          <input value={eMargin} onChange={e=>setEMargin(e.target.value)} placeholder="e.g. 14 runs or 3 wickets" style={{marginBottom:12}}/>
+          <label>Toss summary</label>
+          <input value={eToss} onChange={e=>setEToss(e.target.value)} placeholder="e.g. Team A won the toss, chose to bat first" style={{marginBottom:14}}/>
+          <button className="btn btn-primary w-full" onClick={saveEdit} disabled={eSaving}>{eSaving?"Saving…":"Save Changes"}</button>
+        </Modal>}
 
         {/* Result header */}
         <div className="card" style={{textAlign:"center",marginBottom:16}}>
@@ -2351,8 +2524,47 @@ function CricketScene({hideText}){
   );
 }
 
+// ── LCC Brand Logo — compact badge with tri-color accents + bat·ball mark ──────
+function LCCLogo(){
+  const grad=(c1,c2)=>({background:`linear-gradient(90deg,${c1},${c2},${c1})`,backgroundSize:"300% auto",
+    WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"});
+  return(
+    <div style={{flexShrink:0,display:"inline-flex",flexDirection:"column",alignItems:"center",
+      background:"rgba(8,6,32,.85)",border:"1.5px solid transparent",borderRadius:14,padding:"5px 10px 6px",
+      backgroundImage:"linear-gradient(rgba(8,6,32,.85),rgba(8,6,32,.85)),linear-gradient(135deg,#FF9933,#6366f1,#138808)",
+      backgroundOrigin:"border-box",backgroundClip:"padding-box, border-box",
+      boxShadow:"0 4px 16px rgba(0,0,0,.4)"}}>
+      {/* Tri-color stripe */}
+      <div style={{display:"flex",gap:2,marginBottom:2}}>
+        <div style={{height:2.5,width:12,borderRadius:2,background:"#FF9933"}}/>
+        <div style={{height:2.5,width:12,borderRadius:2,background:"rgba(255,255,255,.8)"}}/>
+        <div style={{height:2.5,width:12,borderRadius:2,background:"#138808"}}/>
+      </div>
+      {/* LCC animated letters */}
+      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700,letterSpacing:"-1px",lineHeight:1}}>
+        <span style={grad("#FF9933","#ffb366")}>L</span>
+        <span style={grad("#ffffff","#a5b4fc")}>C</span>
+        <span style={grad("#138808","#3fa340")}>C</span>
+      </div>
+      {/* Bat · Ball mark */}
+      <div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}>
+        <div style={{width:16,height:3,borderRadius:2,background:"#e8c39a",transform:"rotate(-20deg)",transformOrigin:"right center"}}/>
+        <div style={{width:7,height:7,borderRadius:"50%",background:"radial-gradient(circle at 35% 35%,#ff6b6b,#dc2626)",
+          border:"1px solid rgba(255,160,160,.6)",boxShadow:"0 0 4px rgba(239,68,68,.6)"}}/>
+      </div>
+    </div>
+  );
+}
+
 function Landing({onPick}){
   const[menuOpen,setMenuOpen]=React.useState(false);
+  const[announcement,setAnnouncement]=React.useState(null);
+  React.useEffect(()=>{
+    if(!FB_OK||!DB)return;
+    const ref=DB.ref("announcement");
+    const cb=ref.on("value",s=>setAnnouncement(s.val()||null));
+    return ()=>ref.off("value",cb);
+  },[]);
   const menuItem=(emoji,title,sub,color,onClick)=>(
     <button onClick={()=>{setMenuOpen(false);onClick();}} style={{
       width:"100%",display:"flex",alignItems:"center",gap:12,textAlign:"left",
@@ -2390,22 +2602,30 @@ function Landing({onPick}){
     </button>
   );
   return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"12px 20px 28px",position:"relative",overflow:"hidden",
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"0 20px calc(24px + env(safe-area-inset-bottom, 0px)) 20px",position:"relative",overflow:"hidden",
       background:"linear-gradient(150deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#1c1150,#0a2540,#022c1e)",backgroundSize:"400% 400%",animation:"bgShift 22s ease infinite"}}>
       <div style={{width:"100%",maxWidth:400,position:"relative",zIndex:1,paddingTop:"max(8px, env(safe-area-inset-top))"}}>
 
-        {/* ── Top-right menu — occasional / one-time actions live here ── */}
-        <button onClick={()=>setMenuOpen(o=>!o)} aria-label="Menu" style={{
-          position:"absolute",top:"max(8px, env(safe-area-inset-top))",right:0,zIndex:30,
-          width:44,height:44,borderRadius:14,cursor:"pointer",
-          display:"flex",alignItems:"center",justifyContent:"center",
-          background:"rgba(20,17,55,.8)",border:"1.5px solid rgba(99,102,241,.45)",
-          color:"#a5b4fc",fontSize:20,backdropFilter:"blur(10px)",boxShadow:"0 4px 16px rgba(0,0,0,.35)"
-        }}>{menuOpen?"✕":"☰"}</button>
+        {/* ── Top bar: LCC badge (left) · Club name (center) · Menu (right) ── */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4,position:"relative",zIndex:30,gap:8}}>
+          {/* LCC creative logo badge — left */}
+          <LCCLogo/>
+          {/* Lindenhurst Cricket Club — single line, centered */}
+          <p style={{flex:1,textAlign:"center",color:"#fff",fontSize:12,fontWeight:700,letterSpacing:".01em",
+            margin:0,whiteSpace:"nowrap",textShadow:"0 2px 10px rgba(2,4,15,.9)"}}>Lindenhurst Cricket Club</p>
+          {/* ☰ menu button — right */}
+          <button onClick={()=>setMenuOpen(o=>!o)} aria-label="Menu" style={{
+            flexShrink:0,width:40,height:40,borderRadius:12,cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            background:"rgba(20,17,55,.8)",border:"1.5px solid rgba(99,102,241,.45)",
+            color:"#a5b4fc",fontSize:18,backdropFilter:"blur(10px)",boxShadow:"0 4px 16px rgba(0,0,0,.35)"
+          }}>{menuOpen?"✕":"☰"}</button>
+        </div>
+
         {menuOpen&&(<>
           <div onClick={()=>setMenuOpen(false)} style={{position:"fixed",inset:0,zIndex:20,background:"rgba(0,0,0,.45)"}}/>
           <div style={{
-            position:"absolute",top:"calc(max(8px, env(safe-area-inset-top)) + 52px)",right:0,zIndex:25,
+            position:"absolute",top:60,right:0,zIndex:25,
             width:272,padding:14,borderRadius:18,
             background:"rgba(20,17,55,.98)",border:"1px solid rgba(99,102,241,.45)",
             backdropFilter:"blur(20px)",boxShadow:"0 16px 48px rgba(0,0,0,.6)",animation:"fadeUp .25s ease both"
@@ -2417,25 +2637,19 @@ function Landing({onPick}){
           </div>
         </>)}
 
-        {/* LCC title block — cricket scene sits BEHIND it as a subtle backdrop (not in its own
-            block below anymore), so the home screen no longer pays a separate chunk of vertical
-            space for the animation. The scene is faded down and the title has a solid text-shadow
-            so it stays fully readable on top, regardless of what the figures are doing underneath. */}
-        <div className="text-center" style={{position:"relative",marginBottom:4,height:212}}>
-          <div style={{position:"absolute",inset:0,opacity:.5,pointerEvents:"none"}}>
-            <CricketScene hideText/>
-          </div>
-          <div style={{position:"relative",zIndex:1,paddingTop:48}}>
-            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:58,fontWeight:700,letterSpacing:"-2px",lineHeight:1,marginBottom:2,animation:"glowText 3s ease-in-out infinite",filter:"drop-shadow(0 2px 10px rgba(2,4,15,.9)) drop-shadow(0 0 24px rgba(2,4,15,.7))"}}>
-              <span style={{background:"linear-gradient(90deg,#FF9933,#ffb366,#FF9933)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>L</span>
-              <span style={{background:"linear-gradient(90deg,#ffffff,#a5b4fc,#ffffff)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
-              <span style={{background:"linear-gradient(90deg,#138808,#3fa340,#138808)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
-            </h1>
-            <p style={{color:"#fff",fontSize:14,fontWeight:600,animation:"slideInUp .5s ease .1s both",textShadow:"0 2px 8px rgba(2,4,15,.95), 0 0 16px rgba(2,4,15,.8)"}}>Lindenhurst Cricket Club</p>
-          </div>
+        {/* Cricket animation — natural aspect-ratio height, overflow clipped so it never bleeds into cards.
+            hideText removed so scores (SIX! FOUR! BOWLED! etc.) appear at bat-ball contact. */}
+        <div style={{position:"relative",overflow:"hidden",marginBottom:8,marginTop:4,
+          borderRadius:16,opacity:.92,pointerEvents:"none"}}>
+          <CricketScene/>
         </div>
-
-        {/* Primary actions — the two things used at every match */}
+        {announcement&&announcement.text&&(
+          <div style={{background:"rgba(245,158,11,.12)",border:"1.5px solid rgba(245,158,11,.4)",borderRadius:16,padding:"12px 14px",marginBottom:12,animation:"slideInUp .4s ease both"}}>
+            <p style={{fontSize:10,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".15em",marginBottom:4}}>📢 Club Notice</p>
+            <p style={{fontSize:13,color:"#fff",lineHeight:1.5}}>{announcement.text}</p>
+            {announcement.by&&<p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>— {announcement.by}</p>}
+          </div>
+        )}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:8}}>
           {tile("👁️","Watch Live","Live scoreboard","rgba(16,185,129,.4)","rgba(16,185,129,.15)",()=>onPick("viewer"),0)}
           {tile("🏏","Score","Team scorers · PIN","rgba(245,158,11,.4)","rgba(245,158,11,.15)",()=>onPick("scorer"),1)}
@@ -2476,7 +2690,7 @@ function Landing({onPick}){
           <span style={{color:"#34d399",fontSize:13}}>→</span>
         </button>
 
-        <p style={{textAlign:"center",marginTop:22,marginBottom:4,color:"rgba(129,140,248,.4)",fontSize:11,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".05em"}}>Created by Rajesh Arigela</p>
+        <p style={{textAlign:"center",marginTop:14,marginBottom:0,color:"rgba(129,140,248,.4)",fontSize:11,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".05em"}}>Created by Rajesh Arigela</p>
       </div>
     </div>
   );
@@ -3222,7 +3436,7 @@ function PlayerStatCard({s}){
 function StatsPage({onExit}){
   const[history,setHistory]=React.useState(undefined);
   const[roster,setRoster]=React.useState({});
-  const[view,setView]=React.useState("leaders"); // leaders | players
+  const[view,setView]=React.useState("leaders"); // leaders | players | records
   const[expanded,setExpanded]=React.useState(null);
   const[q,setQ]=React.useState("");
   const[venueF,setVenueF]=React.useState("All"); // "All" | canonical venue label
@@ -3308,8 +3522,8 @@ function StatsPage({onExit}){
             <p style={{color:"#6b7280",fontSize:12}}>Pick a different venue above, or play a match here to start building stats.</p>
           </div>
         ):(<>
-          <div className="tabs" style={{margin:"0 0 16px"}}>
-            {[["leaders","🏆 Leaderboard"],["players","👤 Players"]].map(([id,lbl])=>(
+          <div className="tabs" style={{margin:"0 0 16px",gridTemplateColumns:"1fr 1fr 1fr"}}>
+            {[["leaders","🏆 Leaders"],["players","👤 Players"],["records","🌟 Records"]].map(([id,lbl])=>(
               <button key={id} className={`tab${view===id?" active":""}`} onClick={()=>setView(id)} style={{gridColumn:"auto"}}>{lbl}</button>
             ))}
           </div>
@@ -3346,13 +3560,311 @@ function StatsPage({onExit}){
               ))}
             </div>
           )}
+
+          {view==="records"&&(()=>{
+            const allBat=[], allBowl=[];
+            Object.entries(filteredHistory||{}).forEach(([,m])=>{
+              [m&&m.inn1,m&&m.inn2].forEach(inn=>{
+                if(!inn) return;
+                const vn=canonVenue(m.venue||inn.venue||"");
+                const dt=m.finishedAt?new Date(m.finishedAt).toLocaleDateString():"";
+                (inn.battingOrder||[]).forEach(name=>{const b=inn.batsmen&&inn.batsmen[name];if(!b)return;allBat.push({name,runs:b.runs||0,balls:b.balls||0,fours:b.fours||0,sixes:b.sixes||0,out:b.out,vn,dt});});
+                (inn.bowlingOrder||[]).forEach(name=>{const w=inn.bowlers&&inn.bowlers[name];if(!w)return;const balls=(w.overs||0)*6+(w.ballsThisOver||0);allBowl.push({name,wkts:w.wickets||0,runs:w.runs||0,balls,maidens:w.maidens||0,vn,dt});});
+              });
+            });
+            const hsEntry=[...allBat].sort((a,b)=>b.runs-a.runs||a.balls-b.balls)[0]||null;
+            const mostSixes=[...allBat].sort((a,b)=>b.sixes-a.sixes)[0]||null;
+            const mostFours=[...allBat].sort((a,b)=>b.fours-a.fours)[0]||null;
+            const bestBowl=[...allBowl].filter(w=>w.wkts>0).sort((a,b)=>b.wkts-a.wkts||a.runs-b.runs)[0]||null;
+            const mostMaidens=[...allBowl].filter(w=>w.maidens>0).sort((a,b)=>b.maidens-a.maidens)[0]||null;
+            const RC=({emoji,title,holder,value,sub})=>(
+              <div style={{background:"rgba(15,12,41,.6)",border:"1px solid rgba(245,158,11,.25)",borderRadius:16,padding:"14px",marginBottom:8,display:"flex",alignItems:"center",gap:12}}>
+                <span style={{fontSize:26,flexShrink:0}}>{emoji}</span>
+                <span style={{flex:1}}>
+                  <span style={{display:"block",fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".12em",marginBottom:2}}>{title}</span>
+                  <span style={{display:"block",fontWeight:700,fontSize:15}}>{holder}</span>
+                  <span style={{display:"block",fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{value}{sub&&<span style={{color:"#6b7280",marginLeft:6}}>{sub}</span>}</span>
+                </span>
+              </div>
+            );
+            if(!hsEntry&&!bestBowl) return(<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No records yet for this venue filter.</p>);
+            return(<div>
+              <p className="section-title" style={{color:"#fbbf24",marginBottom:10}}>🏏 Batting Records</p>
+              {hsEntry&&<RC emoji="👑" title="Highest Score" holder={hsEntry.name} value={hsEntry.runs+(hsEntry.out?"":"*")+" off "+hsEntry.balls+"b"} sub={hsEntry.vn+" · "+hsEntry.dt}/>}
+              {mostSixes&&mostSixes.sixes>0&&<RC emoji="💥" title="Most Sixes (single innings)" holder={mostSixes.name} value={mostSixes.sixes+" sixes"} sub={mostSixes.vn+" · "+mostSixes.dt}/>}
+              {mostFours&&mostFours.fours>0&&<RC emoji="🏃" title="Most Fours (single innings)" holder={mostFours.name} value={mostFours.fours+" fours"} sub={mostFours.vn+" · "+mostFours.dt}/>}
+              <p className="section-title" style={{color:"#f87171",marginBottom:10,marginTop:16}}>🎯 Bowling Records</p>
+              {bestBowl?<RC emoji="🎳" title="Best Bowling (single spell)" holder={bestBowl.name} value={bestBowl.wkts+"/"+bestBowl.runs} sub={bestBowl.vn+" · "+bestBowl.dt}/>:<p style={{color:"#6b7280",fontSize:12}}>No wickets recorded yet.</p>}
+              {mostMaidens&&<RC emoji="🔒" title="Most Maidens (single spell)" holder={mostMaidens.name} value={mostMaidens.maidens+" maiden"+(mostMaidens.maidens>1?"s":"")} sub={mostMaidens.vn+" · "+mostMaidens.dt}/>}
+            </div>);
+          })()}
         </>)}
       </div>
     </div>
   );
 }
 
-// ── Basic Admin home — limited helper tools (no match control) ────────────────
+// ── Super Admin: Announcement manager — post a notice visible on the home screen
+function AnnouncementPage({onExit}){
+  const[current,setCurrent]=React.useState(undefined);
+  const[text,setText]=React.useState("");
+  const[by,setBy]=React.useState("");
+  React.useEffect(()=>{
+    if(!FB_OK||!DB){setCurrent(null);return;}
+    const ref=DB.ref("announcement");
+    const cb=ref.on("value",s=>{const v=s.val()||null;setCurrent(v);setText(v?.text||"");setBy(v?.by||"");});
+    return ()=>ref.off("value",cb);
+  },[]);
+  const save=()=>{
+    const t=text.trim();
+    if(!t){alert("Enter the announcement text.");return;}
+    if(!FB_OK||!DB){alert("Offline.");return;}
+    DB.ref("announcement").set({text:t,by:by.trim()||"Admin",postedAt:Date.now()})
+      .then(()=>alert("Announcement posted! Everyone will see it on the home screen."))
+      .catch(e=>alert("Failed: "+e.message));
+  };
+  const clear=()=>{
+    if(!confirm("Remove the current announcement?"))return;
+    DB.ref("announcement").remove().catch(e=>alert("Failed: "+e.message));
+  };
+  if(current===undefined) return <Centered emoji="📢" title="Loading…" onExit={onExit}/>;
+  return(
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+      <div style={{maxWidth:480,margin:"0 auto"}}>
+        <div className="flex items-center justify-between" style={{marginBottom:18}}>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📢 Announcements</h1>
+          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+        </div>
+        {current&&current.text&&(
+          <div style={{background:"rgba(245,158,11,.1)",border:"1px solid rgba(245,158,11,.3)",borderRadius:14,padding:"12px 14px",marginBottom:16}}>
+            <p style={{fontSize:10,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>CURRENT ANNOUNCEMENT</p>
+            <p style={{fontSize:13,color:"#fff"}}>{current.text}</p>
+            {current.by&&<p style={{fontSize:10,color:"#6b7280",marginTop:4}}>— {current.by} · {current.postedAt?new Date(current.postedAt).toLocaleDateString():""}</p>}
+            <button onClick={clear} style={{marginTop:10,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",borderRadius:10,padding:"6px 14px",fontSize:12,cursor:"pointer",fontWeight:600}}>🗑️ Remove Announcement</button>
+          </div>
+        )}
+        <div className="mini-card">
+          <p className="section-title">{current?"✏️ Update Announcement":"➕ Post Announcement"}</p>
+          <label>Message (shown on the home screen for all players)</label>
+          <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="e.g. Match this Saturday at Lakes — 9am sharp!" rows={3}
+            style={{width:"100%",background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,fontFamily:"'Inter',sans-serif",outline:"none",resize:"vertical",marginBottom:12}}/>
+          <label>Posted by (optional)</label>
+          <input value={by} onChange={e=>setBy(e.target.value)} placeholder="Your name" style={{marginBottom:14}}/>
+          <button className="btn btn-primary w-full" onClick={save}>📢 {current?"Update":"Post"} Announcement</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Basic Admin: Player Tools — merge, link, bulk-add ─────────────────────────
+function PlayerToolsPage({onExit}){
+  const[roster,setRoster]=React.useState(undefined);
+  const[history,setHistory]=React.useState({});
+  const[tab,setTab]=React.useState("merge");
+  React.useEffect(()=>{
+    if(!FB_OK||!DB){setRoster({});return;}
+    const rRef=DB.ref("roster"), hRef=DB.ref("history").limitToLast(200);
+    const c1=rRef.on("value",s=>setRoster(s.val()||{}));
+    const c2=hRef.on("value",s=>setHistory(s.val()||{}));
+    return ()=>{rRef.off("value",c1);hRef.off("value",c2);};
+  },[]);
+  if(roster===undefined) return <Centered emoji="🔧" title="Loading…" onExit={onExit}/>;
+
+  function MergeTab(){
+    const[primary,setPrimary]=React.useState("");
+    const[dup,setDup]=React.useState("");
+    const[saving,setSaving]=React.useState(false);
+    const entries=Object.entries(roster).sort((a,b)=>a[1].name.localeCompare(b[1].name));
+    const doMerge=()=>{
+      if(!primary||!dup){alert("Select both profiles.");return;}
+      if(primary===dup){alert("Can't merge a profile with itself.");return;}
+      if(!confirm(`Merge "${roster[dup]?.name}" INTO "${roster[primary]?.name}"? The duplicate profile will be removed.`))return;
+      setSaving(true);
+      DB.ref("roster/"+dup).remove()
+        .then(()=>{setSaving(false);setPrimary("");setDup("");alert("Merged! Duplicate removed. Stats will consolidate under the primary name.");})
+        .catch(e=>{setSaving(false);alert("Failed: "+e.message);});
+    };
+    return(<div>
+      <p style={{color:"#9ca3af",fontSize:12,marginBottom:14,lineHeight:1.5}}>Pick the profile to KEEP as Primary, and the one to REMOVE as Duplicate (e.g. "Raj" vs "Rajesh Arigela").</p>
+      <label>Primary profile (KEEP)</label>
+      <select value={primary} onChange={e=>setPrimary(e.target.value)} style={{width:"100%",background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,marginBottom:12,outline:"none"}}>
+        <option value="">Select profile to keep…</option>
+        {entries.filter(([id])=>id!==dup).map(([id,p])=><option key={id} value={id}>{p.name}</option>)}
+      </select>
+      <label>Duplicate profile (REMOVE)</label>
+      <select value={dup} onChange={e=>setDup(e.target.value)} style={{width:"100%",background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,marginBottom:14,outline:"none"}}>
+        <option value="">Select profile to remove…</option>
+        {entries.filter(([id])=>id!==primary).map(([id,p])=><option key={id} value={id}>{p.name}</option>)}
+      </select>
+      {primary&&dup&&<div style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.3)",borderRadius:12,padding:"10px 14px",marginBottom:14}}>
+        <p style={{color:"#f87171",fontSize:12}}>⚠️ <strong>"{roster[dup]?.name}"</strong> will be permanently removed. Stats consolidate under <strong>"{roster[primary]?.name}"</strong>.</p>
+      </div>}
+      <button className="btn btn-danger w-full" style={{borderRadius:14}} onClick={doMerge} disabled={saving||!primary||!dup}>{saving?"Merging…":"🔀 Merge Profiles"}</button>
+    </div>);
+  }
+
+  function LinkTab(){
+    const[saving,setSaving]=React.useState(null);
+    const resolve=buildPidResolver(roster);
+    const unlinked=new Set();
+    Object.values(history||{}).forEach(m=>{
+      [m&&m.inn1,m&&m.inn2].forEach(inn=>{
+        if(!inn)return;
+        [...(inn.battingOrder||[]),...(inn.bowlingOrder||[])].forEach(name=>{
+          const pid=(inn.batsmen&&inn.batsmen[name]&&inn.batsmen[name].pid)||(inn.bowlers&&inn.bowlers[name]&&inn.bowlers[name].pid)||resolve(name);
+          if(!pid) unlinked.add(name);
+        });
+      });
+    });
+    const unlinkedList=[...unlinked].sort((a,b)=>a.localeCompare(b));
+    const[links,setLinks]=React.useState({});
+    const rosterEntries=Object.entries(roster).sort((a,b)=>a[1].name.localeCompare(b[1].name));
+    const saveLink=(typedName,profileId)=>{
+      if(!profileId){alert("Select a profile.");return;}
+      const profile=roster[profileId];
+      if(!confirm(`Link all appearances of "${typedName}" to "${profile.name}"'s profile?`))return;
+      setSaving(typedName);
+      const current=profile.aliases||[];
+      if(current.includes(typedName)){setSaving(null);setLinks(l=>({...l,[typedName]:"done"}));return;}
+      DB.ref("roster/"+profileId+"/aliases").set([...current,typedName])
+        .then(()=>{setSaving(null);setLinks(l=>({...l,[typedName]:"done"}));})
+        .catch(e=>{setSaving(null);alert("Failed: "+e.message);});
+    };
+    if(unlinkedList.length===0) return(<div style={{textAlign:"center",padding:"24px 0"}}><div style={{fontSize:32,marginBottom:8}}>✅</div><p style={{color:"#34d399",fontWeight:600,fontSize:14}}>All match names are linked to profiles!</p></div>);
+    return(<div>
+      <p style={{color:"#9ca3af",fontSize:12,marginBottom:14,lineHeight:1.5}}>{unlinkedList.length} name{unlinkedList.length>1?"s":""} in history not linked to a profile. Match each to the right person.</p>
+      {unlinkedList.map(name=>(
+        <div key={name} className="mini-card" style={{marginBottom:8}}>
+          <p style={{fontWeight:600,fontSize:13,marginBottom:8,color:"#fbbf24"}}>"{name}"</p>
+          {links[name]==="done"?<p style={{color:"#34d399",fontSize:12}}>✓ Linked!</p>:(
+            <div style={{display:"flex",gap:8}}>
+              <select defaultValue="" onChange={e=>setLinks(l=>({...l,[name]:e.target.value}))} style={{flex:1,background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:10,padding:"8px 12px",color:"#fff",fontSize:13,outline:"none"}}>
+                <option value="">Match to profile…</option>
+                {rosterEntries.map(([id,p])=><option key={id} value={id}>{p.name}</option>)}
+              </select>
+              <button onClick={()=>saveLink(name,links[name])} disabled={!links[name]||saving===name} style={{padding:"8px 14px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#f59e0b,#ef4444)",color:"#111",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>{saving===name?"…":"Link"}</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>);
+  }
+
+  function BulkAddTab(){
+    const[text,setText]=React.useState("");
+    const[saving,setSaving]=React.useState(false);
+    const[done,setDone]=React.useState(null);
+    const doAdd=()=>{
+      const names=text.split("\n").map(n=>n.trim()).filter(n=>n.length>1);
+      if(names.length===0){alert("Enter at least one name.");return;}
+      if(!FB_OK||!DB){alert("Offline.");return;}
+      setSaving(true);
+      const existing=new Set(Object.values(roster).map(p=>normName(p.name)));
+      const toAdd=names.filter(n=>!existing.has(normName(n)));
+      if(toAdd.length===0){setSaving(false);alert("All names already exist in the roster.");return;}
+      const updates={};
+      toAdd.forEach(name=>{
+        const id="p_"+Math.random().toString(36).slice(2)+Date.now().toString(36);
+        updates["roster/"+id]={name,role:"Batsman",bat:"Right",keeper:false,bowl:null};
+      });
+      DB.ref().update(updates)
+        .then(()=>{setSaving(false);setDone(toAdd);setText("");})
+        .catch(e=>{setSaving(false);alert("Failed: "+e.message);});
+    };
+    return(<div>
+      <p style={{color:"#9ca3af",fontSize:12,marginBottom:12,lineHeight:1.5}}>One full name per line. Duplicates are skipped. New players default to "Batsman" — edit individually after.</p>
+      <textarea value={text} onChange={e=>setText(e.target.value)} placeholder={"Rajesh Arigela\nRanjith Kumar\nPradeep Singh"} rows={6}
+        style={{width:"100%",background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,fontFamily:"'Inter',sans-serif",outline:"none",resize:"vertical",marginBottom:14}}/>
+      {done&&<div style={{background:"rgba(52,211,153,.1)",border:"1px solid rgba(52,211,153,.3)",borderRadius:12,padding:"10px 14px",marginBottom:12}}>
+        <p style={{color:"#34d399",fontSize:12,fontWeight:600}}>✓ Added {done.length} player{done.length>1?"s":""}:</p>
+        {done.map(n=><p key={n} style={{color:"#6ee7b7",fontSize:12,marginTop:3}}>• {n}</p>)}
+      </div>}
+      <button className="btn btn-primary w-full" style={{borderRadius:14}} onClick={doAdd} disabled={saving}>{saving?"Adding…":"➕ Add All"}</button>
+    </div>);
+  }
+
+  return(
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+      <div style={{maxWidth:480,margin:"0 auto"}}>
+        <div className="flex items-center justify-between" style={{marginBottom:4}}>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:700}}>🔧 Player Tools</h1>
+          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+        </div>
+        <p style={{color:"#a5b4fc",fontSize:12,fontFamily:"'JetBrains Mono',monospace",marginBottom:14}}>Merge duplicates · link names · bulk add</p>
+        <div className="tabs" style={{margin:"0 0 16px",gridTemplateColumns:"1fr 1fr 1fr"}}>
+          {[["merge","🔀 Merge"],["link","🔗 Link"],["bulk","➕ Bulk Add"]].map(([id,lbl])=>(
+            <button key={id} className={`tab${tab===id?" active":""}`} onClick={()=>setTab(id)} style={{gridColumn:"auto"}}>{lbl}</button>
+          ))}
+        </div>
+        {tab==="merge"&&<MergeTab/>}
+        {tab==="link"&&<LinkTab/>}
+        {tab==="bulk"&&<BulkAddTab/>}
+      </div>
+    </div>
+  );
+}
+
+// ── Basic Admin: Vote on behalf of players ────────────────────────────────────
+function VoteOnBehalfPage({onExit}){
+  const[roster,setRoster]=React.useState(undefined);
+  const[votes,setVotes]=React.useState({});
+  const[poll,setPoll]=React.useState(undefined);
+  const[saving,setSaving]=React.useState(null);
+  React.useEffect(()=>{
+    if(!FB_OK||!DB){setRoster({});setPoll(null);return;}
+    const rRef=DB.ref("roster"), vRef=DB.ref("poll/votes"), pRef=DB.ref("poll/current");
+    const c1=rRef.on("value",s=>setRoster(s.val()||{}));
+    const c2=vRef.on("value",s=>setVotes(s.val()||{}));
+    const c3=pRef.on("value",s=>setPoll(s.val()||null));
+    return ()=>{rRef.off("value",c1);vRef.off("value",c2);pRef.off("value",c3);};
+  },[]);
+  if(roster===undefined||poll===undefined) return <Centered emoji="📋" title="Loading…" onExit={onExit}/>;
+  const setVote=(id,choice)=>{
+    setSaving(id);
+    const existing=votes[id]||{};
+    DB.ref("poll/votes/"+id).set(JSON.parse(JSON.stringify({...existing,choice})))
+      .then(()=>setSaving(null)).catch(e=>{setSaving(null);alert("Failed: "+e.message);});
+  };
+  const clearVote=(id)=>{
+    setSaving(id);
+    DB.ref("poll/votes/"+id).remove().then(()=>setSaving(null)).catch(e=>{setSaving(null);alert("Failed: "+e.message);});
+  };
+  const entries=Object.entries(roster||{}).sort((a,b)=>a[1].name.localeCompare(b[1].name));
+  return(
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+      <div style={{maxWidth:480,margin:"0 auto"}}>
+        <div className="flex items-center justify-between" style={{marginBottom:4}}>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:700}}>🗳️ Vote on Behalf</h1>
+          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+        </div>
+        {!poll?(<div className="mini-card" style={{textAlign:"center",padding:"24px"}}><div style={{fontSize:32,marginBottom:8}}>📋</div><p style={{color:"#6b7280"}}>No poll is open right now.</p></div>):(
+          <div>
+            <div style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",borderRadius:14,padding:"10px 14px",marginBottom:14}}>
+              <p style={{fontSize:12,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace"}}>📋 {poll.venue} · {poll.date} {poll.time}</p>
+              <p style={{fontSize:11,color:"#6b7280",marginTop:4}}>Mark availability for players who haven't voted yet.</p>
+            </div>
+            {entries.map(([id,p])=>{
+              const v=votes[id]; const choice=v?.choice;
+              return(
+                <div key={id} className="mini-card" style={{marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                  <span style={{fontWeight:600,fontSize:13,flex:1}}>{p.name}{choice&&<span style={{fontSize:10,color:choice==="yes"?"#34d399":"#f87171",marginLeft:8,fontFamily:"'JetBrains Mono',monospace"}}>{choice==="yes"?"✅":"❌"}</span>}</span>
+                  <div style={{display:"flex",gap:6,flexShrink:0}}>
+                    {saving===id?<span style={{color:"#6b7280",fontSize:12}}>…</span>:(<>
+                      <button onClick={()=>choice==="yes"?clearVote(id):setVote(id,"yes")} style={{padding:"6px 12px",borderRadius:10,border:"none",background:choice==="yes"?"linear-gradient(135deg,#34d399,#10b981)":"rgba(52,211,153,.15)",color:choice==="yes"?"#111":"#34d399",fontWeight:700,fontSize:12,cursor:"pointer"}}>✅</button>
+                      <button onClick={()=>choice==="no"?clearVote(id):setVote(id,"no")} style={{padding:"6px 12px",borderRadius:10,border:"none",background:choice==="no"?"linear-gradient(135deg,#dc2626,#991b1b)":"rgba(239,68,68,.15)",color:choice==="no"?"#fff":"#f87171",fontWeight:700,fontSize:12,cursor:"pointer"}}>❌</button>
+                    </>)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function BasicAdminHome({onPick,onExit}){
   const tile=(emoji,title,sub,color,glow,screen,idx)=>(
     <button onClick={()=>onPick(screen)} style={{
@@ -3384,22 +3896,36 @@ function BasicAdminHome({onPick,onExit}){
         </div>
         {tile("📋","Manage Weekly Poll","Create · update · close poll","rgba(167,139,250,.4)","rgba(167,139,250,.12)","pollAdmin",0)}
         {tile("👥","Votes & Team Builder","See responses · build teams","rgba(52,211,153,.4)","rgba(52,211,153,.12)","poll",1)}
-        {tile("🏏","Roster & Name Fixes","Add · edit · correct spellings","rgba(245,158,11,.4)","rgba(245,158,11,.12)","roster",2)}
-        {tile("📚","Match History","Browse past matches","rgba(99,102,241,.4)","rgba(99,102,241,.12)","history",3)}
-        {tile("📊","Stats & Records","Leaderboard · profiles","rgba(245,158,11,.4)","rgba(245,158,11,.12)","stats",4)}
+        {tile("🗳️","Vote on Behalf","Mark availability for players","rgba(99,102,241,.4)","rgba(99,102,241,.12)","voteOnBehalf",2)}
+        {tile("🏏","Roster & Name Fixes","Add · edit · correct spellings","rgba(245,158,11,.4)","rgba(245,158,11,.12)","roster",3)}
+        {tile("🔧","Player Tools","Merge · link · bulk add players","rgba(52,211,153,.4)","rgba(52,211,153,.12)","playerTools",4)}
+        {tile("📚","Match History","Browse past matches","rgba(99,102,241,.4)","rgba(99,102,241,.12)","history",5)}
+        {tile("📊","Stats & Records","Leaderboard · profiles","rgba(245,158,11,.4)","rgba(245,158,11,.12)","stats",6)}
       </div>
     </div>
   );
 }
 
 function Root(){
-  const[screen,setScreen]=React.useState("landing"); // landing|viewer|scorer|admin|basicAdmin|history|...
-  const[gate,setGate]=React.useState(null);          // null | "scorer" | "admin"
-  const[adminTier,setAdminTier]=React.useState(null);// null | "basic" | "super" — set once an admin PIN is entered
+  const[screen,setScreen]=React.useState("landing");
+  const[gate,setGate]=React.useState(null);
+  const[adminTier,setAdminTier]=React.useState(null);
+  const[dynPins,setDynPins]=React.useState(null); // {super,basic} loaded from Firebase, null=not yet loaded
 
-  const isAdmin = adminTier!==null;          // any admin (basic or super)
-  const isSuper = adminTier==="super";       // full match control
-  // Where each role returns to when exiting a sub-page:
+  // Load any admin PINs the super-admin has changed via in-app PIN management.
+  // Falls back to the hardcoded constants when Firebase is unreachable.
+  React.useEffect(()=>{
+    if(!FB_OK||!DB){setDynPins({super:ADMIN_PIN,basic:BASIC_ADMIN_PIN});return;}
+    const ref=DB.ref("adminPins");
+    const cb=ref.on("value",s=>{
+      const v=s.val()||{};
+      setDynPins({super:v.super||ADMIN_PIN, basic:v.basic||BASIC_ADMIN_PIN});
+    });
+    return ()=>ref.off("value",cb);
+  },[]);
+
+  const isAdmin = adminTier!==null;
+  const isSuper = adminTier==="super";
   const adminHome = adminTier==="super"?"admin":adminTier==="basic"?"basicAdmin":"landing";
 
   const pick=(r)=>{
@@ -3412,8 +3938,9 @@ function Root(){
   if(gate==="scorer") return <ScorerGate onOk={()=>{setGate(null);setScreen("scorer");}} onCancel={home}/>;
   if(gate==="admin")  return <PinGate title="Admin Access" hint="Super or Basic admin PIN"
     verify={(v)=>{
-      if(v===ADMIN_PIN)       return {ok:true, tier:"super"};
-      if(v===BASIC_ADMIN_PIN) return {ok:true, tier:"basic"};
+      const pins=dynPins||{super:ADMIN_PIN,basic:BASIC_ADMIN_PIN};
+      if(v===pins.super) return {ok:true, tier:"super"};
+      if(v===pins.basic) return {ok:true, tier:"basic"};
       return {ok:false, msg:"❌ Wrong PIN, try again"};
     }}
     onOk={(r)=>{ setGate(null); setAdminTier(r.tier); setScreen(r.tier==="super"?"admin":"basicAdmin"); }}
@@ -3428,8 +3955,11 @@ function Root(){
   if(screen==="roster")  return <RosterPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(adminHome)}/>;
   if(screen==="stats")   return <StatsPage onExit={()=>setScreen(adminHome)}/>;
   if(screen==="pollAdmin") return <PollAdminPage onExit={()=>setScreen(adminHome)}/>;
+  if(screen==="announce") return <AnnouncementPage onExit={()=>setScreen(adminHome)}/>;
+  if(screen==="playerTools") return <PlayerToolsPage onExit={()=>setScreen(adminHome)}/>;
+  if(screen==="voteOnBehalf") return <VoteOnBehalfPage onExit={()=>setScreen(adminHome)}/>;
   if(screen==="scorer")  return <App role="scorer" onExit={home}/>;
-  if(screen==="admin")   return <App role="admin" onExit={home} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("pollAdmin")} onRoster={()=>setScreen("roster")}/>;
+  if(screen==="admin")   return <App role="admin" onExit={home} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("pollAdmin")} onRoster={()=>setScreen("roster")} onAnnounce={()=>setScreen("announce")}/>;
   return <Landing onPick={pick}/>;
 }
 
