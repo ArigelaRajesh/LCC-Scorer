@@ -2361,18 +2361,20 @@ function PollPage({role,onExit}){
   const[poll,setPoll]=React.useState(undefined);        // {venue,date,time,createdAt} | null
   const[votes,setVotes]=React.useState({});             // {playerId: "yes"|"no"|"plus1"}
   const[teams,setTeams]=React.useState(null);            // {teamA:[ids],teamB:[ids],captainA,captainB,published}
+  const[passphrase,setPassphrase]=React.useState(undefined); // shared club passphrase, set by admin
 
   React.useEffect(()=>{
-    if(!FB_OK||!DB){setRoster({});setPoll(null);return;}
-    const rRef=DB.ref("roster"), pRef=DB.ref("poll/current"), vRef=DB.ref("poll/votes"), tRef=DB.ref("poll/teams");
+    if(!FB_OK||!DB){setRoster({});setPoll(null);setPassphrase(null);return;}
+    const rRef=DB.ref("roster"), pRef=DB.ref("poll/current"), vRef=DB.ref("poll/votes"), tRef=DB.ref("poll/teams"), ppRef=DB.ref("clubPassphrase");
     const cb1=rRef.on("value",s=>setRoster(s.val()||{}));
     const cb2=pRef.on("value",s=>setPoll(s.val()||null));
     const cb3=vRef.on("value",s=>setVotes(s.val()||{}));
     const cb4=tRef.on("value",s=>setTeams(s.val()||null));
-    return ()=>{ rRef.off("value",cb1); pRef.off("value",cb2); vRef.off("value",cb3); tRef.off("value",cb4); };
+    const cb5=ppRef.on("value",s=>setPassphrase(s.val()||null));
+    return ()=>{ rRef.off("value",cb1); pRef.off("value",cb2); vRef.off("value",cb3); tRef.off("value",cb4); ppRef.off("value",cb5); };
   },[]);
 
-  if(roster===undefined||poll===undefined) return <Centered emoji="📋" title="Loading poll…" onExit={onExit}/>;
+  if(roster===undefined||poll===undefined||passphrase===undefined) return <Centered emoji="📋" title="Loading poll…" onExit={onExit}/>;
 
   return(
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
@@ -2385,7 +2387,7 @@ function PollPage({role,onExit}){
           <button className={`tab${tab==="vote"?" active":""}`} onClick={()=>setTab("vote")}>🗳️ Vote</button>
           <button className={`tab${tab==="teams"?" active":""}`} onClick={()=>setTab("teams")}>🏏 Teams</button>
         </div>
-        {tab==="vote"&&<PollVoteTab role={role} roster={roster} poll={poll} votes={votes}/>}
+        {tab==="vote"&&<PollVoteTab role={role} roster={roster} poll={poll} votes={votes} passphrase={passphrase}/>}
         {tab==="teams"&&<PollTeamsTab role={role} roster={roster} poll={poll} votes={votes} teams={teams}/>}
       </div>
     </div>
@@ -2396,16 +2398,18 @@ function PollPage({role,onExit}){
 function RosterPage({role,onExit}){
   const[roster,setRoster]=React.useState(undefined);
   const[poll,setPoll]=React.useState(undefined);
+  const[passphrase,setPassphrase]=React.useState(undefined); // the one shared club passphrase, set by admin
 
   React.useEffect(()=>{
-    if(!FB_OK||!DB){setRoster({});setPoll(null);return;}
-    const rRef=DB.ref("roster"), pRef=DB.ref("poll/current");
+    if(!FB_OK||!DB){setRoster({});setPoll(null);setPassphrase(null);return;}
+    const rRef=DB.ref("roster"), pRef=DB.ref("poll/current"), ppRef=DB.ref("clubPassphrase");
     const cb1=rRef.on("value",s=>setRoster(s.val()||{}));
     const cb2=pRef.on("value",s=>setPoll(s.val()||null));
-    return ()=>{ rRef.off("value",cb1); pRef.off("value",cb2); };
+    const cb3=ppRef.on("value",s=>setPassphrase(s.val()||null));
+    return ()=>{ rRef.off("value",cb1); pRef.off("value",cb2); ppRef.off("value",cb3); };
   },[]);
 
-  if(roster===undefined) return <Centered emoji="🏏" title="Loading…" onExit={onExit}/>;
+  if(roster===undefined||passphrase===undefined) return <Centered emoji="🏏" title="Loading…" onExit={onExit}/>;
 
   return(
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
@@ -2415,8 +2419,43 @@ function RosterPage({role,onExit}){
           <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
         </div>
         <p style={{color:"#a5b4fc",fontSize:12,fontFamily:"'JetBrains Mono',monospace",marginBottom:18}}>Add your name & playing style</p>
-        <PollRosterTab roster={roster} canDelete={role==="admin"}/>
+        {role==="admin"&&<ClubPassphraseAdmin current={passphrase}/>}
+        <PollRosterTab roster={roster} canDelete={role==="admin"} passphrase={passphrase}/>
       </div>
+    </div>
+  );
+}
+
+// ── Admin-only: set or change the one shared club passphrase ──────────────────
+// Replaces the old per-person PIN system — instead of every player remembering their
+// own 4-digit code, the whole club shares ONE passphrase (separate from the admin PIN,
+// which stays private). Anyone editing the roster or voting on someone's behalf needs to
+// know this phrase once per device — proves "this is someone actually in the club" without
+// the friction of managing dozens of individual PINs.
+function ClubPassphraseAdmin({current}){
+  const[open,setOpen]=React.useState(false);
+  const[val,setVal]=React.useState(current||"");
+  const save=()=>{
+    const v=val.trim();
+    if(!v){alert("Enter a passphrase.");return;}
+    if(!FB_OK||!DB){alert("Offline — can't save right now.");return;}
+    DB.ref("clubPassphrase").set(v).then(()=>{alert("Club passphrase saved! Share it with the group.");setOpen(false);}).catch(e=>alert("Failed: "+e.message));
+  };
+  return(
+    <div className="mini-card" style={{marginBottom:16,border:"1px solid rgba(245,158,11,.3)"}}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="section-title" style={{marginBottom:2}}>🔑 Club Passphrase</p>
+          <p style={{fontSize:12,color:"#9ca3af"}}>{current?`Currently set: "${current}"`:"Not set yet — anyone can edit/vote freely until you set one."}</p>
+        </div>
+        <button onClick={()=>{setVal(current||"");setOpen(!open);}} style={{background:"rgba(245,158,11,.12)",border:"1px solid rgba(245,158,11,.35)",color:"#fbbf24",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>{current?"Change":"Set"}</button>
+      </div>
+      {open&&(
+        <div style={{marginTop:12}}>
+          <input value={val} onChange={e=>setVal(e.target.value)} placeholder="e.g. LCC2026" style={{marginBottom:10}}/>
+          <button className="btn btn-primary w-full" onClick={save}>Save Passphrase</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2484,43 +2523,49 @@ function PollResultsList({poll}){
 }
 
 // ── Roster management (admin only) ─────────────────────────────────────────
-function PollRosterTab({roster,canDelete}){
+function PollRosterTab({roster,canDelete,passphrase}){
   const[name,setName]=React.useState("");
   const[prole,setProle]=React.useState("Batsman"); // Batsman | Bowler | All-rounder
   const[keeper,setKeeper]=React.useState(false);
   const[bat,setBat]=React.useState("Right");
   const[bowl,setBowl]=React.useState("Seam");
-  const[pin,setPin]=React.useState("");          // PIN being SET when adding a new entry
   const[editingId,setEditingId]=React.useState(null);
-  const[unlockTarget,setUnlockTarget]=React.useState(null); // {id,player} — pending PIN check before edit/delete
-  const[unlockPin,setUnlockPin]=React.useState("");
-  const[unlockErr,setUnlockErr]=React.useState("");
-  const[unlockAction,setUnlockAction]=React.useState(null); // "edit" | "delete"
-  const[pinHelpTarget,setPinHelpTarget]=React.useState(null); // {id,player} — admin viewing/resetting a PIN
-  const[pinHelpNew,setPinHelpNew]=React.useState("");
+  const[deviceUnlocked,setDeviceUnlocked]=React.useState(()=>{
+    // This device proved it knows the club passphrase once before — stays trusted from then on,
+    // same low-friction pattern as the old scoring PINs. Re-checked only if the passphrase itself changes.
+    try{ return localStorage.getItem("lcc_club_unlocked")===passphrase && !!passphrase; }catch(e){ return false; }
+  });
+  const[passModal,setPassModal]=React.useState(null); // {pendingAction:fn} — waiting on the shared passphrase
+  const[passTry,setPassTry]=React.useState("");
+  const[passErr,setPassErr]=React.useState("");
 
   const needsBowlStyle = prole==="Bowler"||prole==="All-rounder";
-  const resetForm=()=>{ setName("");setProle("Batsman");setKeeper(false);setBat("Right");setBowl("Seam");setPin("");setEditingId(null); };
+  const resetForm=()=>{ setName("");setProle("Batsman");setKeeper(false);setBat("Right");setBowl("Seam");setEditingId(null); };
+
+  // Gate for any edit/delete action: if there's no passphrase set at all, anyone can proceed freely
+  // (admin hasn't turned protection on yet). If this device already unlocked, proceed immediately.
+  // Otherwise ask for the shared club passphrase once.
+  const withClubAuth=(action)=>{
+    if(canDelete){ action(); return; } // admin always bypasses, for moderation
+    if(!passphrase){ action(); return; } // no passphrase configured yet — unprotected by admin's choice
+    if(deviceUnlocked){ action(); return; }
+    setPassModal({pendingAction:action}); setPassTry(""); setPassErr("");
+  };
+  const confirmPass=()=>{
+    if(!passModal)return;
+    if(passTry.trim()!==passphrase){ setPassErr("Wrong passphrase — ask admin if you don't have it."); return; }
+    try{ localStorage.setItem("lcc_club_unlocked",passphrase); }catch(e){}
+    setDeviceUnlocked(true);
+    passModal.pendingAction();
+    setPassModal(null);
+  };
 
   const save=()=>{
     const nm=name.trim(); if(!nm){alert("Enter your name.");return;}
-    if(!editingId && (!pin||pin.length!==4||!/^\d{4}$/.test(pin))){alert("Set a 4-digit PIN so only you can edit or remove this entry later.");return;}
     if(!FB_OK||!DB){alert("Offline — can't save right now.");return;}
     const id=editingId||("p_"+Math.random().toString(36).slice(2)+Date.now().toString(36));
-    // PIN is only set on first creation and never overwritten by a later edit, so it can't be
-    // silently changed by someone editing the entry (they already proved ownership to get here).
-    const existingPin=editingId?roster?.[editingId]?.pin:pin;
-    const data={name:nm,role:prole,keeper,bat,bowl:needsBowlStyle?bowl:null,pin:existingPin};
+    const data={name:nm,role:prole,keeper,bat,bowl:needsBowlStyle?bowl:null};
     DB.ref("roster/"+id).set(JSON.parse(JSON.stringify(data))).then(resetForm).catch(e=>alert("Save failed: "+e.message));
-  };
-
-  // Tapping ✏️ or 🗑️ on someone's entry always asks for THEIR pin first (unless admin, who bypasses).
-  const requestUnlock=(id,p,action)=>{
-    if(canDelete){ // admin: skip the PIN check entirely, go straight to the action
-      if(action==="edit") doEdit(id,p); else doDelete(id);
-      return;
-    }
-    setUnlockTarget({id,player:p}); setUnlockAction(action); setUnlockPin(""); setUnlockErr("");
   };
   const doEdit=(id,p)=>{
     setEditingId(id); setName(p.name); setProle(p.role); setKeeper(!!p.keeper); setBat(p.bat||"Right"); setBowl(p.bowl||"Seam");
@@ -2528,15 +2573,6 @@ function PollRosterTab({roster,canDelete}){
   const doDelete=(id)=>{
     if(!confirm("Remove this entry from the club list?"))return;
     DB.ref("roster/"+id).remove();
-  };
-  const confirmUnlock=()=>{
-    if(!unlockTarget)return;
-    const correct=unlockTarget.player.pin;
-    if(!correct){ setUnlockErr("This entry has no PIN set (added before this feature) — ask admin to fix it for you."); return; }
-    if(unlockPin!==correct){ setUnlockErr("Wrong PIN — try again, or ask admin for help."); return; }
-    if(unlockAction==="edit") doEdit(unlockTarget.id,unlockTarget.player);
-    else doDelete(unlockTarget.id);
-    setUnlockTarget(null);
   };
 
   const entries=Object.entries(roster||{}).sort((a,b)=>a[1].name.localeCompare(b[1].name));
@@ -2569,11 +2605,6 @@ function PollRosterTab({roster,canDelete}){
             <button onClick={()=>setBowl("Seam")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bowl==="Seam"?"transparent":"#374151"}`,background:bowl==="Seam"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:bowl==="Seam"?"#111":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Seam</button>
           </div>
         </>)}
-        {!editingId&&(<>
-          <label>Set a 4-digit PIN</label>
-          <p style={{color:"#6b7280",fontSize:11,marginTop:-8,marginBottom:8}}>You'll need this to edit or remove your entry later — remember it!</p>
-          <input value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="••••" inputMode="numeric" maxLength={4} style={{marginBottom:12,letterSpacing:"0.4em",textAlign:"center",fontSize:18}}/>
-        </>)}
         <div style={{display:"flex",gap:8}}>
           <button className="btn btn-primary" style={{flex:1}} onClick={save}>{editingId?"Save Changes":"➕ Add Me"}</button>
           {editingId&&<button className="btn" onClick={resetForm} style={{background:"transparent",border:"1px solid #374151",color:"#9ca3af"}}>Cancel</button>}
@@ -2591,37 +2622,18 @@ function PollRosterTab({roster,canDelete}){
             </div>
           </div>
           <div style={{display:"flex",gap:6}}>
-            {canDelete&&<button onClick={()=>{setPinHelpTarget({id,player:p});setPinHelpNew("");}} style={{background:"rgba(245,158,11,.12)",border:"1px solid rgba(245,158,11,.3)",color:"#fbbf24",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}} title="View or reset this player's PIN">🔑</button>}
-            <button onClick={()=>requestUnlock(id,p,"edit")} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.3)",color:"#a5b4fc",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>✏️</button>
-            {canDelete&&<button onClick={()=>requestUnlock(id,p,"delete")} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.3)",color:"#f87171",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>🗑️</button>}
+            <button onClick={()=>withClubAuth(()=>doEdit(id,p))} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.3)",color:"#a5b4fc",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>✏️</button>
+            {canDelete&&<button onClick={()=>withClubAuth(()=>doDelete(id))} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.3)",color:"#f87171",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>🗑️</button>}
           </div>
         </div>
       ))}
 
-      {pinHelpTarget&&(
-        <Modal onClose={()=>setPinHelpTarget(null)} title={`🔑 ${pinHelpTarget.player.name}'s PIN`}>
-          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>If they forgot their PIN, you can read it to them, or reset it to a new one (let them know the new PIN afterward).</p>
-          <div style={{textAlign:"center",letterSpacing:"0.4em",fontSize:26,fontWeight:700,background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(245,158,11,.4)",borderRadius:12,padding:"12px",color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginBottom:16}}>
-            {pinHelpTarget.player.pin || "— none set —"}
-          </div>
-          <label>Reset to a new 4-digit PIN</label>
-          <input value={pinHelpNew} onChange={e=>setPinHelpNew(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="••••" inputMode="numeric" maxLength={4} style={{marginBottom:12,letterSpacing:"0.4em",textAlign:"center",fontSize:18}}/>
-          <button className="btn btn-primary w-full" onClick={()=>{
-            if(!pinHelpNew||pinHelpNew.length!==4){alert("Enter a 4-digit PIN.");return;}
-            if(!FB_OK||!DB){alert("Offline — can't save right now.");return;}
-            DB.ref("roster/"+pinHelpTarget.id+"/pin").set(pinHelpNew)
-              .then(()=>{alert(`PIN reset to ${pinHelpNew}. Let ${pinHelpTarget.player.name} know!`);setPinHelpTarget(null);})
-              .catch(e=>alert("Failed: "+e.message));
-          }}>Reset PIN</button>
-        </Modal>
-      )}
-
-      {unlockTarget&&(
-        <Modal onClose={()=>setUnlockTarget(null)} title={`🔒 Enter ${unlockTarget.player.name}'s PIN`}>
-          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>To {unlockAction==="delete"?"remove":"edit"} this entry, enter the 4-digit PIN that was set when it was added.</p>
-          <input value={unlockPin} onChange={e=>{setUnlockPin(e.target.value.replace(/\D/g,"").slice(0,4));setUnlockErr("");}} placeholder="••••" inputMode="numeric" maxLength={4} autoFocus onKeyDown={e=>e.key==="Enter"&&confirmUnlock()} style={{marginBottom:8,letterSpacing:"0.4em",textAlign:"center",fontSize:18}}/>
-          {unlockErr&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{unlockErr}</p>}
-          <button className="btn btn-primary w-full" onClick={confirmUnlock}>Confirm</button>
+      {passModal&&(
+        <Modal onClose={()=>setPassModal(null)} title="🔑 Club Passphrase">
+          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Enter the shared club passphrase to edit or remove entries. Ask admin if you don't have it — only needed once on this device.</p>
+          <input value={passTry} onChange={e=>{setPassTry(e.target.value);setPassErr("");}} placeholder="Passphrase" autoFocus onKeyDown={e=>e.key==="Enter"&&confirmPass()} style={{marginBottom:8}}/>
+          {passErr&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{passErr}</p>}
+          <button className="btn btn-primary w-full" onClick={confirmPass}>Confirm</button>
         </Modal>
       )}
     </div>
@@ -2693,20 +2705,17 @@ function ShareButton({label,buildText}){
 }
 
 // ── Public voting tab — tap your name, pick Yes/No/+1, one vote per device ──
-function PollVoteTab({roster,poll,votes}){
+function PollVoteTab({roster,poll,votes,passphrase}){
   const[myVote,setMyVote]=React.useState(null); // playerId this device voted as
   const[kidDraft,setKidDraft]=React.useState({}); // {playerId: "typed kid name, not yet saved"}
-  const[unlockedIds,setUnlockedIds]=React.useState(()=>{
-    // Restore which players this device has already unlocked, so people don't have to re-type
-    // their PIN every single time they tap Yes/No — just once per device, like the scoring PINs.
-    try{
-      const saved=localStorage.getItem("lcc_poll_unlocked");
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    }catch(e){ return new Set(); }
+  const[deviceUnlocked,setDeviceUnlocked]=React.useState(()=>{
+    // Same shared-passphrase device unlock as the roster — one passphrase covers both areas,
+    // so unlocking here also counts as unlocked on the roster page and vice versa.
+    try{ return localStorage.getItem("lcc_club_unlocked")===passphrase && !!passphrase; }catch(e){ return false; }
   });
-  const[unlockTarget,setUnlockTarget]=React.useState(null); // {id,player,pendingAction:fn} — waiting on a PIN
-  const[unlockPin,setUnlockPin]=React.useState("");
-  const[unlockErr,setUnlockErr]=React.useState("");
+  const[passModal,setPassModal]=React.useState(null); // {pendingAction:fn} — waiting on the shared passphrase
+  const[passTry,setPassTry]=React.useState("");
+  const[passErr,setPassErr]=React.useState("");
   const[plus1Open,setPlus1Open]=React.useState(null); // playerId currently showing the kid-name input
 
   React.useEffect(()=>{
@@ -2720,30 +2729,28 @@ function PollVoteTab({roster,poll,votes}){
 
   const entries=Object.entries(roster||{}).sort((a,b)=>a[1].name.localeCompare(b[1].name));
 
-  const persistUnlocked=(set)=>{ try{ localStorage.setItem("lcc_poll_unlocked",JSON.stringify([...set])); }catch(e){} };
-
-  // Every vote action now goes through this gate first: if this device hasn't already proven it's
-  // THAT person (by entering their roster PIN once), it asks for the PIN before doing anything.
-  // This closes the exact gap from the screenshot — anyone could tap Yes/No on ANY name before this.
-  const withUnlock=(id,player,action)=>{
-    if(unlockedIds.has(id)){ action(); return; }
-    if(!player.pin){ alert(`${player.name} doesn't have a PIN set yet (added before this protection existed) — ask admin to help, or have them re-add themselves with a PIN.`); return; }
-    setUnlockTarget({id,player,pendingAction:action}); setUnlockPin(""); setUnlockErr("");
+  // Every vote action goes through this gate: if no passphrase is configured at all, voting stays
+  // open to everyone (admin hasn't turned protection on). If this device already proved it knows
+  // the passphrase, proceed immediately. Otherwise ask for it once.
+  const withClubAuth=(action)=>{
+    if(!passphrase){ action(); return; }
+    if(deviceUnlocked){ action(); return; }
+    setPassModal({pendingAction:action}); setPassTry(""); setPassErr("");
   };
-  const confirmUnlock=()=>{
-    if(!unlockTarget)return;
-    if(unlockPin!==unlockTarget.player.pin){ setUnlockErr("Wrong PIN — try again, or ask admin for help."); return; }
-    const next=new Set(unlockedIds); next.add(unlockTarget.id);
-    setUnlockedIds(next); persistUnlocked(next);
-    unlockTarget.pendingAction();
-    setUnlockTarget(null);
+  const confirmPass=()=>{
+    if(!passModal)return;
+    if(passTry.trim()!==passphrase){ setPassErr("Wrong passphrase — ask admin if you don't have it."); return; }
+    try{ localStorage.setItem("lcc_club_unlocked",passphrase); }catch(e){}
+    setDeviceUnlocked(true);
+    passModal.pendingAction();
+    setPassModal(null);
   };
 
   // Each vote record is {choice:"yes"|"no"|null, plus1:boolean, kidName:string}.
   // choice is mutually exclusive (a person is in exactly one of Yes/No, or has withdrawn — never both).
   // Tapping the SAME choice again clears it back to null, so anyone can opt out of their vote entirely
   // at any time, not just switch between Yes and No.
-  const setChoice=(id,player,choice)=>withUnlock(id,player,()=>{
+  const setChoice=(id,choice)=>withClubAuth(()=>{
     if(!FB_OK||!DB)return;
     const existing=votes?.[id]||{};
     const next = existing.choice===choice ? null : choice; // tapping the active choice again clears it
@@ -2751,7 +2758,7 @@ function PollVoteTab({roster,poll,votes}){
     try{ localStorage.setItem("lcc_poll_voted_as",id); }catch(e){}
     setMyVote(id);
   });
-  const togglePlus1=(id,player)=>withUnlock(id,player,()=>{
+  const togglePlus1=(id)=>withClubAuth(()=>{
     if(!FB_OK||!DB)return;
     const existing=votes?.[id]||{};
     const turningOn=!existing.plus1;
@@ -2797,13 +2804,11 @@ function PollVoteTab({roster,poll,votes}){
         const v=votes?.[id]||{};
         const isMe=myVote===id;
         const hasVoted=v.choice==="yes"||v.choice==="no";
-        const isUnlocked=unlockedIds.has(id);
         const showKidInput=plus1Open===id;
         return(
           <div key={id} className="mini-card" style={{marginBottom:6,padding:"10px 12px",border:isMe?"1.5px solid rgba(245,158,11,.5)":undefined}}>
             <div className="flex items-center justify-between">
               <span style={{fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:4,minWidth:0}}>
-                {!isUnlocked&&<span style={{fontSize:10}} title="PIN required to vote for this person">🔒</span>}
                 <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>
                 {p.keeper&&<span style={{fontSize:11}}>🧤</span>}
                 {isMe&&<span style={{color:"#fbbf24",fontSize:9}}>(you)</span>}
@@ -2811,21 +2816,21 @@ function PollVoteTab({roster,poll,votes}){
 
               {/* Default: compact icon row. After voting: a single tappable badge showing the choice. */}
               {hasVoted ? (
-                <button onClick={()=>setChoice(id,p,v.choice)} style={{
+                <button onClick={()=>setChoice(id,v.choice)} style={{
                   flexShrink:0,padding:"4px 10px",borderRadius:20,border:"none",cursor:"pointer",fontWeight:700,fontSize:11,fontFamily:"'Inter',sans-serif",
                   background:v.choice==="yes"?"linear-gradient(135deg,#34d399,#10b981)":"linear-gradient(135deg,#dc2626,#991b1b)",
                   color:v.choice==="yes"?"#111":"#fff"
                 }} title="Tap to change">{v.choice==="yes"?"✅ Yes":"❌ No"} ✕</button>
               ) : (
                 <div style={{display:"flex",gap:6,flexShrink:0}}>
-                  <button onClick={()=>setChoice(id,p,"yes")} style={{width:30,height:30,borderRadius:"50%",border:"1.5px solid rgba(52,211,153,.4)",background:"rgba(52,211,153,.1)",color:"#34d399",cursor:"pointer",fontSize:14}}>✅</button>
-                  <button onClick={()=>setChoice(id,p,"no")} style={{width:30,height:30,borderRadius:"50%",border:"1.5px solid rgba(239,68,68,.4)",background:"rgba(239,68,68,.1)",color:"#f87171",cursor:"pointer",fontSize:14}}>❌</button>
+                  <button onClick={()=>setChoice(id,"yes")} style={{width:30,height:30,borderRadius:"50%",border:"1.5px solid rgba(52,211,153,.4)",background:"rgba(52,211,153,.1)",color:"#34d399",cursor:"pointer",fontSize:14}}>✅</button>
+                  <button onClick={()=>setChoice(id,"no")} style={{width:30,height:30,borderRadius:"50%",border:"1.5px solid rgba(239,68,68,.4)",background:"rgba(239,68,68,.1)",color:"#f87171",cursor:"pointer",fontSize:14}}>❌</button>
                 </div>
               )}
 
               {/* +1 toggle — always available regardless of Yes/No, sits to the right of the choice */}
               <button onClick={()=>{
-                  if(v.plus1){ togglePlus1(id,p); return; } // already on -> tapping removes it directly
+                  if(v.plus1){ togglePlus1(id); return; } // already on -> tapping removes it directly
                   setPlus1Open(plus1Open===id?null:id); // not on yet -> reveal the name field
                 }}
                 style={{flexShrink:0,marginLeft:8,width:30,height:30,borderRadius:"50%",border:`1.5px solid ${v.plus1?"transparent":"rgba(245,158,11,.4)"}`,
@@ -2837,23 +2842,23 @@ function PollVoteTab({roster,poll,votes}){
             {showKidInput&&!v.plus1&&(
               <div style={{display:"flex",gap:6,marginTop:8}}>
                 <input value={kidDraft[id]||""} onChange={e=>setKidDraft(d=>({...d,[id]:e.target.value}))}
-                  onKeyDown={e=>e.key==="Enter"&&togglePlus1(id,p)} placeholder="Kid's name" autoFocus
+                  onKeyDown={e=>e.key==="Enter"&&togglePlus1(id)} placeholder="Kid's name" autoFocus
                   style={{flex:1,fontSize:12,padding:"7px 10px"}}/>
-                <button onClick={()=>togglePlus1(id,p)} style={{padding:"7px 12px",borderRadius:10,border:"1.5px solid rgba(245,158,11,.4)",background:"transparent",color:"#fbbf24",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Add</button>
+                <button onClick={()=>togglePlus1(id)} style={{padding:"7px 12px",borderRadius:10,border:"1.5px solid rgba(245,158,11,.4)",background:"transparent",color:"#fbbf24",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Add</button>
               </div>
             )}
             {v.plus1&&<p style={{fontSize:11,color:"#fbbf24",marginTop:6}}>➕ Bringing {v.kidName}</p>}
           </div>
         );
       })}
-      <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:14}}>🔒 means you'll need that person's PIN the first time — stays unlocked after. Tap your colored badge to change your vote.</p>
+      <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:14}}>{passphrase?"First vote on this device asks for the club passphrase — stays unlocked after that.":""} Tap your colored badge to change your vote.</p>
 
-      {unlockTarget&&(
-        <Modal onClose={()=>setUnlockTarget(null)} title={`🔒 Enter ${unlockTarget.player.name}'s PIN`}>
-          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>This is the same PIN they set when adding themselves to the club list. Once unlocked, this device can vote for them again without re-entering it.</p>
-          <input value={unlockPin} onChange={e=>{setUnlockPin(e.target.value.replace(/\D/g,"").slice(0,4));setUnlockErr("");}} placeholder="••••" inputMode="numeric" maxLength={4} autoFocus onKeyDown={e=>e.key==="Enter"&&confirmUnlock()} style={{marginBottom:8,letterSpacing:"0.4em",textAlign:"center",fontSize:18}}/>
-          {unlockErr&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{unlockErr}</p>}
-          <button className="btn btn-primary w-full" onClick={confirmUnlock}>Confirm</button>
+      {passModal&&(
+        <Modal onClose={()=>setPassModal(null)} title="🔑 Club Passphrase">
+          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Enter the shared club passphrase to vote. Ask admin if you don't have it — only needed once on this device.</p>
+          <input value={passTry} onChange={e=>{setPassTry(e.target.value);setPassErr("");}} placeholder="Passphrase" autoFocus onKeyDown={e=>e.key==="Enter"&&confirmPass()} style={{marginBottom:8}}/>
+          {passErr&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{passErr}</p>}
+          <button className="btn btn-primary w-full" onClick={confirmPass}>Confirm</button>
         </Modal>
       )}
     </div>
