@@ -209,11 +209,89 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 const{useState,useRef,useCallback}=React;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-const nb=(n)=>({name:n,runs:0,balls:0,fours:0,sixes:0,out:false,howOut:"",onStrike:false});
-const nw=(n)=>({name:n,overs:0,ballsThisOver:0,runs:0,wickets:0,maidens:0,runsThisOver:0});
+const nb=(n,pid)=>({name:n,pid:pid||null,runs:0,balls:0,fours:0,sixes:0,out:false,howOut:"",onStrike:false});
+const nw=(n,pid)=>({name:n,pid:pid||null,overs:0,ballsThisOver:0,runs:0,wickets:0,maidens:0,runsThisOver:0});
 const ovStr=(b)=>`${Math.floor(b/6)}.${b%6}`;
 const rr=(r,b)=>b===0?"0.00":((r/b)*6).toFixed(2);
 const T=20;
+
+// ── Stats linking: normalize a name and resolve it to a roster profile id ──
+// Scorecards store players by typed name; profiles use ids. We bridge them by
+// matching on a normalized full name (trim + lowercase + collapse spaces).
+function normName(n){return (n||"").trim().toLowerCase().replace(/\s+/g," ");}
+// Map any stored venue string to a short canonical label so Lakes / Millennium
+// group cleanly even though they're stored as "Lakes High School" /
+// "Millennium Park, Lindenhurst" etc. Custom venues keep their own name.
+function canonVenue(v){
+  const s=(v||"").toLowerCase();
+  if(s.includes("lakes")) return "Lakes High School";
+  if(s.includes("millennium")) return "Millennium Park";
+  return (v&&v.trim())||"Other";
+}
+function buildPidResolver(roster){
+  const map={};
+  Object.entries(roster||{}).forEach(([id,p])=>{ if(p&&p.name) map[normName(p.name)]=id; });
+  return (name)=> map[normName(name)] || null;
+}
+
+// ── Career stats engine — aggregates every completed match in `history` ──
+// Players are keyed by profile id when known (exact, survives name typos),
+// otherwise by normalized name. Returns one row per player with batting + bowling.
+function computeCareerStats(history, roster){
+  const resolve=buildPidResolver(roster);
+  const players={};
+  const keyFor=(p)=>{const pid=p.pid||resolve(p.name);return pid?("id:"+pid):("nm:"+normName(p.name));};
+  const ensure=(p)=>{
+    const k=keyFor(p);
+    if(!players[k]){
+      const pid=p.pid||resolve(p.name);
+      players[k]={key:k,pid:pid||null,
+        name:(pid&&roster&&roster[pid]&&roster[pid].name)||p.name,
+        bat:{inns:0,runs:0,balls:0,fours:0,sixes:0,outs:0,hs:0,hsNotOut:false},
+        bowl:{inns:0,balls:0,runs:0,wkts:0,maidens:0,bestW:-1,bestR:0},
+        matchesSet:{}};
+    }
+    return players[k];
+  };
+  Object.values(history||{}).forEach((m,mi)=>{
+    [m&&m.inn1,m&&m.inn2].forEach(inn=>{
+      if(!inn) return;
+      (inn.battingOrder||[]).forEach(name=>{
+        const b=inn.batsmen&&inn.batsmen[name]; if(!b) return;
+        const pl=ensure(b); pl.matchesSet[mi]=true;
+        const batted=(b.balls||0)>0||b.out||(b.runs||0)>0;
+        if(batted){
+          pl.bat.inns++; pl.bat.runs+=b.runs||0; pl.bat.balls+=b.balls||0;
+          pl.bat.fours+=b.fours||0; pl.bat.sixes+=b.sixes||0;
+          if(b.out) pl.bat.outs++;
+          const notOut=!b.out, runs=b.runs||0;
+          if(runs>pl.bat.hs||(runs===pl.bat.hs&&notOut&&!pl.bat.hsNotOut)){ pl.bat.hs=runs; pl.bat.hsNotOut=notOut; }
+        }
+      });
+      (inn.bowlingOrder||[]).forEach(name=>{
+        const w=inn.bowlers&&inn.bowlers[name]; if(!w) return;
+        const balls=(w.overs||0)*6+(w.ballsThisOver||0);
+        const pl=ensure(w); pl.matchesSet[mi]=true;
+        if(balls>0||(w.wickets||0)>0){
+          pl.bowl.inns++; pl.bowl.balls+=balls; pl.bowl.runs+=w.runs||0;
+          pl.bowl.wkts+=w.wickets||0; pl.bowl.maidens+=w.maidens||0;
+          const wk=w.wickets||0, rn=w.runs||0;
+          if(wk>pl.bowl.bestW||(wk===pl.bowl.bestW&&rn<pl.bowl.bestR)){ pl.bowl.bestW=wk; pl.bowl.bestR=rn; }
+        }
+      });
+    });
+  });
+  return Object.values(players).map(pl=>{
+    const b=pl.bat, w=pl.bowl;
+    return {
+      key:pl.key, pid:pl.pid, name:pl.name, matches:Object.keys(pl.matchesSet).length,
+      bat:{...b, avg:b.outs>0?(b.runs/b.outs):null, sr:b.balls>0?(b.runs/b.balls*100):null},
+      bowl:{...w, econ:w.balls>0?(w.runs/w.balls*6):null,
+        oversStr:Math.floor(w.balls/6)+(w.balls%6?"."+(w.balls%6):""),
+        best:w.bestW>=0?(w.bestW+"/"+w.bestR):"—"}
+    };
+  });
+}
 
 function chipClass(ev){
   if(ev.type==="W")  return "chip chip-W";
@@ -679,7 +757,18 @@ function App({role,onExit,onHistory,onPoll,onRoster}){
   const[preEnd,setPreEnd]=useState(null); // snapshot before ending innings/match, so admin can revert
   const[slotsA,setSlotsA]=useState([]);  // device IDs holding Team A's 2 scorer slots
   const[slotsB,setSlotsB]=useState([]);  // device IDs holding Team B's 2 scorer slots
+  const[roster,setRoster]=useState({});  // club roster — used to autocomplete names & stamp profile ids for stats
   const localChange=React.useRef(false); // true right after THIS device makes a change — skip the next incoming sync to avoid clobbering our own optimistic update
+
+  // Roster listener — powers name autocomplete and links scored players to profiles for career stats.
+  React.useEffect(()=>{
+    if(!isScorer||!FB_OK||!DB)return;
+    const ref=DB.ref("roster");
+    const cb=ref.on("value",s=>setRoster(s.val()||{}));
+    return ()=>ref.off("value",cb);
+  },[isScorer]);
+  const resolvePid=React.useMemo(()=>buildPidResolver(roster),[roster]);
+  const rosterNames=React.useMemo(()=>Object.values(roster||{}).map(p=>p&&p.name).filter(Boolean).sort((a,b)=>a.localeCompare(b)),[roster]);
 
   // Pull in any match that's already live (so a scorer/admin joining mid-match sees it)
   // and keep listening so both team scorers + admin always see the SAME shared match.
@@ -760,11 +849,11 @@ function App({role,onExit,onHistory,onPoll,onRoster}){
     setInn(p=>{
       const single=p.single;
       const batsmen=single
-        ?{[striker]:{...nb(striker),onStrike:true}}
-        :{[striker]:{...nb(striker),onStrike:true},[nonStriker]:nb(nonStriker)};
+        ?{[striker]:{...nb(striker,resolvePid(striker)),onStrike:true}}
+        :{[striker]:{...nb(striker,resolvePid(striker)),onStrike:true},[nonStriker]:nb(nonStriker,resolvePid(nonStriker))};
       return{...p,awaitingOpeners:false,
         batsmen,battingOrder:single?[striker]:[striker,nonStriker],
-        bowlers:{[bowler]:nw(bowler)},bowlingOrder:[bowler],
+        bowlers:{[bowler]:nw(bowler,resolvePid(bowler))},bowlingOrder:[bowler],
         strikerName:striker,nonStrikerName:single?null:nonStriker,bowlerName:bowler};
     });
   };
@@ -907,7 +996,7 @@ function App({role,onExit,onHistory,onPoll,onRoster}){
         // returning retired batsman — keep their score, clear retired flag
         b[nm]={...existing,onStrike:enteringAtStrikerEnd,retired:false};
       }else{
-        b[nm]={...nb(nm),onStrike:enteringAtStrikerEnd};
+        b[nm]={...nb(nm,resolvePid(nm)),onStrike:enteringAtStrikerEnd};
       }
       const order=p.battingOrder.includes(nm)?p.battingOrder:[...p.battingOrder,nm];
       // If a new bowler was ALSO needed (wicket fell on the over's last ball), keep that prompt
@@ -929,16 +1018,16 @@ function App({role,onExit,onHistory,onPoll,onRoster}){
   const confBowler=()=>{
     const nm=nbwn.trim();if(!nm)return;
     if(inn&&nm===inn.bowlerName){alert("A bowler cannot bowl two overs in a row. Pick a different bowler.");return;}
-    setInn(p=>{const b={...p.bowlers};if(!b[nm])b[nm]=nw(nm);return{...p,bowlers:b,bowlingOrder:p.bowlingOrder.includes(nm)?p.bowlingOrder:[...p.bowlingOrder,nm],bowlerName:nm,pending:null};});
+    setInn(p=>{const b={...p.bowlers};if(!b[nm])b[nm]=nw(nm,resolvePid(nm));return{...p,bowlers:b,bowlingOrder:p.bowlingOrder.includes(nm)?p.bowlingOrder:[...p.bowlingOrder,nm],bowlerName:nm,pending:null};});
     setNBWN("");
   };
   const start2=({striker,nonStriker,bowler})=>{
     setHist([]);
     setInn(p=>({battingTeam:p.bowlingTeam,bowlingTeam:p.battingTeam,inningsNum:2,
       venue:p.venue,format:p.format,overs:p.overs,maxWkts:p.maxWkts,single:p.single,
-      batsmen:p.single?{[striker]:{...nb(striker),onStrike:true}}:{[striker]:{...nb(striker),onStrike:true},[nonStriker]:nb(nonStriker)},
+      batsmen:p.single?{[striker]:{...nb(striker,resolvePid(striker)),onStrike:true}}:{[striker]:{...nb(striker,resolvePid(striker)),onStrike:true},[nonStriker]:nb(nonStriker,resolvePid(nonStriker))},
       battingOrder:p.single?[striker]:[striker,nonStriker],
-      bowlers:{[bowler]:nw(bowler)},bowlingOrder:[bowler],
+      bowlers:{[bowler]:nw(bowler,resolvePid(bowler))},bowlingOrder:[bowler],
       strikerName:striker,nonStrikerName:p.single?null:nonStriker,bowlerName:bowler,
       totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],
       extras:{wd:0,nb:0,b:0,lb:0},target:p.totalRuns+1}));
@@ -952,8 +1041,8 @@ function App({role,onExit,onHistory,onPoll,onRoster}){
     return<Setup onStart={startMatch} role={role} onExit={onExit} onHistory={onHistory} onPoll={onPoll} onRoster={onRoster}/>;
   }
   if(!inn)   return null;
-  if(inn.awaitingOpeners) return<OpenersForm inn={inn} match={match} onSubmit={fillOpeners} role={role} onExit={onExit}/>;
-  if(ib)     return<InningsBreak inn={inn} match={match} onStart={start2} role={role} onRevert={revert} canRevert={!!preEnd} onExit={onExit}/>;
+  if(inn.awaitingOpeners) return<OpenersForm inn={inn} match={match} onSubmit={fillOpeners} role={role} onExit={onExit} rosterNames={rosterNames}/>;
+  if(ib)     return<InningsBreak inn={inn} match={match} onStart={start2} role={role} onRevert={revert} canRevert={!!preEnd} onExit={onExit} rosterNames={rosterNames}/>;
   if(mo)     return<MatchOver result={mo} inn={inn} inn1={inn1} match={match} role={role} onRevert={revert} canRevert={!!preEnd} onNew={()=>{setMatch(null);setInn(null);setMO(null);setInn1(null);setPreEnd(null);}}/>;
 
   const SK=inn.batsmen[inn.strikerName];
@@ -984,14 +1073,14 @@ function App({role,onExit,onHistory,onPoll,onRoster}){
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <span style={{color:"#4b5563",fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
             {role==="admin"&&onHistory&&<button onClick={onHistory} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.35)",color:"#a5b4fc",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>📚 History</button>}
-            <ManualFixButton inn={inn} onSave={({striker,nonStriker,bowler})=>setInn(p=>{
+            <ManualFixButton inn={inn} rosterNames={rosterNames} onSave={({striker,nonStriker,bowler})=>setInn(p=>{
               const b={...p.batsmen};
-              if(!b[striker]) b[striker]={...nb(striker)};
-              if(nonStriker&&!b[nonStriker]) b[nonStriker]={...nb(nonStriker)};
+              if(!b[striker]) b[striker]={...nb(striker,resolvePid(striker))};
+              if(nonStriker&&!b[nonStriker]) b[nonStriker]={...nb(nonStriker,resolvePid(nonStriker))};
               b[striker]={...b[striker],onStrike:true};
               if(nonStriker) b[nonStriker]={...b[nonStriker],onStrike:false};
               const bwlrs={...p.bowlers};
-              if(!bwlrs[bowler]) bwlrs[bowler]=nw(bowler);
+              if(!bwlrs[bowler]) bwlrs[bowler]=nw(bowler,resolvePid(bowler));
               const battingOrder=p.battingOrder.includes(striker)?p.battingOrder:[...p.battingOrder,striker];
               const bo2=(nonStriker&&!battingOrder.includes(nonStriker))?[...battingOrder,nonStriker]:battingOrder;
               const bowlingOrder=p.bowlingOrder.includes(bowler)?p.bowlingOrder:[...p.bowlingOrder,bowler];
@@ -1031,7 +1120,7 @@ function App({role,onExit,onHistory,onPoll,onRoster}){
       </div>
 
       <div className="content">
-        {tab==="score"&&<ScoreTab inn={inn} SK={SK} NS={NS} BW={BW} record={record}
+        {tab==="score"&&<ScoreTab inn={inn} SK={SK} NS={NS} BW={BW} record={record} rosterNames={rosterNames}
           pw={pw} nbn={nbn} setNBN={setNBN} confBatsman={confBatsman}
           nnb={nnb} nbwn={nbwn} setNBWN={setNBWN} confBowler={confBowler}
           pr={pr} onRetire={retire}
@@ -1045,7 +1134,7 @@ function App({role,onExit,onHistory,onPoll,onRoster}){
 }
 
 // ── Score Tab ─────────────────────────────────────────────────────────────────
-function ScoreTab({inn,SK,NS,BW,record,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onEndInnings,onRevert,canRevert,role,onUndo,canUndo}){
+function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onEndInnings,onRevert,canRevert,role,onUndo,canUndo}){
   const[wt,setWT]=useState("Bowled");
   const[fielder,setFielder]=useState("");
   const[roRuns,setRoRuns]=useState(0);      // runs completed before the run-out happened
@@ -1103,7 +1192,7 @@ function ScoreTab({inn,SK,NS,BW,record,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBW
           <p style={{color:pr?"#818cf8":"#f87171",fontFamily:"'JetBrains Mono',monospace",fontSize:11,textTransform:"uppercase",letterSpacing:".15em",marginBottom:8}}>{pr?"🔁 Retired — who's in next?":"⚡ Wicket! Who's next?"}</p>
           <div style={{display:"flex",gap:8}}>
             <input value={nbn} onChange={e=>setNBN(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confBatsman()} placeholder="Batsman name" autoFocus list="batlist" style={{flex:1}}/>
-            <datalist id="batlist">{retiredList.map(n=><option key={n} value={n}/>)}</datalist>
+            <datalist id="batlist">{[...new Set([...retiredList,...(rosterNames||[])])].map(n=><option key={n} value={n}/>)}</datalist>
             <button className="btn btn-primary" onClick={confBatsman} style={{padding:"10px 16px",whiteSpace:"nowrap"}}>In →</button>
           </div>
           {retiredList.length>0&&<div style={{marginTop:8}}>
@@ -1121,7 +1210,8 @@ function ScoreTab({inn,SK,NS,BW,record,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBW
           <p style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:12,textTransform:"uppercase",letterSpacing:".12em",marginBottom:4,fontWeight:700}}>🎯 Over Complete!</p>
           <p style={{color:"#818cf8",fontSize:12,marginBottom:10}}>Select the next bowler (a bowler can't bowl two overs in a row):</p>
           <div style={{display:"flex",gap:8,marginBottom:(inn.bowlingOrder||[]).filter(b=>b!==inn.bowlerName).length>0?10:0}}>
-            <input value={nbwn} onChange={e=>setNBWN(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confBowler()} placeholder="Type bowler name" autoFocus style={{flex:1}}/>
+            <input value={nbwn} onChange={e=>setNBWN(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confBowler()} placeholder="Type bowler name" autoFocus list="bowlerlist" style={{flex:1}}/>
+            <datalist id="bowlerlist">{(rosterNames||[]).map(n=><option key={n} value={n}/>)}</datalist>
             <button className="btn btn-primary" onClick={confBowler} style={{padding:"10px 18px",whiteSpace:"nowrap"}}>Bowl →</button>
           </div>
           {(inn.bowlingOrder||[]).filter(b=>b!==inn.bowlerName).length>0&&<div>
@@ -1290,7 +1380,7 @@ function Modal({children,onClose,title}){
 }
 
 // ── PIN Viewer — admin can check both team PINs anytime during the match ──────
-function ManualFixButton({inn,onSave}){
+function ManualFixButton({inn,onSave,rosterNames}){
   const[open,setOpen]=React.useState(false);
   const[sk,setSk]=React.useState("");
   const[ns,setNs]=React.useState("");
@@ -1312,13 +1402,14 @@ function ManualFixButton({inn,onSave}){
       <Modal onClose={()=>setOpen(false)} title="🔧 Correct Striker / Bowler">
         <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Use this if a name was entered wrong (e.g. wrong bowler typed in) or strike rotation needs a manual correction. Scores already recorded are not affected — this only changes who's currently at the crease/bowling.</p>
         <label>{inn.single?"Batsman":"Striker (on strike now)"}</label>
-        <input value={sk} onChange={e=>setSk(e.target.value)} placeholder="Striker's name" style={{marginBottom:12}}/>
+        <input value={sk} onChange={e=>setSk(e.target.value)} list="fixPlayers" placeholder="Striker's name" style={{marginBottom:12}}/>
         {!inn.single&&(<>
           <label>Non-striker</label>
-          <input value={ns} onChange={e=>setNs(e.target.value)} placeholder="Non-striker's name" style={{marginBottom:12}}/>
+          <input value={ns} onChange={e=>setNs(e.target.value)} list="fixPlayers" placeholder="Non-striker's name" style={{marginBottom:12}}/>
         </>)}
         <label>Current bowler</label>
-        <input value={bw} onChange={e=>setBw(e.target.value)} placeholder="Bowler's name" style={{marginBottom:14}}/>
+        <input value={bw} onChange={e=>setBw(e.target.value)} list="fixPlayers" placeholder="Bowler's name" style={{marginBottom:14}}/>
+        <datalist id="fixPlayers">{(rosterNames||[]).map(n=><option key={n} value={n}/>)}</datalist>
         <button className="btn btn-primary w-full" onClick={save}>Save Correction</button>
       </Modal>
     )}
@@ -1456,7 +1547,7 @@ function BowlingTab({inn}){
 }
 
 // ── Openers Form — batting team enters striker/non-striker, bowling team enters bowler ──
-function OpenersForm({inn,match,onSubmit,role,onExit}){
+function OpenersForm({inn,match,onSubmit,role,onExit,rosterNames}){
   const rS=useRef(),rNS=useRef(),rBw=useRef();
   const single=inn.single;
   const go=()=>{
@@ -1486,11 +1577,12 @@ function OpenersForm({inn,match,onSubmit,role,onExit}){
             <span style={{color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:600}}>🏏 {inn.battingTeam} is batting first</span>
           </div>
           <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em"}}>{inn.battingTeam}'s opening {single?"batsman":"pair"}</p>
-          <div><label>🟡 {single?"Batsman":"Striker (on strike)"}</label><input ref={rS} placeholder={single?"Batsman name":"On-strike batsman"}/></div>
-          {!single&&<div><label>⚪ Non-striker</label><input ref={rNS} placeholder="Other batsman"/></div>}
+          <div><label>🟡 {single?"Batsman":"Striker (on strike)"}</label><input ref={rS} list="rosterPlayers" placeholder={single?"Batsman name":"On-strike batsman"}/></div>
+          {!single&&<div><label>⚪ Non-striker</label><input ref={rNS} list="rosterPlayers" placeholder="Other batsman"/></div>}
           <div className="divider"/>
           <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em"}}>{inn.bowlingTeam}'s opening bowler</p>
-          <div><label>🎯 Opening Bowler</label><input ref={rBw} placeholder={`${inn.bowlingTeam} bowler`}/></div>
+          <div><label>🎯 Opening Bowler</label><input ref={rBw} list="rosterPlayers" placeholder={`${inn.bowlingTeam} bowler`}/></div>
+          <datalist id="rosterPlayers">{(rosterNames||[]).map(n=><option key={n} value={n}/>)}</datalist>
           <button className="btn btn-primary w-full" onClick={go}>▶ Start Scoring</button>
           <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textAlign:"center"}}>
             {inn.battingTeam}'s scorer enters their batsmen · {inn.bowlingTeam}'s scorer enters the bowler{role==="admin"?" · or admin can fill both":""}
@@ -1501,7 +1593,7 @@ function OpenersForm({inn,match,onSubmit,role,onExit}){
   );
 }
 
-function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onExit}){
+function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onExit,rosterNames}){
   const rS=useRef(),rNS=useRef(),rBw=useRef();
   const single=inn.single;
   const go=()=>{
@@ -1529,8 +1621,9 @@ function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onExit}){
           <div className="tag-amber">🎯 {inn.bowlingTeam} need {inn.totalRuns+1} to win in {inn.overs} overs</div>
           <div className="divider"/>
           {fields.map(([l,r,p])=>(
-            <div key={l}><label>{l}</label><input ref={r} placeholder={p}/></div>
+            <div key={l}><label>{l}</label><input ref={r} list="rosterPlayers2" placeholder={p}/></div>
           ))}
+          <datalist id="rosterPlayers2">{(rosterNames||[]).map(n=><option key={n} value={n}/>)}</datalist>
           <button className="btn btn-primary w-full" onClick={go}>Start 2nd Innings</button>
           {role==="admin"&&canRevert&&(
             <button className="btn w-full" onClick={onRevert} style={{borderRadius:14,fontSize:13,padding:"12px",background:"transparent",border:"1.5px solid rgba(52,211,153,.5)",color:"#34d399"}}>↩️ Revert — undo end, back to live 1st innings</button>
@@ -2314,6 +2407,7 @@ function Landing({onPick}){
             backdropFilter:"blur(20px)",boxShadow:"0 16px 48px rgba(0,0,0,.6)",animation:"fadeUp .25s ease both"
           }}>
             <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:9,textTransform:"uppercase",letterSpacing:".2em",marginBottom:10,paddingLeft:4}}>Club Menu</p>
+            {menuItem("📊","Stats & Records","Leaderboard · player profiles","rgba(245,158,11,.35)",()=>onPick("stats"))}
             {menuItem("📚","History","Past LCC matches","rgba(99,102,241,.35)",()=>onPick("history"))}
             {menuItem("👑","Admin","Manage · PIN","rgba(239,68,68,.35)",()=>onPick("admin"))}
           </div>
@@ -2665,8 +2759,9 @@ function PollRosterTab({roster,canDelete,passphrase}){
     <div>
       <div className="mini-card" style={{marginBottom:16}}>
         <p className="section-title">{editingId?"✏️ Edit Your Details":"➕ Add Yourself"}</p>
-        <label>Your name</label>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Rajesh" style={{marginBottom:12}}/>
+        <label>Full name</label>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Rajesh Arigela" style={{marginBottom:4}}/>
+        <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:12,lineHeight:1.4}}>💡 Used to track your career stats across matches — enter the same full name you're scored under.</p>
         <label>Role</label>
         <div className="grid-3" style={{marginBottom:12}}>
           {["Batsman","Bowler","All-rounder"].map(r=>(
@@ -3086,6 +3181,173 @@ function PollTeamsTab({roster,poll,votes,teams}){
   );
 }
 
+// ── Stats & Leaderboard page — career stats aggregated from match history ──────
+function fmtAvg(v){return v===null?"—":v.toFixed(1);}
+function fmtSR(v){return v===null?"—":v.toFixed(1);}
+function fmtEcon(v){return v===null?"—":v.toFixed(2);}
+
+function PlayerStatCard({s}){
+  const b=s.bat, w=s.bowl;
+  const cell=(label,val,color)=>(
+    <div style={{textAlign:"center",flex:1}}>
+      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:color||"#fff"}}>{val}</div>
+      <div style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",marginTop:2}}>{label}</div>
+    </div>
+  );
+  return(
+    <div style={{padding:"4px 2px 8px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+        <span style={{fontSize:11,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace"}}>🏏 {s.matches} match{s.matches===1?"":"es"}</span>
+      </div>
+      <p style={{color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em",marginBottom:6}}>Batting</p>
+      <div style={{display:"flex",gap:6,marginBottom:6}}>
+        {cell("Runs",b.runs,"#fbbf24")}{cell("Inns",b.inns)}{cell("HS",b.hs+(b.hsNotOut&&b.hs>0?"*":""))}{cell("Avg",fmtAvg(b.avg))}
+      </div>
+      <div style={{display:"flex",gap:6,marginBottom:14}}>
+        {cell("SR",fmtSR(b.sr))}{cell("Balls",b.balls)}{cell("4s",b.fours,"#fbbf24")}{cell("6s",b.sixes,"#34d399")}
+      </div>
+      <p style={{color:"#34d399",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em",marginBottom:6}}>Bowling</p>
+      <div style={{display:"flex",gap:6}}>
+        {cell("Wkts",w.wkts,"#f87171")}{cell("Overs",w.oversStr)}{cell("Econ",fmtEcon(w.econ))}{cell("Best",w.best,"#f87171")}
+      </div>
+      {(b.inns===0&&w.inns===0)&&<p style={{color:"#6b7280",fontSize:12,textAlign:"center",marginTop:10}}>No scored appearances yet.</p>}
+    </div>
+  );
+}
+
+function StatsPage({onExit}){
+  const[history,setHistory]=React.useState(undefined);
+  const[roster,setRoster]=React.useState({});
+  const[view,setView]=React.useState("leaders"); // leaders | players
+  const[expanded,setExpanded]=React.useState(null);
+  const[q,setQ]=React.useState("");
+  const[venueF,setVenueF]=React.useState("All"); // "All" | canonical venue label
+  React.useEffect(()=>{
+    if(!FB_OK||!DB){setHistory({});return;}
+    const hRef=DB.ref("history").limitToLast(200), rRef=DB.ref("roster");
+    const c1=hRef.on("value",s=>setHistory(s.val()||{}));
+    const c2=rRef.on("value",s=>setRoster(s.val()||{}));
+    return ()=>{hRef.off("value",c1);rRef.off("value",c2);};
+  },[]);
+  if(history===undefined) return <Centered emoji="📊" title="Loading stats…" onExit={onExit}/>;
+
+  // Distinct venues present in history (Lakes / Millennium always offered if seen, plus any custom)
+  const venueCounts={};
+  Object.values(history||{}).forEach(m=>{ const v=canonVenue(m&&m.venue); venueCounts[v]=(venueCounts[v]||0)+1; });
+  const venueList=Object.keys(venueCounts).sort((a,b)=>{
+    // Keep Lakes & Millennium first, then others alphabetically
+    const rank=x=>x==="Lakes High School"?0:x==="Millennium Park"?1:2;
+    return rank(a)-rank(b)||a.localeCompare(b);
+  });
+  // Filter history by the selected venue before aggregating
+  const filteredHistory={};
+  Object.entries(history||{}).forEach(([k,m])=>{ if(venueF==="All"||canonVenue(m&&m.venue)===venueF) filteredHistory[k]=m; });
+
+  const stats=computeCareerStats(filteredHistory,roster);
+  const topRuns=[...stats].filter(s=>s.bat.runs>0).sort((a,b)=>b.bat.runs-a.bat.runs).slice(0,10);
+  const topWkts=[...stats].filter(s=>s.bowl.wkts>0).sort((a,b)=>b.bowl.wkts-a.bowl.wkts||a.bowl.runs-b.bowl.runs).slice(0,10);
+  const players=[...stats].sort((a,b)=>a.name.localeCompare(b.name))
+    .filter(s=>!q.trim()||normName(s.name).includes(normName(q)));
+  const hasData=stats.length>0;
+  const matchCount=Object.keys(filteredHistory).length;
+
+  const LeaderRow=(s,i,kind)=>(
+    <div key={s.key} onClick={()=>{setView("players");setExpanded(s.key);}} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:12,cursor:"pointer",
+      background:i===0?"rgba(245,158,11,.1)":"rgba(15,12,41,.5)",border:`1px solid ${i===0?"rgba(245,158,11,.35)":"rgba(99,102,241,.18)"}`,marginBottom:6}}>
+      <span style={{width:22,textAlign:"center",fontFamily:"'Oswald',sans-serif",fontWeight:700,fontSize:15,color:i===0?"#fbbf24":i===1?"#cbd5e1":i===2?"#d8a25e":"#6b7280"}}>{i+1}</span>
+      <span style={{flex:1,fontSize:14,fontWeight:600,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}{!s.pid&&<span title="Not linked to a profile" style={{color:"#6b7280",fontSize:10,marginLeft:5}}>•</span>}</span>
+      {kind==="runs"
+        ?<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13}}><span style={{color:"#fbbf24",fontWeight:700,fontSize:15}}>{s.bat.runs}</span> <span style={{color:"#6b7280",fontSize:10}}>runs</span></span>
+        :<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13}}><span style={{color:"#f87171",fontWeight:700,fontSize:15}}>{s.bowl.wkts}</span> <span style={{color:"#6b7280",fontSize:10}}>wkts</span></span>}
+    </div>
+  );
+
+  return(
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+      <div style={{maxWidth:480,margin:"0 auto"}}>
+        <div className="flex items-center justify-between" style={{marginBottom:4}}>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📊 Stats & Records</h1>
+          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+        </div>
+        <p style={{color:"#a5b4fc",fontSize:12,fontFamily:"'JetBrains Mono',monospace",marginBottom:12}}>
+          {venueF==="All"?"All venues":venueF} · {matchCount} match{matchCount===1?"":"es"}
+        </p>
+
+        {/* Venue filter — Lakes and Millennium tracked separately (different formats) */}
+        {Object.keys(history).length>0&&venueList.length>0&&(
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+            {["All",...venueList].map(v=>{
+              const active=venueF===v;
+              const short=v==="Lakes High School"?"🎾 Lakes":v==="Millennium Park"?"🏟️ Millennium":v==="All"?"🏆 All":"📍 "+v;
+              return(
+                <button key={v} onClick={()=>{setVenueF(v);setExpanded(null);}} style={{
+                  padding:"7px 12px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'Inter',sans-serif",
+                  border:`1.5px solid ${active?"transparent":"rgba(99,102,241,.3)"}`,
+                  background:active?"linear-gradient(135deg,#f59e0b,#ef4444)":"rgba(15,12,41,.5)",
+                  color:active?"#111":"#a5b4fc",whiteSpace:"nowrap"
+                }}>{short}{v!=="All"&&<span style={{opacity:.6,marginLeft:5,fontSize:10}}>{venueCounts[v]}</span>}</button>
+              );
+            })}
+          </div>
+        )}
+
+        {Object.keys(history).length===0?(
+          <div className="mini-card" style={{textAlign:"center",padding:"30px 16px"}}>
+            <div style={{fontSize:40,marginBottom:10}}>📭</div>
+            <p style={{fontWeight:600,marginBottom:4}}>No stats yet</p>
+            <p style={{color:"#6b7280",fontSize:12}}>Career stats appear here once matches are completed and saved to history.</p>
+          </div>
+        ):!hasData?(
+          <div className="mini-card" style={{textAlign:"center",padding:"30px 16px"}}>
+            <div style={{fontSize:40,marginBottom:10}}>🏟️</div>
+            <p style={{fontWeight:600,marginBottom:4}}>No matches at {venueF} yet</p>
+            <p style={{color:"#6b7280",fontSize:12}}>Pick a different venue above, or play a match here to start building stats.</p>
+          </div>
+        ):(<>
+          <div className="tabs" style={{margin:"0 0 16px"}}>
+            {[["leaders","🏆 Leaderboard"],["players","👤 Players"]].map(([id,lbl])=>(
+              <button key={id} className={`tab${view===id?" active":""}`} onClick={()=>setView(id)} style={{gridColumn:"auto"}}>{lbl}</button>
+            ))}
+          </div>
+
+          {view==="leaders"&&(
+            <div className="space-y-4">
+              <div className="mini-card">
+                <p className="section-title" style={{color:"#fbbf24",marginBottom:10}}>🏏 Most Runs</p>
+                {topRuns.length?topRuns.map((s,i)=>LeaderRow(s,i,"runs")):<p style={{color:"#6b7280",fontSize:12}}>No runs recorded yet.</p>}
+              </div>
+              <div className="mini-card">
+                <p className="section-title" style={{color:"#f87171",marginBottom:10}}>🎯 Most Wickets</p>
+                {topWkts.length?topWkts.map((s,i)=>LeaderRow(s,i,"wkts")):<p style={{color:"#6b7280",fontSize:12}}>No wickets recorded yet.</p>}
+              </div>
+              <p style={{color:"#4338ca",fontSize:10,fontFamily:"'JetBrains Mono',monospace",textAlign:"center"}}>Tap any name to see their full profile · “•” = not yet linked to a club profile</p>
+            </div>
+          )}
+
+          {view==="players"&&(
+            <div>
+              <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Search players…" style={{marginBottom:12}}/>
+              {players.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"16px 0"}}>No players match “{q}”.</p>}
+              {players.map(s=>(
+                <div key={s.key} className="mini-card" style={{marginBottom:8,padding:0,overflow:"hidden"}}>
+                  <button onClick={()=>setExpanded(expanded===s.key?null:s.key)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"12px 14px",background:"transparent",border:"none",cursor:"pointer",color:"#fff",textAlign:"left"}}>
+                    <span style={{display:"flex",flexDirection:"column"}}>
+                      <span style={{fontWeight:600,fontSize:14}}>{s.name}{!s.pid&&<span title="Not linked to a club profile" style={{color:"#6b7280",fontSize:10,marginLeft:6,fontFamily:"'JetBrains Mono',monospace"}}>unlinked</span>}</span>
+                      <span style={{fontSize:11,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{s.bat.runs} runs · {s.bowl.wkts} wkts · {s.matches} M</span>
+                    </span>
+                    <span style={{color:"#6b7280",fontSize:14,transform:expanded===s.key?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</span>
+                  </button>
+                  {expanded===s.key&&<div style={{padding:"0 14px",borderTop:"1px solid #1e1b4b"}}><PlayerStatCard s={s}/></div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </>)}
+      </div>
+    </div>
+  );
+}
+
 function Root(){
   const[screen,setScreen]=React.useState("landing"); // landing|viewer|scorer|admin|history
   const[gate,setGate]=React.useState(null);          // null | "scorer" | "admin"
@@ -3106,6 +3368,7 @@ function Root(){
   if(screen==="history") return <HistoryPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
   if(screen==="poll")    return <PollPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
   if(screen==="roster")  return <RosterPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
+  if(screen==="stats")   return <StatsPage onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
   if(screen==="pollAdmin") return <PollAdminPage onExit={()=>setScreen(isAdmin?"admin":"landing")}/>;
   if(screen==="scorer")  return <App role="scorer" onExit={home}/>;
   if(screen==="admin")   return <App role="admin" onExit={home} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("pollAdmin")} onRoster={()=>setScreen("roster")}/>;
