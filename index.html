@@ -79,6 +79,7 @@
 @keyframes legSprint{0%{transform:scaleX(1)}20%{transform:scaleX(.75)}40%{transform:scaleX(1.25)}60%{transform:scaleX(.8)}80%{transform:scaleX(1.2)}100%{transform:scaleX(1)}}
 @keyframes tossResultPop{0%{transform:scale(.4);opacity:0}12%{transform:scale(1.2);opacity:1}20%{transform:scale(1);opacity:1}88%{transform:scale(1);opacity:1}100%{transform:scale(.96);opacity:0}}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes batSwing{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}}
 @keyframes coinFlip{
   0%{transform:rotateY(0deg) translateY(0)}
   8%{transform:rotateY(720deg) translateY(-22px)}
@@ -1088,16 +1089,15 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
             <span style={{width:4,height:4,borderRadius:"50%",background:"#4338ca",display:"inline-block"}}/>
             <span style={{fontWeight:600,fontSize:14}}>{inn.battingTeam}</span>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <span style={{color:"#4b5563",fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
-            {role==="admin"&&onHistory&&<button onClick={onHistory} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.35)",color:"#a5b4fc",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>📚 History</button>}
-            {role==="admin"&&onAnnounce&&<button onClick={onAnnounce} style={{background:"rgba(245,158,11,.12)",border:"1px solid rgba(245,158,11,.35)",color:"#fbbf24",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>📢 Notice</button>}
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{color:"#4b5563",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
             <ManualFixButton inn={inn} rosterNames={rosterNames} onSave={({striker,nonStriker,bowler})=>fixPlayers({striker,nonStriker,bowler})}/>
-            {role==="admin"&&<EditMatchButton inn={inn} onSave={({overs,maxWkts})=>setInn(p=>({...p,overs,maxWkts}))}/>}
-            {role==="admin"&&<PinManagementButton/>}
-            {role==="admin"&&<PinButton match={match} slotsA={slotsA} slotsB={slotsB} onClearSlots={()=>{
-              setSlotsA([]); setSlotsB([]);
-            }}/>}
+            {role==="admin"&&<AdminActionsMenu
+              onHistory={onHistory} onAnnounce={onAnnounce}
+              inn={inn} onEditMatchSave={({overs,maxWkts})=>setInn(p=>({...p,overs,maxWkts}))}
+              match={match} slotsA={slotsA} slotsB={slotsB}
+              onClearSlots={()=>{setSlotsA([]);setSlotsB([]);}}
+            />}
             {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
           </div>
         </div>
@@ -1441,6 +1441,127 @@ function PinManagementButton(){
       <button className="btn btn-primary w-full" onClick={save}>Save PINs</button>
     </Modal>}
   </>);
+}
+
+// ── AdminActionsMenu — consolidates all admin header controls into one ⚙️ button ─
+// Replaces the 6-button overflow row with a tidy dropdown. Navigation items
+// (History, Notice) close the menu and navigate. Modal items manage their own
+// open state locally so the dropdown stays out of their way.
+function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,slotsA,slotsB,onClearSlots}){
+  const[open,setOpen]=React.useState(false);
+  const[editOpen,setEditOpen]=React.useState(false);
+  const[pinMgmtOpen,setPinMgmtOpen]=React.useState(false);
+  const[pinViewOpen,setPinViewOpen]=React.useState(false);
+  const close=()=>setOpen(false);
+
+  const row=(icon,label,color,onClick)=>(
+    <button key={label} onClick={()=>{close();onClick();}} style={{width:"100%",display:"flex",alignItems:"center",gap:10,
+      padding:"10px 12px",background:"transparent",border:"none",cursor:"pointer",borderRadius:10,
+      fontFamily:"'Inter',sans-serif",transition:"background .12s"
+    }}
+    onMouseEnter={e=>e.currentTarget.style.background="rgba(99,102,241,.12)"}
+    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+      <span style={{fontSize:16,flexShrink:0}}>{icon}</span>
+      <span style={{fontSize:13,fontWeight:600,color}}>{label}</span>
+    </button>
+  );
+
+  // Edit Match inline modal (controlled here so we can close the menu first)
+  const[ov,setOv]=React.useState(inn?.overs||0);
+  const[wk,setWk]=React.useState(inn?.maxWkts||0);
+  const minOv=Math.ceil((inn?.totalBalls||0)/6)||1;
+  const minWk=(inn?.wickets||0)+1;
+  const saveEdit=()=>{
+    const o=Number(ov),w=Number(wk);
+    if(!o||o<minOv){alert(`Overs can't be less than ${minOv}.`);return;}
+    if(!w||w<minWk){alert(`Wickets can't be less than ${minWk}.`);return;}
+    onEditMatchSave({overs:o,maxWkts:w});setEditOpen(false);
+  };
+
+  return(
+    <div style={{position:"relative"}}>
+      {/* Trigger */}
+      <button onClick={()=>setOpen(o=>!o)} style={{
+        background:"rgba(99,102,241,.15)",border:"1.5px solid rgba(99,102,241,.4)",
+        color:"#a5b4fc",fontSize:15,cursor:"pointer",borderRadius:9,
+        padding:"4px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace"
+      }} title="Admin tools">⚙️</button>
+
+      {/* Dropdown */}
+      {open&&<>
+        <div onClick={close} style={{position:"fixed",inset:0,zIndex:40}}/>
+        <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,minWidth:210,
+          background:"rgba(12,9,38,.98)",border:"1px solid rgba(99,102,241,.4)",borderRadius:16,
+          padding:"6px",boxShadow:"0 16px 48px rgba(0,0,0,.7)",backdropFilter:"blur(20px)",
+          animation:"fadeUp .15s ease both"}}>
+          {onHistory&&row("📚","Match History","#a5b4fc",onHistory||close)}
+          {onAnnounce&&row("📢","Post Notice","#fbbf24",onAnnounce||close)}
+          <div style={{borderTop:"1px solid #1e1b4b",margin:"4px 0"}}/>
+          {row("✏️","Edit Match (overs/wkts)","#c4b5fd",()=>{setOv(inn?.overs||0);setWk(inn?.maxWkts||0);setEditOpen(true);})}
+          {row("🔐","Manage Admin PINs","#f87171",()=>setPinMgmtOpen(true))}
+          {match?.pinA&&row("👥","View Team PINs","#6ee7b7",()=>setPinViewOpen(true))}
+        </div>
+      </>}
+
+      {/* Edit Match modal */}
+      {editOpen&&<Modal onClose={()=>setEditOpen(false)} title="✏️ Edit Match Settings">
+        <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Correct overs or wickets if they were set wrong at the start.</p>
+        <label>Overs per side</label>
+        <input type="number" min={minOv} value={ov} onChange={e=>setOv(e.target.value)} style={{marginBottom:6}}/>
+        <p style={{color:"#4b5563",fontSize:10,marginBottom:12}}>{Math.ceil((inn?.totalBalls||0)/6)} overs already bowled</p>
+        <label>Wickets per side</label>
+        <input type="number" min={minWk} value={wk} onChange={e=>setWk(e.target.value)} style={{marginBottom:6}}/>
+        <p style={{color:"#4b5563",fontSize:10,marginBottom:14}}>{inn?.wickets||0} wicket{inn?.wickets===1?"":"s"} already fallen</p>
+        <button className="btn btn-primary w-full" onClick={saveEdit}>Save Changes</button>
+      </Modal>}
+
+      {/* Manage PINs modal */}
+      {pinMgmtOpen&&(()=>{
+        // Inline PIN management (same logic as PinManagementButton)
+        const[bp,setBP]=React.useState("");
+        const[sp,setSP]=React.useState("");
+        const[saved,setSaved]=React.useState(false);
+        const[err,setErr]=React.useState("");
+        const save=()=>{
+          setErr("");
+          const b=bp.trim(),s=sp.trim();
+          if(b&&(b.length<4||!/^\d+$/.test(b))){setErr("Basic PIN must be 4 digits.");return;}
+          if(s&&(s.length<4||!/^\d+$/.test(s))){setErr("Super PIN must be 4 digits.");return;}
+          if(b&&s&&b===s){setErr("PINs can't be the same.");return;}
+          if(!b&&!s){setErr("Enter at least one PIN to update.");return;}
+          if(!FB_OK||!DB){setErr("Offline.");return;}
+          const u={};if(b)u["adminPins/basic"]=b;if(s)u["adminPins/super"]=s;
+          DB.ref().update(u).then(()=>setSaved(true)).catch(e=>setErr("Failed: "+e.message));
+        };
+        return(
+          <Modal onClose={()=>setPinMgmtOpen(false)} title="🔐 Manage Admin PINs">
+            <label>New Basic Admin PIN</label>
+            <input value={bp} onChange={e=>{setBP(e.target.value.replace(/\D/g,"").slice(0,4));setSaved(false);setErr("");}} placeholder="Leave blank to keep" inputMode="numeric" maxLength={4} style={{marginBottom:12,letterSpacing:".3em",textAlign:"center"}}/>
+            <label>New Super Admin PIN</label>
+            <input value={sp} onChange={e=>{setSP(e.target.value.replace(/\D/g,"").slice(0,4));setSaved(false);setErr("");}} placeholder="Leave blank to keep" inputMode="numeric" maxLength={4} style={{marginBottom:14,letterSpacing:".3em",textAlign:"center"}}/>
+            {err&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{err}</p>}
+            {saved&&<p style={{color:"#34d399",fontSize:12,marginBottom:10}}>✓ PINs updated!</p>}
+            <button className="btn btn-primary w-full" onClick={save}>Save PINs</button>
+          </Modal>
+        );
+      })()}
+
+      {/* View Team PINs modal */}
+      {pinViewOpen&&match?.pinA&&(
+        <Modal onClose={()=>setPinViewOpen(false)} title="👥 Team PINs">
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {[["🟡",match.teamA,match.pinA],["⚡",match.teamB,match.pinB]].map(([em,team,pin])=>(
+              <div key={team} style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",borderRadius:12,padding:"12px 14px"}}>
+                <p style={{fontSize:11,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>{em} {team}</p>
+                <p style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700,letterSpacing:"0.2em",color:"#fff"}}>{pin}</p>
+              </div>
+            ))}
+            {slotsA?.length>0||slotsB?.length>0?<button onClick={()=>{onClearSlots&&onClearSlots();setPinViewOpen(false);}} style={{marginTop:4,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",borderRadius:10,padding:"8px",fontSize:12,cursor:"pointer",fontWeight:600}}>🔄 Clear Scorer Slots</button>:null}
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
 }
 
 // ── EditPlayersButton — redesigned player editor available to scorer AND admin ─
@@ -2524,35 +2645,92 @@ function CricketScene({hideText}){
   );
 }
 
-// ── LCC Brand Logo — compact badge with tri-color accents + bat·ball mark ──────
+// ── LCC Circular Badge — sports patch with rotating tri-color ring + glow ────────
 function LCCLogo(){
-  const grad=(c1,c2)=>({background:`linear-gradient(90deg,${c1},${c2},${c1})`,backgroundSize:"300% auto",
-    WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"});
+  // Circle r=49, circumference ≈ 307.9; each arc = 1/3 ≈ 102.6
+  const C=2*Math.PI*49, dash=C/3, gap=C-dash;
+  const arcs=[
+    {color:"#FF9933",       offset:0},           // saffron
+    {color:"rgba(255,255,255,.92)", offset:-dash}, // white
+    {color:"#138808",       offset:-dash*2},       // green
+  ];
   return(
-    <div style={{flexShrink:0,display:"inline-flex",flexDirection:"column",alignItems:"center",
-      background:"rgba(8,6,32,.85)",border:"1.5px solid transparent",borderRadius:14,padding:"5px 10px 6px",
-      backgroundImage:"linear-gradient(rgba(8,6,32,.85),rgba(8,6,32,.85)),linear-gradient(135deg,#FF9933,#6366f1,#138808)",
-      backgroundOrigin:"border-box",backgroundClip:"padding-box, border-box",
-      boxShadow:"0 4px 16px rgba(0,0,0,.4)"}}>
-      {/* Tri-color stripe */}
-      <div style={{display:"flex",gap:2,marginBottom:2}}>
-        <div style={{height:2.5,width:12,borderRadius:2,background:"#FF9933"}}/>
-        <div style={{height:2.5,width:12,borderRadius:2,background:"rgba(255,255,255,.8)"}}/>
-        <div style={{height:2.5,width:12,borderRadius:2,background:"#138808"}}/>
-      </div>
-      {/* LCC animated letters */}
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700,letterSpacing:"-1px",lineHeight:1}}>
-        <span style={grad("#FF9933","#ffb366")}>L</span>
-        <span style={grad("#ffffff","#a5b4fc")}>C</span>
-        <span style={grad("#138808","#3fa340")}>C</span>
-      </div>
-      {/* Bat · Ball mark */}
-      <div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}>
-        <div style={{width:16,height:3,borderRadius:2,background:"#e8c39a",transform:"rotate(-20deg)",transformOrigin:"right center"}}/>
-        <div style={{width:7,height:7,borderRadius:"50%",background:"radial-gradient(circle at 35% 35%,#ff6b6b,#dc2626)",
-          border:"1px solid rgba(255,160,160,.6)",boxShadow:"0 0 4px rgba(239,68,68,.6)"}}/>
-      </div>
-    </div>
+    <svg viewBox="0 0 100 100" width="84" height="84" fill="none"
+      aria-label="Lindenhurst Cricket Club badge">
+      <defs>
+        {/* Glow filter for the ring */}
+        <filter id="lcGlow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="2.2" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        {/* Text paths — same as before */}
+        <path id="lcTop" d="M 9.6,35.3 A 43,43 0 0,1 90.4,35.3"/>
+        <path id="lcBot" d="M 17,62 A 38,38 0 0,0 83,62"/>
+      </defs>
+
+      {/* Dark badge fill */}
+      <circle cx="50" cy="50" r="49" fill="#06041a"/>
+
+      {/* ── Rotating tri-color ring — glow layer (wider, translucent) ── */}
+      <g style={{transformOrigin:"50px 50px",animation:"spin 6s linear infinite"}}
+         filter="url(#lcGlow)">
+        {arcs.map(({color,offset},i)=>(
+          <circle key={i} cx="50" cy="50" r="49" stroke={color} strokeWidth="6"
+            strokeDasharray={`${dash} ${gap}`} strokeDashoffset={offset} opacity="0.38"/>
+        ))}
+      </g>
+
+      {/* ── Rotating tri-color ring — crisp top layer ── */}
+      <g style={{transformOrigin:"50px 50px",animation:"spin 6s linear infinite"}}>
+        {arcs.map(({color,offset},i)=>(
+          <circle key={i} cx="50" cy="50" r="49" stroke={color} strokeWidth="2.8"
+            strokeDasharray={`${dash} ${gap}`} strokeDashoffset={offset}/>
+        ))}
+      </g>
+
+      {/* Inner decorative ring */}
+      <circle cx="50" cy="50" r="39.5" stroke="rgba(99,102,241,.28)" strokeWidth="0.8"/>
+
+      {/* LINDENHURST CRICKET CLUB — curved top */}
+      <text fontFamily="'Oswald',sans-serif" fontSize="6.2" fontWeight="700"
+            fill="#818cf8" letterSpacing="0.7">
+        <textPath href="#lcTop" startOffset="50%" textAnchor="middle">
+          LINDENHURST CRICKET CLUB
+        </textPath>
+      </text>
+
+      {/* LCC — main letters, Indian tri-color */}
+      <text x="50" y="55" textAnchor="middle"
+            fontFamily="'Oswald',sans-serif" fontSize="27" fontWeight="700">
+        <tspan fill="#FF9933">L</tspan>
+        <tspan fill="#dde4ff">C</tspan>
+        <tspan fill="#22c55e">C</tspan>
+      </text>
+
+      {/* ── Cricket bat — gentle swing animation ── */}
+      <g style={{transformOrigin:"23px 74px",animation:"batSwing 2.8s ease-in-out infinite"}}>
+        <line x1="26" y1="73" x2="43" y2="61" stroke="#e8c39a" strokeWidth="4.5" strokeLinecap="round"/>
+        <line x1="22" y1="75" x2="26" y2="73" stroke="#c4a26a" strokeWidth="2.5"  strokeLinecap="round"/>
+      </g>
+
+      {/* Ball */}
+      <circle cx="47" cy="58" r="4.5" fill="#dc2626"/>
+      <path d="M 44,58 A 3,3 0 0,1 50,58" stroke="rgba(255,200,200,.55)" strokeWidth="0.9" fill="none"/>
+
+      {/* Stumps */}
+      <line x1="61"   y1="61" x2="61"   y2="73" stroke="rgba(226,232,240,.65)" strokeWidth="1.6" strokeLinecap="round"/>
+      <line x1="64.5" y1="61" x2="64.5" y2="73" stroke="rgba(226,232,240,.65)" strokeWidth="1.6" strokeLinecap="round"/>
+      <line x1="68"   y1="61" x2="68"   y2="73" stroke="rgba(226,232,240,.65)" strokeWidth="1.6" strokeLinecap="round"/>
+      <line x1="59.5" y1="61" x2="69.5" y2="61" stroke="rgba(226,232,240,.4)"  strokeWidth="1"   strokeLinecap="round"/>
+
+      {/* · LINDENHURST, IL · — curved bottom (corrected to Illinois) */}
+      <text fontFamily="'JetBrains Mono',monospace" fontSize="5.5"
+            fill="rgba(129,140,248,.6)" letterSpacing="0.6">
+        <textPath href="#lcBot" startOffset="50%" textAnchor="middle">
+          · LINDENHURST, IL ·
+        </textPath>
+      </text>
+    </svg>
   );
 }
 
@@ -2602,14 +2780,16 @@ function Landing({onPick}){
     </button>
   );
   return(
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"0 20px calc(24px + env(safe-area-inset-bottom, 0px)) 20px",position:"relative",overflow:"hidden",
+    <div style={{minHeight:"100dvh",display:"flex",flexDirection:"column",alignItems:"center",padding:"0 20px calc(24px + env(safe-area-inset-bottom, 0px)) 20px",position:"relative",overflow:"hidden",
       background:"linear-gradient(150deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#1c1150,#0a2540,#022c1e)",backgroundSize:"400% 400%",animation:"bgShift 22s ease infinite"}}>
       <div style={{width:"100%",maxWidth:400,position:"relative",zIndex:1,paddingTop:"max(8px, env(safe-area-inset-top))"}}>
 
         {/* ── Top bar: LCC badge (left) · Club name (center) · Menu (right) ── */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4,position:"relative",zIndex:30,gap:8}}>
-          {/* LCC creative logo badge — left */}
-          <LCCLogo/>
+          {/* LCC circular badge — just display, no tap action */}
+          <div style={{flexShrink:0}}>
+            <LCCLogo/>
+          </div>
           {/* Lindenhurst Cricket Club — single line, centered */}
           <p style={{flex:1,textAlign:"center",color:"#fff",fontSize:12,fontWeight:700,letterSpacing:".01em",
             margin:0,whiteSpace:"nowrap",textShadow:"0 2px 10px rgba(2,4,15,.9)"}}>Lindenhurst Cricket Club</p>
@@ -3404,31 +3584,17 @@ function fmtAvg(v){return v===null?"—":v.toFixed(1);}
 function fmtSR(v){return v===null?"—":v.toFixed(1);}
 function fmtEcon(v){return v===null?"—":v.toFixed(2);}
 
-function PlayerStatCard({s}){
-  const b=s.bat, w=s.bowl;
-  const cell=(label,val,color)=>(
-    <div style={{textAlign:"center",flex:1}}>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:color||"#fff"}}>{val}</div>
-      <div style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",marginTop:2}}>{label}</div>
-    </div>
-  );
+// Initial-avatar for player cards
+function PlayerAvatar({name,size=38}){
+  const initial=(name||"?")[0].toUpperCase();
+  const colors=[["#f59e0b","#ef4444"],["#6366f1","#8b5cf6"],["#10b981","#06b6d4"],
+                ["#f97316","#ec4899"],["#14b8a6","#6366f1"],["#84cc16","#10b981"]];
+  const [c1,c2]=colors[(name||"").charCodeAt(0)%colors.length];
   return(
-    <div style={{padding:"4px 2px 8px"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-        <span style={{fontSize:11,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace"}}>🏏 {s.matches} match{s.matches===1?"":"es"}</span>
-      </div>
-      <p style={{color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em",marginBottom:6}}>Batting</p>
-      <div style={{display:"flex",gap:6,marginBottom:6}}>
-        {cell("Runs",b.runs,"#fbbf24")}{cell("Inns",b.inns)}{cell("HS",b.hs+(b.hsNotOut&&b.hs>0?"*":""))}{cell("Avg",fmtAvg(b.avg))}
-      </div>
-      <div style={{display:"flex",gap:6,marginBottom:14}}>
-        {cell("SR",fmtSR(b.sr))}{cell("Balls",b.balls)}{cell("4s",b.fours,"#fbbf24")}{cell("6s",b.sixes,"#34d399")}
-      </div>
-      <p style={{color:"#34d399",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em",marginBottom:6}}>Bowling</p>
-      <div style={{display:"flex",gap:6}}>
-        {cell("Wkts",w.wkts,"#f87171")}{cell("Overs",w.oversStr)}{cell("Econ",fmtEcon(w.econ))}{cell("Best",w.best,"#f87171")}
-      </div>
-      {(b.inns===0&&w.inns===0)&&<p style={{color:"#6b7280",fontSize:12,textAlign:"center",marginTop:10}}>No scored appearances yet.</p>}
+    <div style={{width:size,height:size,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",
+      background:`linear-gradient(135deg,${c1},${c2})`,boxShadow:`0 2px 8px ${c1}55`,
+      fontFamily:"'Oswald',sans-serif",fontSize:size*0.46,fontWeight:700,color:"#fff"}}>
+      {initial}
     </div>
   );
 }
@@ -3436,10 +3602,10 @@ function PlayerStatCard({s}){
 function StatsPage({onExit}){
   const[history,setHistory]=React.useState(undefined);
   const[roster,setRoster]=React.useState({});
-  const[view,setView]=React.useState("leaders"); // leaders | players | records
+  const[view,setView]=React.useState("leaders");
   const[expanded,setExpanded]=React.useState(null);
   const[q,setQ]=React.useState("");
-  const[venueF,setVenueF]=React.useState("All"); // "All" | canonical venue label
+  const[venueF,setVenueF]=React.useState("All");
   React.useEffect(()=>{
     if(!FB_OK||!DB){setHistory({});return;}
     const hRef=DB.ref("history").limitToLast(200), rRef=DB.ref("roster");
@@ -3449,18 +3615,14 @@ function StatsPage({onExit}){
   },[]);
   if(history===undefined) return <Centered emoji="📊" title="Loading stats…" onExit={onExit}/>;
 
-  // Distinct venues present in history (Lakes / Millennium always offered if seen, plus any custom)
   const venueCounts={};
-  Object.values(history||{}).forEach(m=>{ const v=canonVenue(m&&m.venue); venueCounts[v]=(venueCounts[v]||0)+1; });
+  Object.values(history||{}).forEach(m=>{const v=canonVenue(m&&m.venue);venueCounts[v]=(venueCounts[v]||0)+1;});
   const venueList=Object.keys(venueCounts).sort((a,b)=>{
-    // Keep Lakes & Millennium first, then others alphabetically
     const rank=x=>x==="Lakes High School"?0:x==="Millennium Park"?1:2;
     return rank(a)-rank(b)||a.localeCompare(b);
   });
-  // Filter history by the selected venue before aggregating
   const filteredHistory={};
-  Object.entries(history||{}).forEach(([k,m])=>{ if(venueF==="All"||canonVenue(m&&m.venue)===venueF) filteredHistory[k]=m; });
-
+  Object.entries(history||{}).forEach(([k,m])=>{if(venueF==="All"||canonVenue(m&&m.venue)===venueF)filteredHistory[k]=m;});
   const stats=computeCareerStats(filteredHistory,roster);
   const topRuns=[...stats].filter(s=>s.bat.runs>0).sort((a,b)=>b.bat.runs-a.bat.runs).slice(0,10);
   const topWkts=[...stats].filter(s=>s.bowl.wkts>0).sort((a,b)=>b.bowl.wkts-a.bowl.wkts||a.bowl.runs-b.bowl.runs).slice(0,10);
@@ -3469,103 +3631,217 @@ function StatsPage({onExit}){
   const hasData=stats.length>0;
   const matchCount=Object.keys(filteredHistory).length;
 
-  const LeaderRow=(s,i,kind)=>(
-    <div key={s.key} onClick={()=>{setView("players");setExpanded(s.key);}} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:12,cursor:"pointer",
-      background:i===0?"rgba(245,158,11,.1)":"rgba(15,12,41,.5)",border:`1px solid ${i===0?"rgba(245,158,11,.35)":"rgba(99,102,241,.18)"}`,marginBottom:6}}>
-      <span style={{width:22,textAlign:"center",fontFamily:"'Oswald',sans-serif",fontWeight:700,fontSize:15,color:i===0?"#fbbf24":i===1?"#cbd5e1":i===2?"#d8a25e":"#6b7280"}}>{i+1}</span>
-      <span style={{flex:1,fontSize:14,fontWeight:600,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}{!s.pid&&<span title="Not linked to a profile" style={{color:"#6b7280",fontSize:10,marginLeft:5}}>•</span>}</span>
-      {kind==="runs"
-        ?<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13}}><span style={{color:"#fbbf24",fontWeight:700,fontSize:15}}>{s.bat.runs}</span> <span style={{color:"#6b7280",fontSize:10}}>runs</span></span>
-        :<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13}}><span style={{color:"#f87171",fontWeight:700,fontSize:15}}>{s.bowl.wkts}</span> <span style={{color:"#6b7280",fontSize:10}}>wkts</span></span>}
-    </div>
-  );
+  // Club summary totals
+  const clubRuns=stats.reduce((s,p)=>s+p.bat.runs,0);
+  const clubWkts=stats.reduce((s,p)=>s+p.bowl.wkts,0);
+
+  const MEDALS=["🥇","🥈","🥉"];
+
+  // Full player stat card (expanded)
+  const FullCard=({s})=>{
+    const b=s.bat,w=s.bowl;
+    const cell=(label,val,accent)=>(
+      <div style={{flex:1,textAlign:"center"}}>
+        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:19,fontWeight:700,color:accent||"#fff",lineHeight:1}}>{val}</div>
+        <div style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginTop:3}}>{label}</div>
+      </div>
+    );
+    return(
+      <div style={{padding:"12px 14px 14px"}}>
+        {/* Batting */}
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+          <div style={{width:3,height:14,borderRadius:2,background:"#fbbf24"}}/>
+          <span style={{fontSize:10,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".15em"}}>BATTING</span>
+          <span style={{marginLeft:"auto",fontSize:10,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace"}}>{s.matches} match{s.matches===1?"":"es"}</span>
+        </div>
+        <div style={{display:"flex",gap:4,marginBottom:14}}>
+          {cell("Runs",b.runs,"#fbbf24")}{cell("Inns",b.inns)}{cell("HS",b.hs+(b.hsNotOut&&b.hs>0?"*":""))}{cell("Avg",fmtAvg(b.avg))}
+          {cell("SR",fmtSR(b.sr))}{cell("4s",b.fours,"#fbbf24")}{cell("6s",b.sixes,"#34d399")}
+        </div>
+        {/* Bowling */}
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+          <div style={{width:3,height:14,borderRadius:2,background:"#f87171"}}/>
+          <span style={{fontSize:10,color:"#f87171",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".15em"}}>BOWLING</span>
+        </div>
+        <div style={{display:"flex",gap:4}}>
+          {cell("Wkts",w.wkts,"#f87171")}{cell("Overs",w.oversStr)}{cell("Econ",fmtEcon(w.econ))}{cell("Best",w.best,"#f87171")}
+        </div>
+        {(b.inns===0&&w.inns===0)&&<p style={{color:"#6b7280",fontSize:12,textAlign:"center",marginTop:10}}>No scored appearances yet.</p>}
+      </div>
+    );
+  };
+
+  const LeaderEntry=({s,rank,kind})=>{
+    const isTop3=rank<3;
+    const val=kind==="runs"?s.bat.runs:s.bowl.wkts;
+    const unit=kind==="runs"?"runs":"wkts";
+    const accent=kind==="runs"?"#fbbf24":"#f87171";
+    const isExp=expanded===s.key+"_"+kind;
+    return(
+      <div style={{marginBottom:isTop3?10:6}}>
+        <div onClick={()=>setExpanded(isExp?null:s.key+"_"+kind)} style={{
+          display:"flex",alignItems:"center",gap:10,padding:isTop3?"12px 14px":"10px 12px",borderRadius:14,cursor:"pointer",
+          background:isTop3?"rgba(255,255,255,.04)":"transparent",
+          border:`1px solid ${isTop3?"rgba(255,255,255,.1)":"rgba(99,102,241,.12)"}`,
+          transition:"background .15s"
+        }}>
+          <span style={{width:28,textAlign:"center",fontSize:isTop3?20:13,flexShrink:0}}>
+            {rank<3?MEDALS[rank]:<span style={{fontFamily:"'Oswald',sans-serif",fontWeight:700,color:"#4b5563"}}>{rank+1}</span>}
+          </span>
+          <PlayerAvatar name={s.name} size={isTop3?36:28}/>
+          <span style={{flex:1,overflow:"hidden"}}>
+            <span style={{display:"block",fontWeight:700,fontSize:isTop3?15:13,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</span>
+            {isTop3&&<span style={{display:"block",fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:1}}>{s.matches}M · {kind==="runs"?s.bat.inns+" inn":s.bowl.oversStr+" ov"}</span>}
+          </span>
+          <div style={{textAlign:"right",flexShrink:0}}>
+            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:isTop3?22:16,fontWeight:700,color:accent}}>{val}</span>
+            <span style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginLeft:3}}>{unit}</span>
+          </div>
+          <span style={{color:"#4b5563",fontSize:11,transform:isExp?"rotate(180deg)":"none",transition:"transform .2s",flexShrink:0}}>▾</span>
+        </div>
+        {isExp&&(
+          <div style={{background:"rgba(10,8,35,.5)",borderRadius:12,border:"1px solid rgba(99,102,241,.15)",marginTop:4}}>
+            <FullCard s={s}/>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
-      <div style={{maxWidth:480,margin:"0 auto"}}>
-        <div className="flex items-center justify-between" style={{marginBottom:4}}>
-          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📊 Stats & Records</h1>
-          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh"}}>
+      {/* ── Header ── */}
+      <div style={{padding:"18px 16px 0"}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
+          <div>
+            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,letterSpacing:"-.5px"}}>Club Stats</h1>
+            <p style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{venueF==="All"?"All venues":venueF} · {matchCount} match{matchCount===1?"":"es"}</p>
+          </div>
+          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",paddingTop:4}}>← back</button>
         </div>
-        <p style={{color:"#a5b4fc",fontSize:12,fontFamily:"'JetBrains Mono',monospace",marginBottom:12}}>
-          {venueF==="All"?"All venues":venueF} · {matchCount} match{matchCount===1?"":"es"}
-        </p>
 
-        {/* Venue filter — Lakes and Millennium tracked separately (different formats) */}
-        {Object.keys(history).length>0&&venueList.length>0&&(
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+        {/* Venue filter — slim pills */}
+        {venueList.length>0&&(
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
             {["All",...venueList].map(v=>{
               const active=venueF===v;
-              const short=v==="Lakes High School"?"🎾 Lakes":v==="Millennium Park"?"🏟️ Millennium":v==="All"?"🏆 All":"📍 "+v;
+              const label=v==="Lakes High School"?"🎾 Lakes":v==="Millennium Park"?"🏟️ Millennium":v==="All"?"All":"📍 "+v;
               return(
                 <button key={v} onClick={()=>{setVenueF(v);setExpanded(null);}} style={{
-                  padding:"7px 12px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'Inter',sans-serif",
-                  border:`1.5px solid ${active?"transparent":"rgba(99,102,241,.3)"}`,
-                  background:active?"linear-gradient(135deg,#f59e0b,#ef4444)":"rgba(15,12,41,.5)",
-                  color:active?"#111":"#a5b4fc",whiteSpace:"nowrap"
-                }}>{short}{v!=="All"&&<span style={{opacity:.6,marginLeft:5,fontSize:10}}>{venueCounts[v]}</span>}</button>
+                  padding:"5px 12px",borderRadius:20,cursor:"pointer",fontSize:11,fontWeight:600,
+                  fontFamily:"'Inter',sans-serif",border:"none",transition:"all .15s",
+                  background:active?"linear-gradient(135deg,#f59e0b,#ef4444)":"rgba(255,255,255,.07)",
+                  color:active?"#111":"#9ca3af"
+                }}>{label}{v!=="All"&&<span style={{opacity:.55,marginLeft:4}}>{venueCounts[v]}</span>}</button>
               );
             })}
           </div>
         )}
 
+        {/* Club summary pills */}
+        {hasData&&(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
+            {[["Matches",matchCount,"#6366f1"],["Club Runs",clubRuns,"#fbbf24"],["Wickets",clubWkts,"#f87171"]].map(([lbl,val,col])=>(
+              <div key={lbl} style={{background:"rgba(255,255,255,.04)",border:`1px solid ${col}28`,borderRadius:14,padding:"10px 8px",textAlign:"center"}}>
+                <div style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700,color:col,lineHeight:1}}>{val}</div>
+                <div style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginTop:3}}>{lbl.toUpperCase()}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Content ── */}
+      <div style={{padding:"0 16px 28px"}}>
         {Object.keys(history).length===0?(
-          <div className="mini-card" style={{textAlign:"center",padding:"30px 16px"}}>
-            <div style={{fontSize:40,marginBottom:10}}>📭</div>
-            <p style={{fontWeight:600,marginBottom:4}}>No stats yet</p>
-            <p style={{color:"#6b7280",fontSize:12}}>Career stats appear here once matches are completed and saved to history.</p>
+          <div style={{textAlign:"center",padding:"40px 16px"}}>
+            <div style={{fontSize:48,marginBottom:12}}>📭</div>
+            <p style={{fontWeight:700,fontSize:16,marginBottom:6}}>No stats yet</p>
+            <p style={{color:"#6b7280",fontSize:13}}>Complete and save a match to start building club stats.</p>
           </div>
         ):!hasData?(
-          <div className="mini-card" style={{textAlign:"center",padding:"30px 16px"}}>
+          <div style={{textAlign:"center",padding:"32px 16px"}}>
             <div style={{fontSize:40,marginBottom:10}}>🏟️</div>
-            <p style={{fontWeight:600,marginBottom:4}}>No matches at {venueF} yet</p>
-            <p style={{color:"#6b7280",fontSize:12}}>Pick a different venue above, or play a match here to start building stats.</p>
+            <p style={{fontWeight:700,marginBottom:4}}>No matches at {venueF}</p>
+            <p style={{color:"#6b7280",fontSize:12}}>Try a different venue above.</p>
           </div>
         ):(<>
-          <div className="tabs" style={{margin:"0 0 16px",gridTemplateColumns:"1fr 1fr 1fr"}}>
+          {/* Tabs */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,marginBottom:18,
+            background:"rgba(255,255,255,.04)",borderRadius:14,padding:4}}>
             {[["leaders","🏆 Leaders"],["players","👤 Players"],["records","🌟 Records"]].map(([id,lbl])=>(
-              <button key={id} className={`tab${view===id?" active":""}`} onClick={()=>setView(id)} style={{gridColumn:"auto"}}>{lbl}</button>
+              <button key={id} onClick={()=>setView(id)} style={{
+                padding:"9px 4px",borderRadius:10,border:"none",cursor:"pointer",
+                fontSize:12,fontWeight:600,fontFamily:"'Inter',sans-serif",transition:"all .15s",
+                background:view===id?"linear-gradient(135deg,rgba(99,102,241,.6),rgba(139,92,246,.6))":"transparent",
+                color:view===id?"#fff":"#6b7280",
+                boxShadow:view===id?"0 2px 8px rgba(99,102,241,.3)":""
+              }}>{lbl}</button>
             ))}
           </div>
 
+          {/* ── LEADERS ── */}
           {view==="leaders"&&(
-            <div className="space-y-4">
-              <div className="mini-card">
-                <p className="section-title" style={{color:"#fbbf24",marginBottom:10}}>🏏 Most Runs</p>
-                {topRuns.length?topRuns.map((s,i)=>LeaderRow(s,i,"runs")):<p style={{color:"#6b7280",fontSize:12}}>No runs recorded yet.</p>}
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                <div style={{width:3,height:16,borderRadius:2,background:"#fbbf24"}}/>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,fontWeight:700,color:"#fbbf24",letterSpacing:".15em"}}>MOST RUNS</span>
               </div>
-              <div className="mini-card">
-                <p className="section-title" style={{color:"#f87171",marginBottom:10}}>🎯 Most Wickets</p>
-                {topWkts.length?topWkts.map((s,i)=>LeaderRow(s,i,"wkts")):<p style={{color:"#6b7280",fontSize:12}}>No wickets recorded yet.</p>}
+              {topRuns.length?topRuns.map((s,i)=><LeaderEntry key={s.key} s={s} rank={i} kind="runs"/>)
+                :<p style={{color:"#6b7280",fontSize:12,marginBottom:16}}>No runs recorded yet.</p>}
+
+              <div style={{height:1,background:"rgba(255,255,255,.06)",margin:"16px 0"}}/>
+
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                <div style={{width:3,height:16,borderRadius:2,background:"#f87171"}}/>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,fontWeight:700,color:"#f87171",letterSpacing:".15em"}}>MOST WICKETS</span>
               </div>
-              <p style={{color:"#4338ca",fontSize:10,fontFamily:"'JetBrains Mono',monospace",textAlign:"center"}}>Tap any name to see their full profile · “•” = not yet linked to a club profile</p>
+              {topWkts.length?topWkts.map((s,i)=><LeaderEntry key={s.key} s={s} rank={i} kind="wkts"/>)
+                :<p style={{color:"#6b7280",fontSize:12}}>No wickets recorded yet.</p>}
+              <p style={{color:"#4338ca",fontSize:10,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:16}}>Tap any player to see their full stats</p>
             </div>
           )}
 
+          {/* ── PLAYERS ── */}
           {view==="players"&&(
             <div>
               <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Search players…" style={{marginBottom:12}}/>
-              {players.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"16px 0"}}>No players match “{q}”.</p>}
+              {players.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"16px 0"}}>No players match "{q}".</p>}
               {players.map(s=>(
-                <div key={s.key} className="mini-card" style={{marginBottom:8,padding:0,overflow:"hidden"}}>
-                  <button onClick={()=>setExpanded(expanded===s.key?null:s.key)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"12px 14px",background:"transparent",border:"none",cursor:"pointer",color:"#fff",textAlign:"left"}}>
-                    <span style={{display:"flex",flexDirection:"column"}}>
-                      <span style={{fontWeight:600,fontSize:14}}>{s.name}{!s.pid&&<span title="Not linked to a club profile" style={{color:"#6b7280",fontSize:10,marginLeft:6,fontFamily:"'JetBrains Mono',monospace"}}>unlinked</span>}</span>
-                      <span style={{fontSize:11,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{s.bat.runs} runs · {s.bowl.wkts} wkts · {s.matches} M</span>
+                <div key={s.key} style={{marginBottom:8,background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:16,overflow:"hidden"}}>
+                  <button onClick={()=>setExpanded(expanded===s.key?null:s.key)} style={{
+                    width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",
+                    background:"transparent",border:"none",cursor:"pointer",color:"#fff",textAlign:"left"}}>
+                    <PlayerAvatar name={s.name} size={42}/>
+                    <span style={{flex:1,overflow:"hidden"}}>
+                      <span style={{display:"block",fontWeight:700,fontSize:15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        {s.name}
+                        {!s.pid&&<span style={{color:"#4b5563",fontSize:10,marginLeft:6,fontFamily:"'JetBrains Mono',monospace"}}>unlinked</span>}
+                      </span>
+                      <span style={{display:"flex",gap:12,marginTop:3}}>
+                        <span style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace"}}>{s.bat.runs} runs</span>
+                        <span style={{fontSize:11,color:"#f87171",fontFamily:"'JetBrains Mono',monospace"}}>{s.bowl.wkts} wkts</span>
+                        <span style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>{s.matches}M</span>
+                      </span>
                     </span>
-                    <span style={{color:"#6b7280",fontSize:14,transform:expanded===s.key?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</span>
+                    <span style={{color:"#4b5563",fontSize:12,transform:expanded===s.key?"rotate(180deg)":"none",transition:"transform .2s",flexShrink:0}}>▾</span>
                   </button>
-                  {expanded===s.key&&<div style={{padding:"0 14px",borderTop:"1px solid #1e1b4b"}}><PlayerStatCard s={s}/></div>}
+                  {expanded===s.key&&(
+                    <div style={{borderTop:"1px solid rgba(255,255,255,.06)"}}>
+                      <FullCard s={s}/>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
 
+          {/* ── RECORDS ── */}
           {view==="records"&&(()=>{
-            const allBat=[], allBowl=[];
+            const allBat=[],allBowl=[];
             Object.entries(filteredHistory||{}).forEach(([,m])=>{
               [m&&m.inn1,m&&m.inn2].forEach(inn=>{
-                if(!inn) return;
+                if(!inn)return;
                 const vn=canonVenue(m.venue||inn.venue||"");
                 const dt=m.finishedAt?new Date(m.finishedAt).toLocaleDateString():"";
                 (inn.battingOrder||[]).forEach(name=>{const b=inn.batsmen&&inn.batsmen[name];if(!b)return;allBat.push({name,runs:b.runs||0,balls:b.balls||0,fours:b.fours||0,sixes:b.sixes||0,out:b.out,vn,dt});});
@@ -3577,33 +3853,49 @@ function StatsPage({onExit}){
             const mostFours=[...allBat].sort((a,b)=>b.fours-a.fours)[0]||null;
             const bestBowl=[...allBowl].filter(w=>w.wkts>0).sort((a,b)=>b.wkts-a.wkts||a.runs-b.runs)[0]||null;
             const mostMaidens=[...allBowl].filter(w=>w.maidens>0).sort((a,b)=>b.maidens-a.maidens)[0]||null;
-            const RC=({emoji,title,holder,value,sub})=>(
-              <div style={{background:"rgba(15,12,41,.6)",border:"1px solid rgba(245,158,11,.25)",borderRadius:16,padding:"14px",marginBottom:8,display:"flex",alignItems:"center",gap:12}}>
-                <span style={{fontSize:26,flexShrink:0}}>{emoji}</span>
-                <span style={{flex:1}}>
-                  <span style={{display:"block",fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".12em",marginBottom:2}}>{title}</span>
-                  <span style={{display:"block",fontWeight:700,fontSize:15}}>{holder}</span>
-                  <span style={{display:"block",fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{value}{sub&&<span style={{color:"#6b7280",marginLeft:6}}>{sub}</span>}</span>
-                </span>
+            const RC=({accent,icon,title,name,value,detail})=>(
+              <div style={{display:"flex",gap:0,marginBottom:10,borderRadius:16,overflow:"hidden",
+                border:"1px solid rgba(255,255,255,.07)"}}>
+                <div style={{width:4,background:accent,flexShrink:0}}/>
+                <div style={{flex:1,display:"flex",alignItems:"center",gap:12,padding:"13px 14px",
+                  background:"rgba(255,255,255,.03)"}}>
+                  <span style={{fontSize:24,flexShrink:0}}>{icon}</span>
+                  <div style={{flex:1,overflow:"hidden"}}>
+                    <div style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".12em",marginBottom:3}}>{title}</div>
+                    <div style={{fontWeight:700,fontSize:15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
+                    <div style={{fontSize:11,color:accent,fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{value}</div>
+                  </div>
+                  {detail&&<div style={{textAlign:"right",flexShrink:0}}>
+                    <div style={{fontSize:9,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.6}}>{detail.split("·").map((d,i)=><div key={i}>{d.trim()}</div>)}</div>
+                  </div>}
+                </div>
               </div>
             );
-            if(!hsEntry&&!bestBowl) return(<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No records yet for this venue filter.</p>);
-            return(<div>
-              <p className="section-title" style={{color:"#fbbf24",marginBottom:10}}>🏏 Batting Records</p>
-              {hsEntry&&<RC emoji="👑" title="Highest Score" holder={hsEntry.name} value={hsEntry.runs+(hsEntry.out?"":"*")+" off "+hsEntry.balls+"b"} sub={hsEntry.vn+" · "+hsEntry.dt}/>}
-              {mostSixes&&mostSixes.sixes>0&&<RC emoji="💥" title="Most Sixes (single innings)" holder={mostSixes.name} value={mostSixes.sixes+" sixes"} sub={mostSixes.vn+" · "+mostSixes.dt}/>}
-              {mostFours&&mostFours.fours>0&&<RC emoji="🏃" title="Most Fours (single innings)" holder={mostFours.name} value={mostFours.fours+" fours"} sub={mostFours.vn+" · "+mostFours.dt}/>}
-              <p className="section-title" style={{color:"#f87171",marginBottom:10,marginTop:16}}>🎯 Bowling Records</p>
-              {bestBowl?<RC emoji="🎳" title="Best Bowling (single spell)" holder={bestBowl.name} value={bestBowl.wkts+"/"+bestBowl.runs} sub={bestBowl.vn+" · "+bestBowl.dt}/>:<p style={{color:"#6b7280",fontSize:12}}>No wickets recorded yet.</p>}
-              {mostMaidens&&<RC emoji="🔒" title="Most Maidens (single spell)" holder={mostMaidens.name} value={mostMaidens.maidens+" maiden"+(mostMaidens.maidens>1?"s":"")} sub={mostMaidens.vn+" · "+mostMaidens.dt}/>}
-            </div>);
+            if(!hsEntry&&!bestBowl)return<p style={{color:"#6b7280",textAlign:"center",padding:"20px 0",fontSize:13}}>No records yet for this venue.</p>;
+            return(
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                  <div style={{width:3,height:16,borderRadius:2,background:"#fbbf24"}}/>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,fontWeight:700,color:"#fbbf24",letterSpacing:".15em"}}>BATTING</span>
+                </div>
+                {hsEntry&&<RC accent="#fbbf24" icon="👑" title="HIGHEST SCORE" name={hsEntry.name} value={`${hsEntry.runs+(hsEntry.out?"":"*")} off ${hsEntry.balls} balls`} detail={`${hsEntry.vn}·${hsEntry.dt}`}/>}
+                {mostSixes&&mostSixes.sixes>0&&<RC accent="#34d399" icon="💥" title="MOST SIXES (innings)" name={mostSixes.name} value={`${mostSixes.sixes} sixes`} detail={`${mostSixes.vn}·${mostSixes.dt}`}/>}
+                {mostFours&&mostFours.fours>0&&<RC accent="#fbbf24" icon="🏃" title="MOST FOURS (innings)" name={mostFours.name} value={`${mostFours.fours} fours`} detail={`${mostFours.vn}·${mostFours.dt}`}/>}
+                <div style={{height:1,background:"rgba(255,255,255,.06)",margin:"16px 0"}}/>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                  <div style={{width:3,height:16,borderRadius:2,background:"#f87171"}}/>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,fontWeight:700,color:"#f87171",letterSpacing:".15em"}}>BOWLING</span>
+                </div>
+                {bestBowl?<RC accent="#f87171" icon="🎳" title="BEST BOWLING" name={bestBowl.name} value={`${bestBowl.wkts}/${bestBowl.runs}`} detail={`${bestBowl.vn}·${bestBowl.dt}`}/>:<p style={{color:"#6b7280",fontSize:12,marginBottom:10}}>No wickets recorded yet.</p>}
+                {mostMaidens&&<RC accent="#a5b4fc" icon="🔒" title="MOST MAIDENS" name={mostMaidens.name} value={`${mostMaidens.maidens} maiden${mostMaidens.maidens>1?"s":""}`} detail={`${mostMaidens.vn}·${mostMaidens.dt}`}/>}
+              </div>
+            );
           })()}
         </>)}
       </div>
     </div>
   );
 }
-
 // ── Super Admin: Announcement manager — post a notice visible on the home screen
 function AnnouncementPage({onExit}){
   const[current,setCurrent]=React.useState(undefined);
