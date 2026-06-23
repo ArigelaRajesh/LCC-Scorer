@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
 <title>LCC · Lindenhurst Cricket Club · Scorer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>
@@ -95,6 +95,8 @@
 .animate-fade{animation:fadeUp .4s ease both}
 .animate-bounce-in{animation:bounceIn .5s ease both}
 *{box-sizing:border-box;margin:0;padding:0}
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+input,select,textarea{touch-action:manipulation}
 body{font-family:'Inter',sans-serif;background:linear-gradient(150deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#1c1150,#0a2540,#022c1e) fixed;background-color:#1c1150;color:#fff;min-height:100dvh}
 .font-mono{font-family:'JetBrains Mono',monospace}
 .font-display{font-family:'Oswald',sans-serif}
@@ -123,10 +125,13 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .btn-outline-amber:hover{background:rgba(217,119,6,.15)}
 .btn-outline-gray{background:transparent;border:1.5px solid #374151;color:#6b7280;padding:13px 14px}
 .btn-outline-gray:hover{border-color:#6366f1;color:#818cf8}
-.btn-run{background:#1e1b4b;border:1.5px solid #3730a3;color:#fff;padding:16px 8px;font-family:'Oswald',sans-serif;font-size:24px;font-weight:700;border-radius:16px;width:100%}
-.btn-run:hover{border-color:#818cf8;background:rgba(99,102,241,.2);transform:translateY(-2px);box-shadow:0 4px 16px rgba(99,102,241,.2)}
+.btn-run{background:#1e1b4b;border:1.5px solid #3730a3;color:#fff;padding:18px 8px;font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;border-radius:16px;width:100%;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .08s ease,box-shadow .08s ease,background .08s ease;cursor:pointer;user-select:none}
+.btn-run:active{transform:scale(.9);background:rgba(99,102,241,.45);border-color:#818cf8;box-shadow:0 0 20px rgba(99,102,241,.5)}
+.btn-run:hover{border-color:#818cf8;background:rgba(99,102,241,.2)}
 .btn-run.amber{background:linear-gradient(135deg,#f59e0b,#d97706);color:#111;border:none;box-shadow:0 0 24px rgba(245,158,11,.5);text-shadow:0 1px 0 rgba(0,0,0,.15)}
+.btn-run.amber:active{transform:scale(.9);box-shadow:0 0 32px rgba(245,158,11,.8);filter:brightness(1.15)}
 .btn-run.green{background:linear-gradient(135deg,#10b981,#059669);color:#111;border:none;box-shadow:0 0 20px rgba(16,185,129,.3)}
+.btn-run.green:active{transform:scale(.9);box-shadow:0 0 32px rgba(16,185,129,.7);filter:brightness(1.15)}
 .btn-undo{background:transparent;border:1.5px solid #4338ca;color:#818cf8;padding:6px 12px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s}
 .btn-undo:hover{background:rgba(99,102,241,.15)}
 .btn-undo:disabled{border-color:#1f2937;color:#374151;cursor:not-allowed}
