@@ -79,7 +79,6 @@
 @keyframes legSprint{0%{transform:scaleX(1)}20%{transform:scaleX(.75)}40%{transform:scaleX(1.25)}60%{transform:scaleX(.8)}80%{transform:scaleX(1.2)}100%{transform:scaleX(1)}}
 @keyframes tossResultPop{0%{transform:scale(.4);opacity:0}12%{transform:scale(1.2);opacity:1}20%{transform:scale(1);opacity:1}88%{transform:scale(1);opacity:1}100%{transform:scale(.96);opacity:0}}
 @keyframes spin{to{transform:rotate(360deg)}}
-@keyframes batSwing{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}}
 @keyframes coinFlip{
   0%{transform:rotateY(0deg) translateY(0)}
   8%{transform:rotateY(720deg) translateY(-22px)}
@@ -96,7 +95,7 @@
 .animate-fade{animation:fadeUp .4s ease both}
 .animate-bounce-in{animation:bounceIn .5s ease both}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;background:#0a0414;color:#fff;min-height:100vh}
+body{font-family:'Inter',sans-serif;background:linear-gradient(150deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#1c1150,#0a2540,#022c1e) fixed;background-color:#1c1150;color:#fff;min-height:100dvh}
 .font-mono{font-family:'JetBrains Mono',monospace}
 .font-display{font-family:'Oswald',sans-serif}
 
@@ -2645,92 +2644,54 @@ function CricketScene({hideText}){
   );
 }
 
-// ── LCC Circular Badge — sports patch with rotating tri-color ring + glow ────────
+// ── LCC Square Badge — clean rounded-square club badge, static border, animated letters ──
 function LCCLogo(){
-  // Circle r=49, circumference ≈ 307.9; each arc = 1/3 ≈ 102.6
-  const C=2*Math.PI*49, dash=C/3, gap=C-dash;
-  const arcs=[
-    {color:"#FF9933",       offset:0},           // saffron
-    {color:"rgba(255,255,255,.92)", offset:-dash}, // white
-    {color:"#138808",       offset:-dash*2},       // green
-  ];
+  const grad=(c1,c2)=>({
+    background:`linear-gradient(90deg,${c1},${c2},${c1})`,
+    backgroundSize:"300% auto",
+    WebkitBackgroundClip:"text",
+    WebkitTextFillColor:"transparent",
+    animation:"slowDrift 9s linear infinite"
+  });
   return(
-    <svg viewBox="0 0 100 100" width="84" height="84" fill="none"
-      aria-label="Lindenhurst Cricket Club badge">
-      <defs>
-        {/* Glow filter for the ring */}
-        <filter id="lcGlow" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="2.2" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-        {/* Text paths — same as before */}
-        <path id="lcTop" d="M 9.6,35.3 A 43,43 0 0,1 90.4,35.3"/>
-        <path id="lcBot" d="M 17,62 A 38,38 0 0,0 83,62"/>
-      </defs>
-
-      {/* Dark badge fill */}
-      <circle cx="50" cy="50" r="49" fill="#06041a"/>
-
-      {/* ── Rotating tri-color ring — glow layer (wider, translucent) ── */}
-      <g style={{transformOrigin:"50px 50px",animation:"spin 6s linear infinite"}}
-         filter="url(#lcGlow)">
-        {arcs.map(({color,offset},i)=>(
-          <circle key={i} cx="50" cy="50" r="49" stroke={color} strokeWidth="6"
-            strokeDasharray={`${dash} ${gap}`} strokeDashoffset={offset} opacity="0.38"/>
-        ))}
-      </g>
-
-      {/* ── Rotating tri-color ring — crisp top layer ── */}
-      <g style={{transformOrigin:"50px 50px",animation:"spin 6s linear infinite"}}>
-        {arcs.map(({color,offset},i)=>(
-          <circle key={i} cx="50" cy="50" r="49" stroke={color} strokeWidth="2.8"
-            strokeDasharray={`${dash} ${gap}`} strokeDashoffset={offset}/>
-        ))}
-      </g>
-
-      {/* Inner decorative ring */}
-      <circle cx="50" cy="50" r="39.5" stroke="rgba(99,102,241,.28)" strokeWidth="0.8"/>
-
-      {/* LINDENHURST CRICKET CLUB — curved top */}
-      <text fontFamily="'Oswald',sans-serif" fontSize="6.2" fontWeight="700"
-            fill="#818cf8" letterSpacing="0.7">
-        <textPath href="#lcTop" startOffset="50%" textAnchor="middle">
-          LINDENHURST CRICKET CLUB
-        </textPath>
-      </text>
-
-      {/* LCC — main letters, Indian tri-color */}
-      <text x="50" y="55" textAnchor="middle"
-            fontFamily="'Oswald',sans-serif" fontSize="27" fontWeight="700">
-        <tspan fill="#FF9933">L</tspan>
-        <tspan fill="#dde4ff">C</tspan>
-        <tspan fill="#22c55e">C</tspan>
-      </text>
-
-      {/* ── Cricket bat — gentle swing animation ── */}
-      <g style={{transformOrigin:"23px 74px",animation:"batSwing 2.8s ease-in-out infinite"}}>
-        <line x1="26" y1="73" x2="43" y2="61" stroke="#e8c39a" strokeWidth="4.5" strokeLinecap="round"/>
-        <line x1="22" y1="75" x2="26" y2="73" stroke="#c4a26a" strokeWidth="2.5"  strokeLinecap="round"/>
-      </g>
-
-      {/* Ball */}
-      <circle cx="47" cy="58" r="4.5" fill="#dc2626"/>
-      <path d="M 44,58 A 3,3 0 0,1 50,58" stroke="rgba(255,200,200,.55)" strokeWidth="0.9" fill="none"/>
-
-      {/* Stumps */}
-      <line x1="61"   y1="61" x2="61"   y2="73" stroke="rgba(226,232,240,.65)" strokeWidth="1.6" strokeLinecap="round"/>
-      <line x1="64.5" y1="61" x2="64.5" y2="73" stroke="rgba(226,232,240,.65)" strokeWidth="1.6" strokeLinecap="round"/>
-      <line x1="68"   y1="61" x2="68"   y2="73" stroke="rgba(226,232,240,.65)" strokeWidth="1.6" strokeLinecap="round"/>
-      <line x1="59.5" y1="61" x2="69.5" y2="61" stroke="rgba(226,232,240,.4)"  strokeWidth="1"   strokeLinecap="round"/>
-
-      {/* · LINDENHURST, IL · — curved bottom (corrected to Illinois) */}
-      <text fontFamily="'JetBrains Mono',monospace" fontSize="5.5"
-            fill="rgba(129,140,248,.6)" letterSpacing="0.6">
-        <textPath href="#lcBot" startOffset="50%" textAnchor="middle">
-          · LINDENHURST, IL ·
-        </textPath>
-      </text>
-    </svg>
+    <div style={{
+      flexShrink:0,display:"inline-flex",flexDirection:"column",alignItems:"center",
+      background:"rgba(8,6,32,.93)",
+      border:"2px solid transparent",borderRadius:13,padding:"4px 8px 5px",
+      backgroundImage:[
+        "linear-gradient(rgba(8,6,32,.93),rgba(8,6,32,.93))",
+        "linear-gradient(135deg,#FF9933 0%,#ff6600 20%,#6366f1 50%,#138808 80%,#22c55e 100%)"
+      ].join(","),
+      backgroundOrigin:"border-box",backgroundClip:"padding-box, border-box",
+      boxShadow:[
+        "0 3px 14px rgba(0,0,0,.55)",
+        "0 0 12px rgba(255,153,51,.4)",
+        "0 0 22px rgba(19,136,8,.22)"
+      ].join(",")
+    }}>
+      {/* Indian tri-color stripe */}
+      <div style={{display:"flex",gap:2,marginBottom:2}}>
+        <div style={{height:2.5,width:10,borderRadius:2,background:"#FF9933",boxShadow:"0 0 6px rgba(255,153,51,.8)"}}/>
+        <div style={{height:2.5,width:10,borderRadius:2,background:"rgba(255,255,255,.9)",boxShadow:"0 0 5px rgba(255,255,255,.3)"}}/>
+        <div style={{height:2.5,width:10,borderRadius:2,background:"#22c55e",boxShadow:"0 0 6px rgba(34,197,94,.8)"}}/>
+      </div>
+      {/* LCC letters */}
+      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700,letterSpacing:"-0.5px",lineHeight:1}}>
+        <span style={grad("#FF9933","#ffb347")}>L</span>
+        <span style={grad("#e0e7ff","#a5b4fc")}>C</span>
+        <span style={grad("#22c55e","#4ade80")}>C</span>
+      </div>
+      {/* Bat · Ball */}
+      <div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}>
+        <div style={{width:12,height:2.5,borderRadius:2,
+          background:"linear-gradient(90deg,#a67c52,#e8c39a)",
+          transform:"rotate(-22deg)",transformOrigin:"right center"}}/>
+        <div style={{width:5.5,height:5.5,borderRadius:"50%",
+          background:"radial-gradient(circle at 32% 32%,#ff8080,#dc2626,#991b1b)",
+          border:"1px solid rgba(255,160,160,.6)",
+          boxShadow:"0 0 5px rgba(239,68,68,.7)"}}/>
+      </div>
+    </div>
   );
 }
 
@@ -2780,7 +2741,7 @@ function Landing({onPick}){
     </button>
   );
   return(
-    <div style={{minHeight:"100dvh",display:"flex",flexDirection:"column",alignItems:"center",padding:"0 20px calc(24px + env(safe-area-inset-bottom, 0px)) 20px",position:"relative",overflow:"hidden",
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"0 20px calc(24px + env(safe-area-inset-bottom, 0px)) 20px",position:"relative",overflow:"hidden",
       background:"linear-gradient(150deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#1c1150,#0a2540,#022c1e)",backgroundSize:"400% 400%",animation:"bgShift 22s ease infinite"}}>
       <div style={{width:"100%",maxWidth:400,position:"relative",zIndex:1,paddingTop:"max(8px, env(safe-area-inset-top))"}}>
 
@@ -2791,7 +2752,7 @@ function Landing({onPick}){
             <LCCLogo/>
           </div>
           {/* Lindenhurst Cricket Club — single line, centered */}
-          <p style={{flex:1,textAlign:"center",color:"#fff",fontSize:12,fontWeight:700,letterSpacing:".01em",
+          <p style={{flex:1,textAlign:"center",color:"#fff",fontSize:15,fontWeight:700,letterSpacing:".02em",
             margin:0,whiteSpace:"nowrap",textShadow:"0 2px 10px rgba(2,4,15,.9)"}}>Lindenhurst Cricket Club</p>
           {/* ☰ menu button — right */}
           <button onClick={()=>setMenuOpen(o=>!o)} aria-label="Menu" style={{
