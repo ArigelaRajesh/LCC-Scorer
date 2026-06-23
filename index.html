@@ -452,7 +452,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
     }catch(e){ console.error("speech announce failed",e); }
   };
 
-  const FLIP_DURATION = 6000; // 6 seconds, as requested — gives time for the call to happen "in the air"
+  const FLIP_DURATION = 5000; // 5 seconds
   const flipCoin=()=>{
     if(flipping)return;
     setFlipping(true);setCoinResult(null);setFlipCount(c=>c+1);
@@ -715,7 +715,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
                     boxShadow:flipping?"0 0 24px rgba(245,158,11,.6), inset 0 2px 4px rgba(255,255,255,.4)":"0 4px 16px rgba(245,158,11,.5), inset 0 2px 4px rgba(255,255,255,.4)",
                     fontSize:26,fontWeight:700,color:"#7c2d12",
                     transformStyle:"preserve-3d",
-                    animation:flipping?"coinFlip 6s cubic-bezier(.36,.07,.19,.97)":"none"}}>
+                    animation:flipping?"coinFlip 5s cubic-bezier(.36,.07,.19,.97)":"none"}}>
                     {flipping?"":coinResult==="heads"?"H":coinResult==="tails"?"T":"?"}
                   </div>
                 </div>
@@ -1185,6 +1185,30 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
 }
 
 // ── Score Tab ─────────────────────────────────────────────────────────────────
+// ── Free Hit sound — played when a No Ball is recorded ────────────────────────
+// Uses a module-level AudioContext so it's accessible from anywhere.
+let _fhCtx = null;
+function playFreeHitSound(){
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(!Ctx)return;
+    if(!_fhCtx)_fhCtx=new Ctx();
+    const ctx=_fhCtx;
+    if(ctx.state==="suspended")ctx.resume();
+    // Ascending G-B-D-G fanfare — distinctive, unmistakable
+    [392,494,587,784].forEach((freq,i)=>{
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      const t=ctx.currentTime+i*0.13;
+      osc.type="sine";osc.frequency.setValueAtTime(freq,t);
+      gain.gain.setValueAtTime(0.0001,t);
+      gain.gain.exponentialRampToValueAtTime(0.22,t+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001,t+0.28);
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.start(t);osc.stop(t+0.32);
+    });
+  }catch(e){}
+}
+
 function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onSwapStrike,onFixPlayers,onEndInnings,onRevert,canRevert,role,onUndo,canUndo}){
   const[wt,setWT]=useState("Bowled");
   const[fielder,setFielder]=useState("");
@@ -1196,6 +1220,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb
   const[showOT,setShowOT]=useState(false);
   const[otBase,setOTBase]=useState(0);
   const[otThrow,setOTThrow]=useState(1);
+  const[showFH,setShowFH]=useState(false); // Free Hit banner after No Ball
   const dis=pw||nnb||pr;
   const retiredList=(inn.battingOrder||[]).filter(n=>inn.batsmen&&inn.batsmen[n]&&inn.batsmen[n].retired);
 
@@ -1226,7 +1251,13 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb
   };
   const doEx=()=>{
     if(em==="WD")record({type:"WD",extraRuns:1+er});
-    else if(em==="NB")record({type:"NB",extraRuns:1,batRuns:er});
+    else if(em==="NB"){
+      record({type:"NB",extraRuns:1,batRuns:er});
+      // Next delivery is a FREE HIT — play sound and show banner
+      playFreeHitSound();
+      setShowFH(true);
+      setTimeout(()=>setShowFH(false),3500);
+    }
     else if(em==="DECL")record({type:"DECL",runs:er||1});
     else record({type:em,extraRuns:er||1});
     setEM(null);setER(0);
@@ -1328,6 +1359,25 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb
           }
         </div>
       </div>
+
+      {/* Free Hit banner — appears for 3.5s after any No Ball */}
+      {showFH&&(
+        <div style={{
+          position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-54%)",
+          zIndex:999,textAlign:"center",pointerEvents:"none",
+          animation:"bounceIn .35s ease both"
+        }}>
+          <div style={{
+            background:"linear-gradient(135deg,#fbbf24,#f59e0b,#ef4444)",
+            borderRadius:24,padding:"18px 32px",
+            boxShadow:"0 0 0 4px rgba(251,191,36,.3),0 0 48px rgba(251,191,36,.6),0 8px 32px rgba(0,0,0,.6)"
+          }}>
+            <div style={{fontSize:10,color:"rgba(0,0,0,.55)",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".25em",marginBottom:4}}>NEXT BALL IS A</div>
+            <div style={{fontSize:38,fontFamily:"'Oswald',sans-serif",fontWeight:700,color:"#111",lineHeight:1}}>🟡 FREE HIT!</div>
+            <div style={{fontSize:10,color:"rgba(0,0,0,.5)",fontFamily:"'JetBrains Mono',monospace",marginTop:5}}>only run out can dismiss the batter</div>
+          </div>
+        </div>
+      )}
 
       {/* Buttons */}
       <div style={{opacity:dis?.4:1,pointerEvents:dis?"none":"auto"}} className="space-y-3">
