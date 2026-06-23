@@ -179,12 +179,12 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .btn-undo:disabled{border-color:#1f2937;color:#374151;cursor:not-allowed}
 
 /* Score header */
-.score-header{background:linear-gradient(135deg,rgba(16,185,129,.14),rgba(45,15,92,.3),rgba(245,158,11,.08));border-bottom:1px solid #3730a3;padding:20px 20px 16px}
-.score-big{font-family:'Oswald',sans-serif;font-size:68px;font-weight:700;line-height:1;background:linear-gradient(135deg,#fff,#c7d2fe);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.score-header{background:linear-gradient(135deg,rgba(16,185,129,.14),rgba(45,15,92,.3),rgba(245,158,11,.08));border-bottom:1px solid #3730a3;padding:10px 14px 8px}
+.score-big{font-family:'Oswald',sans-serif;font-size:48px;font-weight:700;line-height:1;background:linear-gradient(135deg,#fff,#c7d2fe);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .score-wkt{-webkit-text-fill-color:#f87171}
 
 /* Tabs */
-.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:#1e1b4b;border-radius:16px;padding:4px;margin:16px 20px}
+.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:#1e1b4b;border-radius:16px;padding:4px;margin:8px 14px}
 .tab{background:transparent;border:none;color:#6b7280;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.08em;padding:10px;border-radius:12px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s}
 .tab.active{background:linear-gradient(135deg,#f59e0b,#ef4444);color:#111}
 
@@ -246,7 +246,7 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .w-full{width:100%}
 .shrink-0{flex-shrink:0}
 .ml-2{margin-left:8px}
-.content{padding:0 20px 24px}
+.content{padding:0 14px 12px}
 @keyframes flash{0%,100%{opacity:1}50%{opacity:.3}}
 .flash{animation:flash .5s ease}
 
@@ -1127,16 +1127,16 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
         </div>
       )}
 
-      {/* Score header */}
+      {/* Compact score header — single page fit */}
       <div className="score-header">
-        <div className="flex items-center justify-between mb-3">
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".2em"}}>{inn.inningsNum===1?"1st":"2nd"} Innings</span>
-            <span style={{width:4,height:4,borderRadius:"50%",background:"#4338ca",display:"inline-block"}}/>
-            <span style={{fontWeight:600,fontSize:14}}>{inn.battingTeam}</span>
-          </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:9,textTransform:"uppercase",letterSpacing:".2em"}}>{inn.inningsNum===1?"1st":"2nd"} Inn</span>
+            <span style={{width:3,height:3,borderRadius:"50%",background:"#4338ca",display:"inline-block"}}/>
+            <span style={{fontWeight:700,fontSize:13}}>{inn.battingTeam}</span>
             <span style={{color:"#4b5563",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:5}}>
             <ManualFixButton inn={inn} rosterNames={rosterNames} onSave={({striker,nonStriker,bowler})=>fixPlayers({striker,nonStriker,bowler})}/>
             {role==="admin"&&<AdminActionsMenu
               onHistory={onHistory} onAnnounce={onAnnounce}
@@ -1144,24 +1144,18 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
               match={match} slotsA={slotsA} slotsB={slotsB}
               onClearSlots={()=>{setSlotsA([]);setSlotsB([]);}}
             />}
-            {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
+            {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-          <span style={{fontSize:10,background:inn.format==="T20"?"rgba(245,158,11,.18)":"rgba(99,102,241,.18)",color:inn.format==="T20"?"#fbbf24":"#a5b4fc",border:`1px solid ${inn.format==="T20"?"rgba(245,158,11,.35)":"rgba(99,102,241,.35)"}`,borderRadius:6,padding:"2px 8px",fontFamily:"'JetBrains Mono',monospace",fontWeight:600,letterSpacing:".05em"}}>{inn.format==="T20"?"🏟️ T20":`🎾 ${inn.overs} OV`}</span>
-          <span style={{fontSize:10,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace"}}>{inn.venue} · {inn.overs} ov · {inn.maxWkts} wkts</span>
-        </div>
-        {match?.tossSummary&&<div style={{marginBottom:6}}><span style={{fontSize:10,color:"#34d399",fontFamily:"'JetBrains Mono',monospace"}}>🪙 {match.tossSummary}</span></div>}
-        <div className={`flex items-center gap-4 ${flash?"flash":""}`}>
-          <span className="score-big">{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
-          <span style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:16,marginBottom:4}}>({ovStr(inn.totalBalls)} ov)</span>
-        </div>
-        <div style={{display:"flex",gap:16,marginTop:10,flexWrap:"wrap"}}>
-          <span style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>CRR <span style={{color:"#fbbf24",fontWeight:600}}>{crr}</span></span>
+        {/* Score + stats all in one compact row */}
+        <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
+          <span className={`score-big${flash?" flash":""}`}>{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
+          <span style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>({ovStr(inn.totalBalls)} ov)</span>
+          <span style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginLeft:4}}>CRR <span style={{color:"#fbbf24",fontWeight:600}}>{crr}</span></span>
           {inn.target&&<>
-            <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>Target <span style={{color:"#fff",fontWeight:600}}>{inn.target}</span></span>
-            <span style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>Need <span style={{color:"#fff",fontWeight:600}}>{Math.max(req,0)}</span> off <span style={{color:"#fff",fontWeight:600}}>{bLeft}</span>b</span>
-            {rrr&&<span style={{color:parseFloat(rrr)>12?"#f87171":"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>RRR <span style={{fontWeight:600,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span></span>}
+            <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>T:<span style={{color:"#fff",fontWeight:600}}>{inn.target}</span></span>
+            <span style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>Need <span style={{color:"#fff",fontWeight:600}}>{Math.max(req,0)}</span>/<span style={{color:"#fff",fontWeight:600}}>{bLeft}b</span></span>
+            {rrr&&<span style={{color:parseFloat(rrr)>12?"#f87171":"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>RRR <span style={{fontWeight:600,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span></span>}
           </>}
         </div>
       </div>
@@ -1344,17 +1338,15 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb
           <button className="btn-run green" onClick={()=>record({type:"6"})}>6</button>
           <button className="btn-run" onClick={()=>record({type:"5"})}>5</button>
         </div>
-        <div className="grid-4">
+        <div className="grid-4" style={{gridTemplateColumns:"1fr 1fr 1fr"}}>
           <button className="btn btn-danger" onClick={()=>setSW(true)} style={{borderRadius:14,padding:"13px 8px",fontSize:13}}>Wicket</button>
           <button className="btn btn-outline-amber" onClick={()=>setEM("WD")} style={{borderRadius:14,fontSize:13}}>Wide</button>
           <button className="btn btn-outline-amber" onClick={()=>setEM("NB")} style={{borderRadius:14,fontSize:13,borderColor:"#ca8a04",color:"#facc15"}}>No Ball</button>
-          <button className="btn btn-outline-gray" onClick={()=>setEM("B")} style={{borderRadius:14,fontSize:13}}>Bye</button>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button className="btn" onClick={()=>record({type:"DECL",runs:1})} style={{flex:1,borderRadius:14,fontSize:15,padding:"10px 4px",background:"transparent",border:"1.5px solid rgba(167,139,250,.5)",color:"#c4b5fd",fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}} title="Declare 1 run — no strike rotation">D1</button>
-          <button className="btn" onClick={()=>record({type:"DECL",runs:2})} style={{flex:1,borderRadius:14,fontSize:15,padding:"10px 4px",background:"transparent",border:"1.5px solid rgba(167,139,250,.5)",color:"#c4b5fd",fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}} title="Declare 2 runs — no strike rotation">D2</button>
-          <button className="btn" onClick={()=>setShowOT(true)} style={{flex:2,borderRadius:14,fontSize:12,padding:"10px 6px",background:"transparent",border:"1.5px solid rgba(251,146,60,.55)",color:"#fb923c",fontWeight:600}} title="Overthrow: runs + overthrow, striker stays">🔄 Overthrow</button>
-          <button className="btn" onClick={()=>setEM("DECL")} style={{flex:1,borderRadius:14,fontSize:11,padding:"10px 4px",background:"transparent",border:"1.5px solid rgba(167,139,250,.35)",color:"#a78bfa"}} title="Declare custom runs (D3, D4, D6…)">D+</button>
+          <button className="btn" onClick={()=>record({type:"DECL",runs:1})} style={{flex:1,borderRadius:14,fontSize:15,padding:"10px 4px",background:"transparent",border:"1.5px solid rgba(167,139,250,.5)",color:"#c4b5fd",fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>D1</button>
+          <button className="btn" onClick={()=>record({type:"DECL",runs:2})} style={{flex:1,borderRadius:14,fontSize:15,padding:"10px 4px",background:"transparent",border:"1.5px solid rgba(167,139,250,.5)",color:"#c4b5fd",fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>D2</button>
+          <button className="btn" onClick={()=>setShowOT(true)} style={{flex:2,borderRadius:14,fontSize:12,padding:"10px 6px",background:"transparent",border:"1.5px solid rgba(251,146,60,.55)",color:"#fb923c",fontWeight:600}}>🔄 Overthrow</button>
         </div>
         <button className="btn w-full" onClick={onRetire} style={{borderRadius:14,fontSize:13,padding:"12px",background:"transparent",border:"1.5px solid rgba(139,92,246,.5)",color:"#c4b5fd",marginTop:8}}>🔁 Retire {inn.single?"Batsman":"Striker"}</button>
       </div>
@@ -1489,7 +1481,35 @@ function PinManagementButton(){
   </>);
 }
 
-// ── AdminActionsMenu — consolidates all admin header controls into one ⚙️ button ─
+// ── PinMgmtModal — extracted as real component to avoid hooks-in-IIFE (React error #310) ──
+function PinMgmtModal({onClose}){
+  const[bp,setBP]=React.useState("");
+  const[sp,setSP]=React.useState("");
+  const[saved,setSaved]=React.useState(false);
+  const[err,setErr]=React.useState("");
+  const save=()=>{
+    setErr("");
+    const b=bp.trim(),s=sp.trim();
+    if(b&&(b.length<4||!/^\d+$/.test(b))){setErr("Basic PIN must be 4 digits.");return;}
+    if(s&&(s.length<4||!/^\d+$/.test(s))){setErr("Super PIN must be 4 digits.");return;}
+    if(b&&s&&b===s){setErr("PINs can't be the same.");return;}
+    if(!b&&!s){setErr("Enter at least one PIN to update.");return;}
+    if(!FB_OK||!DB){setErr("Offline.");return;}
+    const u={};if(b)u["adminPins/basic"]=b;if(s)u["adminPins/super"]=s;
+    DB.ref().update(u).then(()=>setSaved(true)).catch(e=>setErr("Failed: "+e.message));
+  };
+  return(
+    <Modal onClose={onClose} title="🔐 Manage Admin PINs">
+      <label>New Basic Admin PIN</label>
+      <input value={bp} onChange={e=>{setBP(e.target.value.replace(/\D/g,"").slice(0,4));setSaved(false);setErr("");}} placeholder="Leave blank to keep" inputMode="numeric" maxLength={4} style={{marginBottom:12,letterSpacing:".3em",textAlign:"center"}}/>
+      <label>New Super Admin PIN</label>
+      <input value={sp} onChange={e=>{setSP(e.target.value.replace(/\D/g,"").slice(0,4));setSaved(false);setErr("");}} placeholder="Leave blank to keep" inputMode="numeric" maxLength={4} style={{marginBottom:14,letterSpacing:".3em",textAlign:"center"}}/>
+      {err&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{err}</p>}
+      {saved&&<p style={{color:"#34d399",fontSize:12,marginBottom:10}}>✓ PINs updated!</p>}
+      <button className="btn btn-primary w-full" onClick={save}>Save PINs</button>
+    </Modal>
+  );
+}
 // Replaces the 6-button overflow row with a tidy dropdown. Navigation items
 // (History, Notice) close the menu and navigate. Modal items manage their own
 // open state locally so the dropdown stays out of their way.
@@ -1562,35 +1582,7 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,slotsA
       </Modal>}
 
       {/* Manage PINs modal */}
-      {pinMgmtOpen&&(()=>{
-        // Inline PIN management (same logic as PinManagementButton)
-        const[bp,setBP]=React.useState("");
-        const[sp,setSP]=React.useState("");
-        const[saved,setSaved]=React.useState(false);
-        const[err,setErr]=React.useState("");
-        const save=()=>{
-          setErr("");
-          const b=bp.trim(),s=sp.trim();
-          if(b&&(b.length<4||!/^\d+$/.test(b))){setErr("Basic PIN must be 4 digits.");return;}
-          if(s&&(s.length<4||!/^\d+$/.test(s))){setErr("Super PIN must be 4 digits.");return;}
-          if(b&&s&&b===s){setErr("PINs can't be the same.");return;}
-          if(!b&&!s){setErr("Enter at least one PIN to update.");return;}
-          if(!FB_OK||!DB){setErr("Offline.");return;}
-          const u={};if(b)u["adminPins/basic"]=b;if(s)u["adminPins/super"]=s;
-          DB.ref().update(u).then(()=>setSaved(true)).catch(e=>setErr("Failed: "+e.message));
-        };
-        return(
-          <Modal onClose={()=>setPinMgmtOpen(false)} title="🔐 Manage Admin PINs">
-            <label>New Basic Admin PIN</label>
-            <input value={bp} onChange={e=>{setBP(e.target.value.replace(/\D/g,"").slice(0,4));setSaved(false);setErr("");}} placeholder="Leave blank to keep" inputMode="numeric" maxLength={4} style={{marginBottom:12,letterSpacing:".3em",textAlign:"center"}}/>
-            <label>New Super Admin PIN</label>
-            <input value={sp} onChange={e=>{setSP(e.target.value.replace(/\D/g,"").slice(0,4));setSaved(false);setErr("");}} placeholder="Leave blank to keep" inputMode="numeric" maxLength={4} style={{marginBottom:14,letterSpacing:".3em",textAlign:"center"}}/>
-            {err&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{err}</p>}
-            {saved&&<p style={{color:"#34d399",fontSize:12,marginBottom:10}}>✓ PINs updated!</p>}
-            <button className="btn btn-primary w-full" onClick={save}>Save PINs</button>
-          </Modal>
-        );
-      })()}
+      {pinMgmtOpen&&<PinMgmtModal onClose={()=>setPinMgmtOpen(false)}/>}
 
       {/* View Team PINs modal */}
       {pinViewOpen&&match?.pinA&&(
@@ -4194,7 +4186,8 @@ function BasicAdminHome({onPick,onExit}){
         <div style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",borderRadius:14,padding:"10px 14px",marginBottom:18}}>
           <span style={{fontSize:12,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace"}}>👤 Basic admin · poll, roster & teams. Match scoring is super-admin only.</span>
         </div>
-        {tile("📋","Manage Weekly Poll","Create · update · close poll","rgba(167,139,250,.4)","rgba(167,139,250,.12)","pollAdmin",0)}
+        {tile("🏏","Score a Match","Start · set up · score live","rgba(245,158,11,.4)","rgba(245,158,11,.12)","adminScore",0)}
+        {tile("📋","Manage Weekly Poll","Create · update · close poll","rgba(167,139,250,.4)","rgba(167,139,250,.12)","pollAdmin",1)}
         {tile("👥","Votes & Team Builder","See responses · build teams","rgba(52,211,153,.4)","rgba(52,211,153,.12)","poll",1)}
         {tile("🗳️","Vote on Behalf","Mark availability for players","rgba(99,102,241,.4)","rgba(99,102,241,.12)","voteOnBehalf",2)}
         {tile("🏏","Roster & Name Fixes","Add · edit · correct spellings","rgba(245,158,11,.4)","rgba(245,158,11,.12)","roster",3)}
@@ -4258,7 +4251,8 @@ function Root(){
   if(screen==="announce") return <AnnouncementPage onExit={()=>setScreen(adminHome)}/>;
   if(screen==="playerTools") return <PlayerToolsPage onExit={()=>setScreen(adminHome)}/>;
   if(screen==="voteOnBehalf") return <VoteOnBehalfPage onExit={()=>setScreen(adminHome)}/>;
-  if(screen==="scorer")  return <App role="scorer" onExit={home}/>;
+  if(screen==="scorer")    return <App role="scorer" onExit={home}/>;
+  if(screen==="adminScore") return <App role="admin" onExit={()=>setScreen(adminHome)} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("pollAdmin")} onRoster={()=>setScreen("roster")} onAnnounce={()=>setScreen("announce")}/>;
   if(screen==="admin")   return <App role="admin" onExit={home} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("pollAdmin")} onRoster={()=>setScreen("roster")} onAnnounce={()=>setScreen("announce")}/>;
   return <Landing onPick={pick}/>;
 }
