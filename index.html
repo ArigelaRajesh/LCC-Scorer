@@ -103,7 +103,49 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(150deg,#022c1e,#0
 
 /* Layout */
 .screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,#022c1e 0%,#0a2540 28%,#1c1150 58%,#2d0f5c 80%,#0a0414 100%);position:relative;overflow:hidden}
-.card{background:rgba(30,27,75,.75);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(99,102,241,.35);border-radius:28px;padding:26px;width:100%;max-width:480px;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+
+/* result-screen: full-viewport centered (PinGate, Centered, MatchOver) */
+.result-screen{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px 16px;background:linear-gradient(160deg,#022c1e 0%,#0a2540 28%,#1c1150 58%,#2d0f5c 80%,#0a0414 100%)}
+.result-card{background:rgba(30,27,75,.78);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(99,102,241,.35);border-radius:24px;padding:28px 24px;width:100%;max-width:420px}
+
+/* Responsive content wrapper — replaces hardcoded maxWidth:480 inline styles */
+.resp-wrap{width:100%;max-width:520px;margin:0 auto}
+
+.card{background:rgba(30,27,75,.75);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(99,102,241,.35);border-radius:28px;padding:26px;width:100%;max-width:520px;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+
+/* ── Tablet ≥640px ── */
+@media(min-width:640px){
+  .resp-wrap{max-width:600px}
+  .result-card{max-width:500px;padding:36px 32px;border-radius:28px}
+  .card{max-width:600px;padding:32px}
+  .mini-card{padding:16px}
+  .btn-run{font-size:28px;padding:20px 10px}
+  .grid-4{gap:10px}
+  .grid-2{gap:12px}
+  .tabs{margin:16px 0}
+  input{font-size:15px;padding:12px 16px}
+  label{font-size:11px}
+  .btn{font-size:14px;padding:14px 22px}
+}
+
+/* ── Desktop ≥1024px ── */
+@media(min-width:1024px){
+  .resp-wrap{max-width:720px}
+  .result-card{max-width:560px;padding:44px 40px}
+  .card{max-width:680px;padding:36px}
+  .mini-card{padding:20px 18px}
+  .btn-run{font-size:30px;padding:22px 10px;border-radius:18px}
+  .grid-4{gap:12px}
+  .grid-2{gap:14px}
+  input{font-size:16px;padding:13px 18px}
+  .btn{font-size:15px}
+}
+
+/* ── Large desktop ≥1280px ── */
+@media(min-width:1280px){
+  .resp-wrap{max-width:800px}
+  .result-card{max-width:600px}
+}
 .section-title{color:#818cf8;font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.2em;margin-bottom:6px}
 
 /* Inputs */
@@ -514,7 +556,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
 
   return(
     <div className="screen">
-      <div style={{width:"100%",maxWidth:460}}>
+      <div style={{width:"100%",maxWidth:"min(460px,100%)"}}>
         <div className="flex items-center justify-between" style={{marginBottom:10}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <span style={{fontSize:11,background:"rgba(239,68,68,.18)",color:"#f87171",border:"1px solid rgba(239,68,68,.4)",borderRadius:8,padding:"4px 10px",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>👑 ADMIN</span>
@@ -1833,7 +1875,7 @@ function OpenersForm({inn,match,onSubmit,role,onExit,rosterNames}){
   };
   return(
     <div className="screen">
-      <div style={{width:"100%",maxWidth:460}}>
+      <div style={{width:"100%",maxWidth:"min(460px,100%)"}}>
         {(onExit||role==="admin")&&<div style={{display:"flex",justifyContent:"flex-end",gap:10,marginBottom:8}}>
           {role==="admin"&&<PinButton match={match}/>}
           {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
@@ -1881,7 +1923,7 @@ function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onExit,rosterNa
     :[["🟡 Striker",rS,"On-strike batsman"],["⚪ Non-striker",rNS,"Non-strike batsman"],["🎯 Opening Bowler",rBw,"Bowler name"]];
   return(
     <div className="screen">
-      <div style={{width:"100%",maxWidth:460}}>
+      <div style={{width:"100%",maxWidth:"min(460px,100%)"}}>
         {(onExit||role==="admin")&&<div style={{display:"flex",justifyContent:"flex-end",gap:10,marginBottom:8}}>
           {role==="admin"&&<PinButton match={match}/>}
           {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
@@ -2086,7 +2128,7 @@ function MatchOver({result,inn,inn1,match,role,onRevert,canRevert,onNew}){
 
   return(
     <div className="screen">
-      <div style={{textAlign:"center",maxWidth:460,width:"100%"}}>
+      <div style={{textAlign:"center",maxWidth:"min(460px,100%)",width:"100%"}}>
         <div style={{fontSize:64,marginBottom:20}}>🏆</div>
         <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:11,textTransform:"uppercase",letterSpacing:".25em",marginBottom:12}}>Match Complete</p>
         <h1 style={{fontSize:40,fontFamily:"'Oswald',sans-serif",fontWeight:700,marginBottom:8}}>{result.winner?`${result.winner} Win!`:"Match Tied!"}</h1>
@@ -2145,7 +2187,7 @@ function ViewerLive({onExit}){
   if(mo){
     const i2=inn;
     return (
-      <div className="result-screen"><div className="result-card" style={{maxWidth:480}}>
+      <div className="result-screen"><div className="result-card">
         <div className="text-center" style={{marginBottom:16}}>
           <div style={{fontSize:54}}>🏆</div>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:36,fontWeight:700,background:"linear-gradient(135deg,#fff,#fbbf24)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{mo.winner?`${mo.winner} Win!`:"Match Tied!"}</h1>
@@ -2265,7 +2307,7 @@ function ScoreRow({team,runs,wkts,balls}){
 
 function Centered({emoji,title,sub,onExit,children}){
   return(
-    <div className="result-screen"><div className="text-center" style={{maxWidth:420}}>
+    <div className="result-screen"><div className="text-center result-card" style={{padding:"16px"}}>
       <div style={{fontSize:56,marginBottom:14}}>{emoji}</div>
       <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:30,fontWeight:700,marginBottom:8}}>{title}</h1>
       {sub&&<p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:13,marginBottom:20,lineHeight:1.5}}>{sub}</p>}
@@ -2298,7 +2340,7 @@ function HistoryPage({role,onExit}){
 
   return(
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
-      <div style={{maxWidth:480,margin:"0 auto"}}>
+      <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:18}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700}}>📚 Match History</h1>
           <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
@@ -2353,7 +2395,7 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
   const r=m.result||{};
   return(
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
-      <div style={{maxWidth:520,margin:"0 auto"}}>
+      <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:14}}>
           <button onClick={onBack} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← all matches</button>
           {role==="admin"&&<div style={{display:"flex",gap:6}}>
@@ -2748,7 +2790,7 @@ function Landing({onPick}){
   return(
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"0 20px calc(24px + env(safe-area-inset-bottom, 0px)) 20px",position:"relative",overflow:"hidden",
       background:"linear-gradient(150deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#1c1150,#0a2540,#022c1e)",backgroundSize:"400% 400%",animation:"bgShift 22s ease infinite"}}>
-      <div style={{width:"100%",maxWidth:400,position:"relative",zIndex:1,paddingTop:"max(8px, env(safe-area-inset-top))"}}>
+      <div style={{width:"100%",maxWidth:"min(400px, 100%)",position:"relative",zIndex:1,paddingTop:"max(8px, env(safe-area-inset-top))"}}>
 
         {/* ── Top bar: LCC badge (left) · Club name (center) · Menu (right) ── */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4,position:"relative",zIndex:30,gap:8}}>
@@ -2920,7 +2962,7 @@ function PollPage({role,onExit}){
 
   return(
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
-      <div style={{maxWidth:480,margin:"0 auto"}}>
+      <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:16}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📋 Weekend Poll</h1>
           <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
@@ -2955,7 +2997,7 @@ function RosterPage({role,onExit}){
 
   return(
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
-      <div style={{maxWidth:480,margin:"0 auto"}}>
+      <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:4}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>🏏 Join the Club</h1>
           <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
@@ -3014,7 +3056,7 @@ function PollAdminPage({onExit}){
   if(poll===undefined) return <Centered emoji="📋" title="Loading…" onExit={onExit}/>;
   return(
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
-      <div style={{maxWidth:480,margin:"0 auto"}}>
+      <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:18}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📋 This Week's Poll</h1>
           <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
@@ -3888,7 +3930,7 @@ function AnnouncementPage({onExit}){
   if(current===undefined) return <Centered emoji="📢" title="Loading…" onExit={onExit}/>;
   return(
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
-      <div style={{maxWidth:480,margin:"0 auto"}}>
+      <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:18}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📢 Announcements</h1>
           <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
@@ -4044,7 +4086,7 @@ function PlayerToolsPage({onExit}){
 
   return(
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
-      <div style={{maxWidth:480,margin:"0 auto"}}>
+      <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:4}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:700}}>🔧 Player Tools</h1>
           <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
@@ -4091,7 +4133,7 @@ function VoteOnBehalfPage({onExit}){
   const entries=Object.entries(roster||{}).sort((a,b)=>a[1].name.localeCompare(b[1].name));
   return(
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
-      <div style={{maxWidth:480,margin:"0 auto"}}>
+      <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:4}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:700}}>🗳️ Vote on Behalf</h1>
           <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
@@ -4144,7 +4186,7 @@ function BasicAdminHome({onPick,onExit}){
   );
   return(
     <div style={{minHeight:"100vh",padding:"22px 18px",background:"linear-gradient(160deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)"}}>
-      <div style={{maxWidth:440,margin:"0 auto"}}>
+      <div style={{maxWidth:"min(440px,100%)",margin:"0 auto"}}>
         <div className="flex items-center justify-between" style={{marginBottom:6}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>🛠️ Admin Tools</h1>
           <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>
@@ -4229,7 +4271,7 @@ class ErrorBoundary extends React.Component{
     if(this.state.error){
       return(
         <div className="screen">
-          <div className="card" style={{maxWidth:420,textAlign:"center"}}>
+          <div className="card" style={{textAlign:"center"}}>
             <div style={{fontSize:44,marginBottom:12}}>⚠️</div>
             <h2 style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700,marginBottom:10}}>Something went wrong</h2>
             <p style={{color:"#9ca3af",fontSize:12,marginBottom:6,fontFamily:"'JetBrains Mono',monospace"}}>{String(this.state.error.message||this.state.error)}</p>
