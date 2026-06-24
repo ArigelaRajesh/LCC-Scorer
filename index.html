@@ -12,6 +12,7 @@
 <!-- Firebase (compat build = works with plain script, no modules) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
   // ── LCC Firebase configuration ──
   const firebaseConfig = {
@@ -23,22 +24,15 @@
     messagingSenderId: "813330930410",
     appId: "1:813330930410:web:e996dc941659e5fd6bd593"
   };
-  // ── App PINs (admin is fixed; team PINs are set per-match by admin) ──
-  // ADMIN_PIN = Super Admin (full control: matches, scoring, everything).
-  // BASIC_ADMIN_PIN = Basic Admin helper (poll, roster/name fixes, teams — NO match control).
-  // To change either, just edit the 4 digits below.
   const ADMIN_PIN = "4821";
   const BASIC_ADMIN_PIN = "1234";
 
-  // Persistent per-device ID — survives refresh so the same phone re-entering a PIN
-  // is recognized as the same scorer, not a new "3rd person".
   function getDeviceId(){
     try{
       let id = localStorage.getItem("lcc_device_id");
       if(!id){ id = "dev_"+Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem("lcc_device_id", id); }
       return id;
     }catch(e){
-      // localStorage unavailable (private browsing etc) — fall back to a session-only id
       if(!window.__lccSessionId) window.__lccSessionId = "dev_"+Math.random().toString(36).slice(2)+Date.now().toString(36);
       return window.__lccSessionId;
     }
@@ -47,16 +41,19 @@
 
   let DB=null, FB_OK=false;
   function tryInitFirebase(){
-    if(FB_OK) return; // already done
-    if(typeof firebase==="undefined") return; // SDK not loaded yet
+    if(FB_OK) return;
+    if(typeof firebase==="undefined") return;
     try {
       if(!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
       DB = firebase.database();
       FB_OK = true;
+      // ── Anonymous Auth — signs every app user in silently so Firebase Rules
+      // can require auth != null, blocking bots and raw API attacks.
+      // Users see nothing — no login screen, no prompts.
+      firebase.auth().signInAnonymously().catch(e=>console.warn("Auth:",e.message));
     } catch(e){ console.error("Firebase init failed:",e); }
   }
   tryInitFirebase();
-  // Safety net: if the SDK was still loading on first attempt (slow network), retry once everything has loaded.
   if(!FB_OK) window.addEventListener("load", tryInitFirebase);
 </script>
 <style>
@@ -79,6 +76,8 @@
 @keyframes legSprint{0%{transform:scaleX(1)}20%{transform:scaleX(.75)}40%{transform:scaleX(1.25)}60%{transform:scaleX(.8)}80%{transform:scaleX(1.2)}100%{transform:scaleX(1)}}
 @keyframes tossResultPop{0%{transform:scale(.4);opacity:0}12%{transform:scale(1.2);opacity:1}20%{transform:scale(1);opacity:1}88%{transform:scale(1);opacity:1}100%{transform:scale(.96);opacity:0}}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes menuPulse{0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,.55),0 4px 16px rgba(0,0,0,.35)}60%{box-shadow:0 0 0 9px rgba(99,102,241,0),0 4px 16px rgba(0,0,0,.35)}}
+@keyframes marquee{0%{transform:translateX(100vw)}100%{transform:translateX(-100%)}}
 @keyframes coinFlip{
   0%{transform:rotateY(0deg) translateY(0)}
   8%{transform:rotateY(720deg) translateY(-22px)}
@@ -2844,51 +2843,37 @@ function CricketScene({hideText}){
 
 // ── LCC Square Badge — clean rounded-square club badge, static border, animated letters ──
 function LCCLogo(){
-  const grad=(c1,c2)=>({
-    background:`linear-gradient(90deg,${c1},${c2},${c1})`,
-    backgroundSize:"300% auto",
-    WebkitBackgroundClip:"text",
-    WebkitTextFillColor:"transparent",
-    animation:"slowDrift 9s linear infinite"
-  });
   return(
-    /* Outer wrapper = the "border" — flag gradient shows around the inner dark badge */
     <div style={{
       flexShrink:0,display:"inline-flex",
-      background:"linear-gradient(to bottom,#FF9933 0%,#FF9933 30%,rgba(255,255,255,.95) 33%,rgba(255,255,255,.95) 50%,#1a56db 50%,#1a56db 67%,#138808 70%,#138808 100%)",
-      borderRadius:15,
-      padding:"2.5px",
-      boxShadow:"0 3px 14px rgba(0,0,0,.55)"
+      // Outer glow ring — single elegant gradient matching the site's indigo/purple/cyan palette
+      background:"linear-gradient(145deg,#06b6d4,#6366f1,#8b5cf6,#06b6d4)",
+      borderRadius:18,padding:"2.5px",
+      boxShadow:"0 0 18px rgba(99,102,241,.45),0 4px 16px rgba(0,0,0,.5)",
+      animation:"slowDrift 8s linear infinite",backgroundSize:"300% 300%"
     }}>
-      {/* Inner badge — dark background sits inside the wrapper, revealing flag colours only on the border edge */}
       <div style={{
         display:"inline-flex",flexDirection:"column",alignItems:"center",
-        background:"rgba(8,6,32,.93)",
-        borderRadius:13,
-        padding:"4px 8px 5px"
+        background:"linear-gradient(160deg,#0d0b28,#13103a)",
+        borderRadius:16,padding:"6px 10px 7px",gap:0
       }}>
-        {/* Indian tri-color stripe */}
-        <div style={{display:"flex",gap:2,marginBottom:2}}>
-          <div style={{height:2.5,width:10,borderRadius:2,background:"#FF9933",boxShadow:"0 0 6px rgba(255,153,51,.8)"}}/>
-          <div style={{height:2.5,width:10,borderRadius:2,background:"rgba(255,255,255,.9)",boxShadow:"0 0 5px rgba(255,255,255,.3)"}}/>
-          <div style={{height:2.5,width:10,borderRadius:2,background:"#22c55e",boxShadow:"0 0 6px rgba(34,197,94,.8)"}}/>
+        {/* Bat + wickets icon row */}
+        <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:4,opacity:.7}}>
+          <div style={{width:14,height:2.5,borderRadius:2,background:"linear-gradient(90deg,#a67c52,#e8c39a)",transform:"rotate(-25deg)",transformOrigin:"right center"}}/>
+          <div style={{display:"flex",gap:1.5}}>
+            {[0,1,2].map(i=><div key={i} style={{width:1.5,height:8,borderRadius:1,background:"rgba(226,232,240,.5)"}}/>)}
+          </div>
         </div>
-        {/* LCC letters */}
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700,letterSpacing:"-0.5px",lineHeight:1}}>
-          <span style={grad("#FF9933","#ffb347")}>L</span>
-          <span style={grad("#e0e7ff","#a5b4fc")}>C</span>
-          <span style={grad("#22c55e","#4ade80")}>C</span>
+        {/* LCC — Indian flag colours: L=Orange, C=White/Blue, C=Green */}
+        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,letterSpacing:"-0.5px",lineHeight:1}}>
+          <span style={{background:"linear-gradient(90deg,#FF9933,#ffb347,#FF9933)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>L</span>
+          <span style={{background:"linear-gradient(90deg,#ffffff,#a5b4fc,#ffffff)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
+          <span style={{background:"linear-gradient(90deg,#22c55e,#4ade80,#22c55e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
         </div>
-        {/* Bat · Ball */}
-        <div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}>
-          <div style={{width:12,height:2.5,borderRadius:2,
-            background:"linear-gradient(90deg,#a67c52,#e8c39a)",
-            transform:"rotate(-22deg)",transformOrigin:"right center"}}/>
-          <div style={{width:5.5,height:5.5,borderRadius:"50%",
-            background:"radial-gradient(circle at 32% 32%,#ff8080,#dc2626,#991b1b)",
-            border:"1px solid rgba(255,160,160,.6)",
-            boxShadow:"0 0 5px rgba(239,68,68,.7)"}}/>
-        </div>
+        {/* Ball accent dot */}
+        <div style={{marginTop:4,width:6,height:6,borderRadius:"50%",
+          background:"radial-gradient(circle at 35% 35%,#ff6b6b,#dc2626)",
+          boxShadow:"0 0 6px rgba(239,68,68,.6)"}}/>
       </div>
     </div>
   );
@@ -2953,12 +2938,13 @@ function Landing({onPick}){
           {/* Lindenhurst Cricket Club — single line, centered */}
           <p style={{flex:1,textAlign:"center",color:"#fff",fontSize:15,fontWeight:700,letterSpacing:".02em",
             margin:0,whiteSpace:"nowrap",textShadow:"0 2px 10px rgba(2,4,15,.9)"}}>Lindenhurst Cricket Club</p>
-          {/* ☰ menu button — right */}
+          {/* ☰ menu button — right, pulsing to draw attention */}
           <button onClick={()=>setMenuOpen(o=>!o)} aria-label="Menu" style={{
-            flexShrink:0,width:40,height:40,borderRadius:12,cursor:"pointer",
+            flexShrink:0,width:50,height:50,borderRadius:14,cursor:"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",
-            background:"rgba(20,17,55,.8)",border:"1.5px solid rgba(99,102,241,.45)",
-            color:"#a5b4fc",fontSize:18,backdropFilter:"blur(10px)",boxShadow:"0 4px 16px rgba(0,0,0,.35)"
+            background:"rgba(20,17,55,.85)",border:"1.5px solid rgba(99,102,241,.55)",
+            color:"#a5b4fc",fontSize:20,backdropFilter:"blur(10px)",
+            animation:menuOpen?"none":"menuPulse 2.4s ease-in-out infinite"
           }}>{menuOpen?"✕":"☰"}</button>
         </div>
 
@@ -2984,10 +2970,29 @@ function Landing({onPick}){
           <CricketScene/>
         </div>
         {announcement&&announcement.text&&(
-          <div style={{background:"rgba(245,158,11,.12)",border:"1.5px solid rgba(245,158,11,.4)",borderRadius:16,padding:"12px 14px",marginBottom:12,animation:"slideInUp .4s ease both"}}>
-            <p style={{fontSize:10,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".15em",marginBottom:4}}>📢 Club Notice</p>
-            <p style={{fontSize:13,color:"#fff",lineHeight:1.5}}>{announcement.text}</p>
-            {announcement.by&&<p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>— {announcement.by}</p>}
+          <div style={{
+            background:"linear-gradient(90deg,rgba(245,158,11,.18),rgba(245,158,11,.08),rgba(245,158,11,.18))",
+            borderTop:"1px solid rgba(245,158,11,.35)",
+            borderBottom:"1px solid rgba(245,158,11,.35)",
+            overflow:"hidden",whiteSpace:"nowrap",
+            padding:"9px 0",marginBottom:12,
+            position:"relative"
+          }}>
+            {/* Fade masks on left and right edges */}
+            <div style={{position:"absolute",left:0,top:0,bottom:0,width:40,
+              background:"linear-gradient(90deg,rgba(10,8,35,1),transparent)",zIndex:1}}/>
+            <div style={{position:"absolute",right:0,top:0,bottom:0,width:40,
+              background:"linear-gradient(270deg,rgba(10,8,35,1),transparent)",zIndex:1}}/>
+            <span style={{
+              display:"inline-block",
+              animation:"marquee 18s linear infinite",
+              fontSize:13,color:"#fff",fontFamily:"'Inter',sans-serif"
+            }}>
+              <span style={{color:"#fbbf24",fontWeight:700,marginRight:10}}>📢</span>
+              {announcement.text}
+              {announcement.by&&<span style={{color:"#6b7280",fontSize:11,marginLeft:12}}>— {announcement.by}</span>}
+              <span style={{margin:"0 40px",color:"rgba(245,158,11,.3)"}}>◆</span>
+            </span>
           </div>
         )}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:8}}>
@@ -4241,46 +4246,195 @@ function VoteOnBehalfPage({onExit}){
   );
 }
 
-function BasicAdminHome({onPick,onExit}){
-  const tile=(emoji,title,sub,color,glow,screen,idx)=>(
-    <button onClick={()=>onPick(screen)} style={{
-      display:"flex",alignItems:"center",gap:14,textAlign:"left",width:"100%",
-      padding:"16px 18px",borderRadius:20,cursor:"pointer",marginBottom:10,
-      background:"rgba(20,17,55,.72)",border:`1.5px solid ${color}`,
-      color:"#fff",fontFamily:"'Inter',sans-serif",backdropFilter:"blur(10px)",
-      animation:`slideInUp .4s ease ${0.07*idx+0.1}s both`,boxShadow:`0 6px 24px ${glow}`,transition:"transform .15s"
-    }}
-    onMouseEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
-    onMouseLeave={e=>e.currentTarget.style.transform=""}>
-      <span style={{fontSize:28}}>{emoji}</span>
+// ── AdminHome — beautiful shared home for both Super and Basic admin ──────────
+function AdminHome({tier,onPick,onExit}){
+  const isSuper=tier==="super";
+  const[live,setLive]=React.useState(null);
+  const[poll,setPoll]=React.useState(null);
+  const[votes,setVotes]=React.useState({});
+  const[rosterCount,setRosterCount]=React.useState(0);
+  const[histCount,setHistCount]=React.useState(0);
+
+  React.useEffect(()=>{
+    if(!FB_OK||!DB) return;
+    const refs=[
+      DB.ref("live"),
+      DB.ref("poll/current"),
+      DB.ref("poll/votes"),
+      DB.ref("roster"),
+      DB.ref("history")
+    ];
+    const cbs=[
+      refs[0].on("value",s=>setLive(s.val())),
+      refs[1].on("value",s=>setPoll(s.val())),
+      refs[2].on("value",s=>setVotes(s.val()||{})),
+      refs[3].on("value",s=>setRosterCount(Object.keys(s.val()||{}).length)),
+      refs[4].on("value",s=>setHistCount(Object.keys(s.val()||{}).length)),
+    ];
+    return ()=>refs.forEach((r,i)=>r.off("value",cbs[i]));
+  },[]);
+
+  const hasLive=!!(live&&live.battingTeam);
+  const yesCount=Object.values(votes).filter(v=>v?.choice==="yes").length;
+  const totalVotes=Object.values(votes).filter(v=>v?.choice).length;
+
+  // Status pill
+  const Pill=({label,color,dot})=>(
+    <div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:20,
+      background:`rgba(${color},.12)`,border:`1px solid rgba(${color},.35)`}}>
+      {dot&&<div style={{width:6,height:6,borderRadius:"50%",background:`rgb(${color})`,
+        boxShadow:`0 0 6px rgba(${color},.8)`,animation:"menuPulse 2s ease-in-out infinite"}}/>}
+      <span style={{fontSize:10,color:`rgb(${color})`,fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{label}</span>
+    </div>
+  );
+
+  // Feature tile — large (full width hero)
+  const Hero=({em,title,sub,grad,onClick})=>(
+    <button onClick={onClick} style={{
+      width:"100%",display:"flex",alignItems:"center",gap:14,padding:"18px 18px",
+      borderRadius:20,cursor:"pointer",color:"#111",textAlign:"left",border:"none",
+      background:grad,boxShadow:"0 8px 24px rgba(0,0,0,.4)",
+      animation:"fadeUp .3s ease both",marginBottom:8
+    }}>
+      <span style={{fontSize:32,flexShrink:0}}>{em}</span>
       <span style={{flex:1}}>
-        <span style={{display:"block",fontWeight:700,fontSize:16,marginBottom:2}}>{title}</span>
-        <span style={{display:"block",fontSize:11,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace"}}>{sub}</span>
+        <span style={{display:"block",fontFamily:"'Oswald',sans-serif",fontWeight:700,fontSize:18,lineHeight:1}}>{title}</span>
+        <span style={{display:"block",fontSize:12,marginTop:3,opacity:.7}}>{sub}</span>
       </span>
-      <span style={{color:"#6b7280",fontSize:14}}>→</span>
+      <span style={{fontSize:20,opacity:.6}}>→</span>
     </button>
   );
+
+  // Feature tile — regular (half width or full)
+  const Tile=({em,title,sub,col,badge,onClick,delay=0,full=false})=>(
+    <button onClick={onClick} style={{
+      display:"flex",flexDirection:full?"row":"column",
+      alignItems:full?"center":"flex-start",
+      gap:full?12:8,
+      padding:full?"13px 14px":"14px 14px",
+      borderRadius:16,cursor:"pointer",textAlign:"left",border:`1px solid rgba(${col},.3)`,
+      background:`rgba(${col},.08)`,color:"#fff",width:"100%",
+      animation:`fadeUp .3s ease ${delay}s both`,position:"relative"
+    }}>
+      {badge!=null&&<div style={{position:"absolute",top:8,right:8,minWidth:18,height:18,borderRadius:9,
+        background:`rgb(${col})`,display:"flex",alignItems:"center",justifyContent:"center",
+        fontSize:9,fontWeight:700,color:"#111",padding:"0 4px"}}>{badge}</div>}
+      <span style={{fontSize:full?22:24,flexShrink:0}}>{em}</span>
+      <span style={{flex:1}}>
+        <span style={{display:"block",fontWeight:700,fontSize:full?13:12,marginBottom:full?2:3}}>{title}</span>
+        <span style={{display:"block",fontSize:10,color:"rgba(255,255,255,.5)",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.4}}>{sub}</span>
+      </span>
+      {full&&<span style={{color:"rgba(255,255,255,.3)",fontSize:14,flexShrink:0}}>→</span>}
+    </button>
+  );
+
+  const now=new Date();
+  const hour=now.getHours();
+  const greet=hour<12?"Good morning":"hour<17"?"Good afternoon":"Good evening";
+  const timeStr=hour<12?"Good morning ☀️":hour<17?"Good afternoon ⛅":"Good evening 🌙";
+
   return(
-    <div style={{minHeight:"100vh",padding:"22px 18px",background:"linear-gradient(160deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)"}}>
-      <div style={{maxWidth:"min(440px,100%)",margin:"0 auto"}}>
-        <div className="flex items-center justify-between" style={{marginBottom:6}}>
-          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>🛠️ Admin Tools</h1>
-          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",paddingBottom:32}}>
+
+      {/* ── Header ── */}
+      <div style={{padding:"20px 18px 0"}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
+          <div>
+            <p style={{fontSize:12,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:3}}>{timeStr}</p>
+            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,lineHeight:1}}>
+              {isSuper?"👑 Super Admin":"🛠️ Basic Admin"}
+            </h1>
+          </div>
+          <button onClick={onExit} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.3)",
+            color:"#a5b4fc",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",
+            borderRadius:10,padding:"7px 12px"}}>← home</button>
         </div>
-        <div style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",borderRadius:14,padding:"10px 14px",marginBottom:18}}>
-          <span style={{fontSize:12,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace"}}>👤 Basic admin · poll, roster & teams. Match scoring is super-admin only.</span>
+
+        {/* ── Live status pills ── */}
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:20}}>
+          {hasLive
+            ?<Pill label={`● LIVE · ${live.battingTeam} ${live.totalRuns||0}/${live.wickets||0}`} color="52,211,153" dot/>
+            :<Pill label="No active match" color="107,114,128"/>}
+          {poll
+            ?<Pill label={`Poll open · ${yesCount} Yes / ${totalVotes} voted`} color="167,139,250" dot/>
+            :<Pill label="No poll open" color="107,114,128"/>}
+          <Pill label={`${rosterCount} members`} color="99,102,241"/>
+          <Pill label={`${histCount} matches`} color="245,158,11"/>
         </div>
-        {tile("🏏","Score a Match","Start · set up · score live","rgba(245,158,11,.4)","rgba(245,158,11,.12)","adminScore",0)}
-        {tile("📋","Manage Weekly Poll","Create · update · close poll","rgba(167,139,250,.4)","rgba(167,139,250,.12)","pollAdmin",1)}
-        {tile("👥","Votes & Team Builder","See responses · build teams","rgba(52,211,153,.4)","rgba(52,211,153,.12)","poll",1)}
-        {tile("🗳️","Vote on Behalf","Mark availability for players","rgba(99,102,241,.4)","rgba(99,102,241,.12)","voteOnBehalf",2)}
-        {tile("🏏","Roster & Name Fixes","Add · edit · correct spellings","rgba(245,158,11,.4)","rgba(245,158,11,.12)","roster",3)}
-        {tile("🔧","Player Tools","Merge · link · bulk add players","rgba(52,211,153,.4)","rgba(52,211,153,.12)","playerTools",4)}
-        {tile("📚","Match History","Browse past matches","rgba(99,102,241,.4)","rgba(99,102,241,.12)","history",5)}
-        {tile("📊","Stats & Records","Leaderboard · profiles","rgba(245,158,11,.4)","rgba(245,158,11,.12)","stats",6)}
+      </div>
+
+      {/* ── Content ── */}
+      <div style={{padding:"0 18px"}}>
+
+        {/* Primary hero — Score a Match */}
+        <Hero
+          em="🏏" title="Score a Match"
+          sub={hasLive?"● Resume live match":"Start a new match · full scoring access"}
+          grad={hasLive
+            ?"linear-gradient(135deg,#10b981,#059669)"
+            :"linear-gradient(135deg,#f59e0b,#d97706)"}
+          onClick={()=>onPick("admin")}
+        />
+
+        {/* ── 2-column grid ── */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+          <Tile em="📋" title="Weekly Poll" sub="Create · close poll" col="167,139,250"
+            onClick={()=>onPick("pollAdmin")} delay={.05}/>
+          <Tile em="👥" title="Votes & Teams" sub="Responses · build teams"
+            col="52,211,153" badge={yesCount>0?yesCount:null}
+            onClick={()=>onPick("poll")} delay={.08}/>
+          <Tile em="🗳️" title="Vote on Behalf" sub="Mark player availability" col="99,102,241"
+            onClick={()=>onPick("voteOnBehalf")} delay={.11}/>
+          <Tile em="👤" title="Roster & Tools" sub="Add · merge · fix names" col="245,158,11"
+            badge={rosterCount} onClick={()=>onPick("roster")} delay={.14}/>
+        </div>
+
+        {/* ── Full-width tiles ── */}
+        <Tile em="🔧" title="Player Tools" sub="Merge duplicates · link profiles · bulk add"
+          col="52,211,153" full onClick={()=>onPick("playerTools")} delay={.17}/>
+        <div style={{height:8}}/>
+        <Tile em="📚" title="Match History" sub={`${histCount} matches · view scorecards`+(isSuper?" · edit & delete":"")}
+          col="99,102,241" full onClick={()=>onPick("history")} delay={.2}/>
+        <div style={{height:8}}/>
+        <Tile em="📊" title="Stats & Records" sub="Leaderboard · player profiles · venue filter"
+          col="245,158,11" full onClick={()=>onPick("stats")} delay={.23}/>
+
+        {/* ── Super admin only ── */}
+        {isSuper&&<>
+          <div style={{display:"flex",alignItems:"center",gap:8,margin:"16px 0 8px"}}>
+            <div style={{flex:1,height:1,background:"rgba(239,68,68,.2)"}}/>
+            <span style={{fontSize:9,color:"rgba(239,68,68,.6)",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".15em"}}>SUPER ADMIN ONLY</span>
+            <div style={{flex:1,height:1,background:"rgba(239,68,68,.2)"}}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <Tile em="📢" title="Post Notice" sub="Scrolling home screen ticker" col="245,158,11"
+              onClick={()=>onPick("announce")} delay={.26}/>
+            <Tile em="🔐" title="Manage PINs" sub="Change admin PINs" col="239,68,68"
+              onClick={()=>onPick("pinMgmt")} delay={.29}/>
+          </div>
+        </>}
       </div>
     </div>
   );
+}
+
+function SuperAdminHome({onScore,onHistory,onAnnounce,onRoster,onStats,onPoll,onPins,onVoteOnBehalf,onPlayerTools,onExit}){
+  return <AdminHome tier="super" onPick={(s)=>{
+    if(s==="admin")       onScore();
+    else if(s==="history")   onHistory();
+    else if(s==="announce")  onAnnounce();
+    else if(s==="roster")    onRoster();
+    else if(s==="stats")     onStats();
+    else if(s==="pollAdmin") onPoll();
+    else if(s==="poll")      onPoll();
+    else if(s==="pinMgmt")   onPins();
+    else if(s==="voteOnBehalf") onVoteOnBehalf();
+    else if(s==="playerTools")  onPlayerTools();
+  }} onExit={onExit}/>;
+}
+
+function BasicAdminHome({onPick,onExit}){
+  return <AdminHome tier="basic" onPick={onPick} onExit={onExit}/>;
 }
 
 function Root(){
@@ -4303,7 +4457,7 @@ function Root(){
 
   const isAdmin = adminTier!==null;
   const isSuper = adminTier==="super";
-  const adminHome = adminTier==="super"?"admin":adminTier==="basic"?"basicAdmin":"landing";
+  const adminHome = adminTier==="super"?"superAdmin":adminTier==="basic"?"basicAdmin":"landing";
 
   const pick=(r)=>{
     if(r==="scorer"){setGate("scorer");}
@@ -4320,7 +4474,7 @@ function Root(){
       if(v===pins.basic) return {ok:true, tier:"basic"};
       return {ok:false, msg:"❌ Wrong PIN, try again"};
     }}
-    onOk={(r)=>{ setGate(null); setAdminTier(r.tier); setScreen(r.tier==="super"?"admin":"basicAdmin"); }}
+    onOk={(r)=>{ setGate(null); setAdminTier(r.tier); setScreen(r.tier==="super"?"superAdmin":"basicAdmin"); }}
     onCancel={home}/>;
 
   if(screen==="landing") return <Landing onPick={pick}/>;
@@ -4337,7 +4491,19 @@ function Root(){
   if(screen==="voteOnBehalf") return <VoteOnBehalfPage onExit={()=>setScreen(adminHome)}/>;
   if(screen==="scorer")    return <App role="scorer" onExit={home}/>;
   if(screen==="adminScore") return <App role="admin" onExit={()=>setScreen(adminHome)} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("pollAdmin")} onRoster={()=>setScreen("roster")} onAnnounce={()=>setScreen("announce")}/>;
-  if(screen==="admin")   return <App role="admin" onExit={home} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("pollAdmin")} onRoster={()=>setScreen("roster")} onAnnounce={()=>setScreen("announce")}/>;
+  if(screen==="superAdmin") return <SuperAdminHome
+    onScore={()=>setScreen("admin")}
+    onHistory={()=>setScreen("history")}
+    onStats={()=>setScreen("stats")}
+    onPoll={()=>setScreen("pollAdmin")}
+    onRoster={()=>setScreen("roster")}
+    onAnnounce={()=>setScreen("announce")}
+    onPins={()=>setScreen("pinMgmt")}
+    onVoteOnBehalf={()=>setScreen("voteOnBehalf")}
+    onPlayerTools={()=>setScreen("playerTools")}
+    onExit={home}/>;
+  if(screen==="pinMgmt") return <PinMgmtModal onClose={()=>setScreen(adminHome)}/>;
+  if(screen==="admin") return <App role="admin" onExit={()=>setScreen("superAdmin")} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("pollAdmin")} onRoster={()=>setScreen("roster")} onAnnounce={()=>setScreen("announce")}/>;
   return <Landing onPick={pick}/>;
 }
 
