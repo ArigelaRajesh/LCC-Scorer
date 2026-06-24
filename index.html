@@ -1052,8 +1052,8 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     if(overDone){ setInn(p=>({...p,pending:"newBowler"})); }
   };
 
-  const confBatsman=()=>{
-    const nm=nbn.trim();if(!nm)return;
+  const confBatsman=(directName)=>{
+    const nm=(typeof directName==="string"?directName:nbn).trim();if(!nm)return;
     setInn(p=>{
       const b={...p.batsmen};
       const enteringAtStrikerEnd = (p.pendingOutEnd||"striker")==="striker";
@@ -1081,8 +1081,8 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     setHist(h=>[...h,JSON.parse(JSON.stringify(inn))]);
     setInn(p=>{const b={...p.batsmen};b[p.strikerName]={...b[p.strikerName],retired:true,onStrike:false};return{...p,batsmen:b,pending:"retire"};});
   };
-  const confBowler=()=>{
-    const nm=nbwn.trim();if(!nm)return;
+  const confBowler=(directName)=>{
+    const nm=(typeof directName==="string"?directName:nbwn).trim();if(!nm)return;
     if(inn&&nm===inn.bowlerName){alert("A bowler cannot bowl two overs in a row. Pick a different bowler.");return;}
     setInn(p=>{const b={...p.bowlers};if(!b[nm])b[nm]=nw(nm,resolvePid(nm));return{...p,bowlers:b,bowlingOrder:p.bowlingOrder.includes(nm)?p.bowlingOrder:[...p.bowlingOrder,nm],bowlerName:nm,pending:null};});
     setNBWN("");
@@ -1209,6 +1209,41 @@ function playFreeHitSound(){
   }catch(e){}
 }
 
+// ── QuickAddPlayer — adds a new club member to the roster mid-match ──────────
+// Scorer/admin taps "+ Add to club", types a name, saves to Firebase.
+// The real-time roster listener in App picks it up instantly — player appears
+// in quick-tap buttons for the rest of the match.
+function QuickAddPlayer({onAdded,onCancel}){
+  const[name,setName]=React.useState("");
+  const[saving,setSaving]=React.useState(false);
+  const save=()=>{
+    const nm=name.trim();if(!nm){alert("Enter a name.");return;}
+    if(!FB_OK||!DB){alert("Can't add player — offline.");return;}
+    setSaving(true);
+    const id="p_"+Math.random().toString(36).slice(2)+Date.now().toString(36);
+    DB.ref("roster/"+id).set({name:nm,role:"All-rounder",keeper:false,bat:"Right",bowl:null})
+      .then(()=>{ setSaving(false); onAdded(nm); })
+      .catch(e=>{ setSaving(false); alert("Failed: "+e.message); });
+  };
+  return(
+    <div style={{background:"rgba(16,185,129,.08)",border:"1.5px solid rgba(16,185,129,.35)",borderRadius:12,padding:"10px 12px",marginTop:8}}>
+      <p style={{fontSize:10,color:"#34d399",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:8}}>➕ ADD NEW CLUB MEMBER</p>
+      <div style={{display:"flex",gap:8}}>
+        <input value={name} onChange={e=>setName(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&save()}
+          placeholder="Player name" autoFocus style={{flex:1,fontSize:13}}/>
+        <button onClick={save} disabled={saving} style={{
+          padding:"8px 14px",borderRadius:10,border:"none",cursor:"pointer",fontWeight:700,fontSize:12,
+          background:"linear-gradient(135deg,#10b981,#059669)",color:"#111",whiteSpace:"nowrap",
+          opacity:saving?.6:1
+        }}>{saving?"Saving…":"Add ✓"}</button>
+        <button onClick={onCancel} style={{padding:"8px 10px",borderRadius:10,border:"1px solid rgba(107,114,128,.3)",background:"transparent",color:"#6b7280",cursor:"pointer",fontSize:13}}>✕</button>
+      </div>
+      <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>Saved to club roster · they can add details later from Join the Club</p>
+    </div>
+  );
+}
+
 function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onSwapStrike,onFixPlayers,onEndInnings,onRevert,canRevert,role,onUndo,canUndo}){
   const[wt,setWT]=useState("Bowled");
   const[fielder,setFielder]=useState("");
@@ -1220,7 +1255,8 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb
   const[showOT,setShowOT]=useState(false);
   const[otBase,setOTBase]=useState(0);
   const[otThrow,setOTThrow]=useState(1);
-  const[showFH,setShowFH]=useState(false); // Free Hit banner after No Ball
+  const[showFH,setShowFH]=useState(false);
+  const[quickAdd,setQuickAdd]=useState(null); // "bat" | "bowl" | null
   const dis=pw||nnb||pr;
   const retiredList=(inn.battingOrder||[]).filter(n=>inn.batsmen&&inn.batsmen[n]&&inn.batsmen[n].retired);
 
@@ -1272,39 +1308,116 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb
       {(pw||pr)&&(
         <div className={pr?"alert-indigo":"alert-red"}>
           <p style={{color:pr?"#818cf8":"#f87171",fontFamily:"'JetBrains Mono',monospace",fontSize:11,textTransform:"uppercase",letterSpacing:".15em",marginBottom:8}}>{pr?"🔁 Retired — who's in next?":"⚡ Wicket! Who's next?"}</p>
-          <div style={{display:"flex",gap:8}}>
-            <input value={nbn} onChange={e=>setNBN(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confBatsman()} placeholder="Batsman name" autoFocus list="batlist" style={{flex:1}}/>
-            <datalist id="batlist">{[...new Set([...retiredList,...(rosterNames||[])])].map(n=><option key={n} value={n}/>)}</datalist>
-            <button className="btn btn-primary" onClick={confBatsman} style={{padding:"10px 16px",whiteSpace:"nowrap"}}>In →</button>
-          </div>
-          {retiredList.length>0&&<div style={{marginTop:8}}>
-            <p style={{fontSize:10,color:"#a78bfa",fontFamily:"'JetBrains Mono',monospace",marginBottom:5}}>Tap a retired batsman to return:</p>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {retiredList.map(n=>(
-                <button key={n} onClick={()=>{setNBN(n);}} style={{padding:"5px 10px",borderRadius:8,border:"1px solid rgba(139,92,246,.4)",background:"rgba(139,92,246,.12)",color:"#c4b5fd",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif"}}>{n} <span style={{color:"#7c6aa8"}}>({inn.batsmen[n].runs})</span></button>
-              ))}
+
+          {/* Quick-tap roster buttons — filtered to available batters */}
+          {(()=>{
+            const dismissed=Object.entries(inn.batsmen||{}).filter(([,b])=>b.out).map(([n])=>n);
+            const batting=new Set([SK,NS].filter(Boolean));
+            const avail=(rosterNames||[]).filter(n=>!batting.has(n)&&!dismissed.includes(n));
+            if(!avail.length) return null;
+            return(
+              <div style={{marginBottom:10}}>
+                <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Tap to bring in:</p>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  {avail.map(n=>(
+                    <button key={n} onClick={()=>confBatsman(n)} style={{
+                      padding:"7px 13px",borderRadius:10,border:"1.5px solid rgba(99,102,241,.4)",
+                      background:"rgba(99,102,241,.12)",color:"#c4b5fd",fontSize:13,cursor:"pointer",
+                      fontFamily:"'Inter',sans-serif",fontWeight:600,touchAction:"manipulation"
+                    }}>{n}</button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Retired batters — return to crease */}
+          {retiredList.length>0&&(
+            <div style={{marginBottom:10}}>
+              <p style={{fontSize:10,color:"#a78bfa",fontFamily:"'JetBrains Mono',monospace",marginBottom:5}}>Return retired:</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {retiredList.map(n=>(
+                  <button key={n} onClick={()=>confBatsman(n)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid rgba(139,92,246,.5)",background:"rgba(139,92,246,.2)",color:"#c4b5fd",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>
+                    {n} <span style={{color:"#7c6aa8",fontSize:10}}>({inn.batsmen[n].runs})</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>}
+          )}
+
+          {/* Text input fallback — for players not in roster */}
+          <div style={{display:"flex",gap:8}}>
+            <input value={nbn} onChange={e=>setNBN(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confBatsman()} placeholder="Or type a new name…" list="batlist" style={{flex:1,fontSize:13}}/>
+            <datalist id="batlist">{[...new Set([...retiredList,...(rosterNames||[])])].map(n=><option key={n} value={n}/>)}</datalist>
+            <button className="btn btn-primary" onClick={()=>confBatsman()} style={{padding:"10px 16px",whiteSpace:"nowrap"}}>In →</button>
+          </div>
+
+          {/* Quick-add new player to roster mid-match */}
+          {quickAdd==="bat"
+            ? <QuickAddPlayer onAdded={nm=>{setQuickAdd(null);confBatsman(nm);}} onCancel={()=>setQuickAdd(null)}/>
+            : <button onClick={()=>setQuickAdd("bat")} style={{marginTop:8,width:"100%",padding:"7px",borderRadius:10,border:"1px dashed rgba(16,185,129,.4)",background:"transparent",color:"#34d399",cursor:"pointer",fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}>➕ Add new player to club</button>
+          }
         </div>
       )}
       {nnb&&!pw&&(
         <div className="alert-indigo" style={{border:"2px solid #6366f1"}}>
           <p style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:12,textTransform:"uppercase",letterSpacing:".12em",marginBottom:4,fontWeight:700}}>🎯 Over Complete!</p>
-          <p style={{color:"#818cf8",fontSize:12,marginBottom:10}}>Select the next bowler (a bowler can't bowl two overs in a row):</p>
-          <div style={{display:"flex",gap:8,marginBottom:(inn.bowlingOrder||[]).filter(b=>b!==inn.bowlerName).length>0?10:0}}>
-            <input value={nbwn} onChange={e=>setNBWN(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confBowler()} placeholder="Type bowler name" autoFocus list="bowlerlist" style={{flex:1}}/>
+          <p style={{color:"#818cf8",fontSize:12,marginBottom:10}}>Who bowls next? <span style={{color:"#4338ca",fontSize:11}}>(not {inn.bowlerName})</span></p>
+
+          {/* Quick-tap roster — exclude current/last bowler */}
+          {(()=>{
+            const avail=(rosterNames||[]).filter(n=>n!==inn.bowlerName);
+            if(!avail.length) return null;
+            // Split: already bowled (familiar) vs fresh bowlers
+            const bowled=new Set(inn.bowlingOrder||[]);
+            const fresh=avail.filter(n=>!bowled.has(n));
+            const prev=avail.filter(n=>bowled.has(n));
+            return(
+              <div style={{marginBottom:10}}>
+                {fresh.length>0&&<>
+                  <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>New bowlers:</p>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                    {fresh.map(n=>(
+                      <button key={n} onClick={()=>confBowler(n)} style={{
+                        padding:"7px 13px",borderRadius:10,border:"1.5px solid rgba(99,102,241,.4)",
+                        background:"rgba(99,102,241,.12)",color:"#a5b4fc",fontSize:13,cursor:"pointer",
+                        fontFamily:"'Inter',sans-serif",fontWeight:600,touchAction:"manipulation"
+                      }}>{n}</button>
+                    ))}
+                  </div>
+                </>}
+                {prev.length>0&&<>
+                  <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Bowled before:</p>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {prev.map(n=>{
+                      const b=inn.bowlers?.[n];
+                      return(
+                        <button key={n} onClick={()=>confBowler(n)} style={{
+                          padding:"7px 13px",borderRadius:10,border:"1.5px solid rgba(99,102,241,.4)",
+                          background:nbwn===n?"linear-gradient(135deg,#6366f1,#8b5cf6)":"rgba(99,102,241,.12)",
+                          color:nbwn===n?"#fff":"#a5b4fc",fontSize:13,cursor:"pointer",
+                          fontFamily:"'Inter',sans-serif",fontWeight:600,touchAction:"manipulation"
+                        }}>{n}{b?<span style={{fontSize:10,opacity:.7,marginLeft:4}}>{b.overs}.{b.ballsThisOver}-{b.runs}-{b.wickets}</span>:""}</button>
+                      );
+                    })}
+                  </div>
+                </>}
+              </div>
+            );
+          })()}
+
+          {/* Text input fallback */}
+          <div style={{display:"flex",gap:8}}>
+            <input value={nbwn} onChange={e=>setNBWN(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confBowler()} placeholder="Or type a new name…" list="bowlerlist" style={{flex:1,fontSize:13}}/>
             <datalist id="bowlerlist">{(rosterNames||[]).map(n=><option key={n} value={n}/>)}</datalist>
-            <button className="btn btn-primary" onClick={confBowler} style={{padding:"10px 18px",whiteSpace:"nowrap"}}>Bowl →</button>
+            <button className="btn btn-primary" onClick={()=>confBowler()} style={{padding:"10px 18px",whiteSpace:"nowrap"}}>Bowl →</button>
           </div>
-          {(inn.bowlingOrder||[]).filter(b=>b!==inn.bowlerName).length>0&&<div>
-            <p style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginBottom:5}}>Or tap a previous bowler:</p>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {(inn.bowlingOrder||[]).filter(b=>b!==inn.bowlerName).map(b=>(
-                <button key={b} onClick={()=>setNBWN(b)} style={{padding:"6px 12px",borderRadius:8,border:nbwn===b?"none":"1px solid rgba(99,102,241,.4)",background:nbwn===b?"linear-gradient(135deg,#6366f1,#8b5cf6)":"rgba(99,102,241,.12)",color:nbwn===b?"#fff":"#a5b4fc",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>{b}</button>
-              ))}
-            </div>
-          </div>}
-          <p style={{fontSize:10,color:"#4338ca",marginTop:8,fontFamily:"'JetBrains Mono',monospace"}}>Last over bowled by: {inn.bowlerName}</p>
+
+          {/* Quick-add new player mid-match */}
+          {quickAdd==="bowl"
+            ? <QuickAddPlayer onAdded={nm=>{setQuickAdd(null);confBowler(nm);}} onCancel={()=>setQuickAdd(null)}/>
+            : <button onClick={()=>setQuickAdd("bowl")} style={{marginTop:8,width:"100%",padding:"7px",borderRadius:10,border:"1px dashed rgba(16,185,129,.4)",background:"transparent",color:"#34d399",cursor:"pointer",fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}>➕ Add new player to club</button>
+          }
         </div>
       )}
 
@@ -2739,42 +2852,43 @@ function LCCLogo(){
     animation:"slowDrift 9s linear infinite"
   });
   return(
+    /* Outer wrapper = the "border" — flag gradient shows around the inner dark badge */
     <div style={{
-      flexShrink:0,display:"inline-flex",flexDirection:"column",alignItems:"center",
-      background:"rgba(8,6,32,.93)",
-      border:"2px solid transparent",borderRadius:13,padding:"4px 8px 5px",
-      backgroundImage:[
-        "linear-gradient(rgba(8,6,32,.93),rgba(8,6,32,.93))",
-        "linear-gradient(135deg,#FF9933 0%,#ff6600 20%,#6366f1 50%,#138808 80%,#22c55e 100%)"
-      ].join(","),
-      backgroundOrigin:"border-box",backgroundClip:"padding-box, border-box",
-      boxShadow:[
-        "0 3px 14px rgba(0,0,0,.55)",
-        "0 0 12px rgba(255,153,51,.4)",
-        "0 0 22px rgba(19,136,8,.22)"
-      ].join(",")
+      flexShrink:0,display:"inline-flex",
+      background:"linear-gradient(to bottom,#FF9933 0%,#FF9933 30%,rgba(255,255,255,.95) 33%,rgba(255,255,255,.95) 50%,#1a56db 50%,#1a56db 67%,#138808 70%,#138808 100%)",
+      borderRadius:15,
+      padding:"2.5px",
+      boxShadow:"0 3px 14px rgba(0,0,0,.55)"
     }}>
-      {/* Indian tri-color stripe */}
-      <div style={{display:"flex",gap:2,marginBottom:2}}>
-        <div style={{height:2.5,width:10,borderRadius:2,background:"#FF9933",boxShadow:"0 0 6px rgba(255,153,51,.8)"}}/>
-        <div style={{height:2.5,width:10,borderRadius:2,background:"rgba(255,255,255,.9)",boxShadow:"0 0 5px rgba(255,255,255,.3)"}}/>
-        <div style={{height:2.5,width:10,borderRadius:2,background:"#22c55e",boxShadow:"0 0 6px rgba(34,197,94,.8)"}}/>
-      </div>
-      {/* LCC letters */}
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700,letterSpacing:"-0.5px",lineHeight:1}}>
-        <span style={grad("#FF9933","#ffb347")}>L</span>
-        <span style={grad("#e0e7ff","#a5b4fc")}>C</span>
-        <span style={grad("#22c55e","#4ade80")}>C</span>
-      </div>
-      {/* Bat · Ball */}
-      <div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}>
-        <div style={{width:12,height:2.5,borderRadius:2,
-          background:"linear-gradient(90deg,#a67c52,#e8c39a)",
-          transform:"rotate(-22deg)",transformOrigin:"right center"}}/>
-        <div style={{width:5.5,height:5.5,borderRadius:"50%",
-          background:"radial-gradient(circle at 32% 32%,#ff8080,#dc2626,#991b1b)",
-          border:"1px solid rgba(255,160,160,.6)",
-          boxShadow:"0 0 5px rgba(239,68,68,.7)"}}/>
+      {/* Inner badge — dark background sits inside the wrapper, revealing flag colours only on the border edge */}
+      <div style={{
+        display:"inline-flex",flexDirection:"column",alignItems:"center",
+        background:"rgba(8,6,32,.93)",
+        borderRadius:13,
+        padding:"4px 8px 5px"
+      }}>
+        {/* Indian tri-color stripe */}
+        <div style={{display:"flex",gap:2,marginBottom:2}}>
+          <div style={{height:2.5,width:10,borderRadius:2,background:"#FF9933",boxShadow:"0 0 6px rgba(255,153,51,.8)"}}/>
+          <div style={{height:2.5,width:10,borderRadius:2,background:"rgba(255,255,255,.9)",boxShadow:"0 0 5px rgba(255,255,255,.3)"}}/>
+          <div style={{height:2.5,width:10,borderRadius:2,background:"#22c55e",boxShadow:"0 0 6px rgba(34,197,94,.8)"}}/>
+        </div>
+        {/* LCC letters */}
+        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700,letterSpacing:"-0.5px",lineHeight:1}}>
+          <span style={grad("#FF9933","#ffb347")}>L</span>
+          <span style={grad("#e0e7ff","#a5b4fc")}>C</span>
+          <span style={grad("#22c55e","#4ade80")}>C</span>
+        </div>
+        {/* Bat · Ball */}
+        <div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}>
+          <div style={{width:12,height:2.5,borderRadius:2,
+            background:"linear-gradient(90deg,#a67c52,#e8c39a)",
+            transform:"rotate(-22deg)",transformOrigin:"right center"}}/>
+          <div style={{width:5.5,height:5.5,borderRadius:"50%",
+            background:"radial-gradient(circle at 32% 32%,#ff8080,#dc2626,#991b1b)",
+            border:"1px solid rgba(255,160,160,.6)",
+            boxShadow:"0 0 5px rgba(239,68,68,.7)"}}/>
+        </div>
       </div>
     </div>
   );
@@ -3042,7 +3156,7 @@ function RosterPage({role,onExit}){
         </div>
         <p style={{color:"#a5b4fc",fontSize:12,fontFamily:"'JetBrains Mono',monospace",marginBottom:18}}>Add your name & playing style</p>
         {role==="admin"&&<ClubPassphraseAdmin current={passphrase}/>}
-        <PollRosterTab roster={roster} canDelete={role==="admin"} passphrase={passphrase}/>
+        <PollRosterTab roster={roster} canDelete={role==="admin"}/>
       </div>
     </div>
   );
@@ -3145,55 +3259,30 @@ function PollResultsList({poll}){
 }
 
 // ── Roster management (admin only) ─────────────────────────────────────────
-function PollRosterTab({roster,canDelete,passphrase}){
+function PollRosterTab({roster,canDelete}){
   const[name,setName]=React.useState("");
-  const[prole,setProle]=React.useState("Batsman"); // Batsman | Bowler | All-rounder
+  const[prole,setProle]=React.useState("Batsman");
   const[keeper,setKeeper]=React.useState(false);
   const[bat,setBat]=React.useState("Right");
   const[bowl,setBowl]=React.useState("Seam");
   const[editingId,setEditingId]=React.useState(null);
-  const[deviceUnlocked,setDeviceUnlocked]=React.useState(()=>{
-    // This device proved it knows the club passphrase once before — stays trusted from then on,
-    // same low-friction pattern as the old scoring PINs. Re-checked only if the passphrase itself changes.
-    try{ return localStorage.getItem("lcc_club_unlocked")===passphrase && !!passphrase; }catch(e){ return false; }
-  });
-  const[passModal,setPassModal]=React.useState(null); // {pendingAction:fn} — waiting on the shared passphrase
-  const[passTry,setPassTry]=React.useState("");
-  const[passErr,setPassErr]=React.useState("");
 
-  const needsBowlStyle = prole==="Bowler"||prole==="All-rounder";
-  const resetForm=()=>{ setName("");setProle("Batsman");setKeeper(false);setBat("Right");setBowl("Seam");setEditingId(null); };
-
-  // Gate for any edit/delete action: if there's no passphrase set at all, anyone can proceed freely
-  // (admin hasn't turned protection on yet). If this device already unlocked, proceed immediately.
-  // Otherwise ask for the shared club passphrase once.
-  const withClubAuth=(action)=>{
-    if(canDelete){ action(); return; } // admin always bypasses, for moderation
-    if(!passphrase){ action(); return; } // no passphrase configured yet — unprotected by admin's choice
-    if(deviceUnlocked){ action(); return; }
-    setPassModal({pendingAction:action}); setPassTry(""); setPassErr("");
-  };
-  const confirmPass=()=>{
-    if(!passModal)return;
-    if(passTry.trim()!==passphrase){ setPassErr("Wrong passphrase — ask admin if you don't have it."); return; }
-    try{ localStorage.setItem("lcc_club_unlocked",passphrase); }catch(e){}
-    setDeviceUnlocked(true);
-    passModal.pendingAction();
-    setPassModal(null);
-  };
+  const needsBowlStyle=prole==="Bowler"||prole==="All-rounder";
+  const resetForm=()=>{setName("");setProle("Batsman");setKeeper(false);setBat("Right");setBowl("Seam");setEditingId(null);};
 
   const save=()=>{
-    const nm=name.trim(); if(!nm){alert("Enter your name.");return;}
+    const nm=name.trim();if(!nm){alert("Enter your name.");return;}
     if(!FB_OK||!DB){alert("Offline — can't save right now.");return;}
     const id=editingId||("p_"+Math.random().toString(36).slice(2)+Date.now().toString(36));
     const data={name:nm,role:prole,keeper,bat,bowl:needsBowlStyle?bowl:null};
     DB.ref("roster/"+id).set(JSON.parse(JSON.stringify(data))).then(resetForm).catch(e=>alert("Save failed: "+e.message));
   };
   const doEdit=(id,p)=>{
-    setEditingId(id); setName(p.name); setProle(p.role); setKeeper(!!p.keeper); setBat(p.bat||"Right"); setBowl(p.bowl||"Seam");
+    setEditingId(id);setName(p.name);setProle(p.role);setKeeper(!!p.keeper);setBat(p.bat||"Right");setBowl(p.bowl||"Seam");
+    window.scrollTo({top:0,behavior:"smooth"});
   };
   const doDelete=(id)=>{
-    if(!confirm("Remove this entry from the club list?"))return;
+    if(!confirm("Remove this player from the club list?"))return;
     DB.ref("roster/"+id).remove();
   };
 
@@ -3245,20 +3334,11 @@ function PollRosterTab({roster,canDelete,passphrase}){
             </div>
           </div>
           <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>withClubAuth(()=>doEdit(id,p))} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.3)",color:"#a5b4fc",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>✏️</button>
-            {canDelete&&<button onClick={()=>withClubAuth(()=>doDelete(id))} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.3)",color:"#f87171",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>🗑️</button>}
+            <button onClick={()=>doEdit(id,p)} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.3)",color:"#a5b4fc",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>✏️</button>
+            {canDelete&&<button onClick={()=>doDelete(id)} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.3)",color:"#f87171",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>🗑️</button>}
           </div>
         </div>
       ))}
-
-      {passModal&&(
-        <Modal onClose={()=>setPassModal(null)} title="🔑 Club Passphrase">
-          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Enter the shared club passphrase to edit or remove entries. Ask admin if you don't have it — only needed once on this device.</p>
-          <input value={passTry} onChange={e=>{setPassTry(e.target.value);setPassErr("");}} placeholder="Passphrase" autoFocus onKeyDown={e=>e.key==="Enter"&&confirmPass()} style={{marginBottom:8}}/>
-          {passErr&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{passErr}</p>}
-          <button className="btn btn-primary w-full" onClick={confirmPass}>Confirm</button>
-        </Modal>
-      )}
     </div>
   );
 }
@@ -3328,88 +3408,68 @@ function ShareButton({label,buildText}){
 }
 
 // ── Public voting tab — tap your name, pick Yes/No/+1, one vote per device ──
-function PollVoteTab({roster,poll,votes,passphrase}){
-  const[myVote,setMyVote]=React.useState(null); // playerId this device voted as
-  const[kidDraft,setKidDraft]=React.useState({}); // {playerId: "typed kid name, not yet saved"}
+function PollVoteTab({roster,poll,votes,passphrase,role}){
+  const[myVote,setMyVote]=React.useState(()=>{try{return localStorage.getItem("lcc_poll_voted_as")||null;}catch(e){return null;}});
+  const[kidDraft,setKidDraft]=React.useState({});
   const[deviceUnlocked,setDeviceUnlocked]=React.useState(()=>{
-    // Same shared-passphrase device unlock as the roster — one passphrase covers both areas,
-    // so unlocking here also counts as unlocked on the roster page and vice versa.
-    try{ return localStorage.getItem("lcc_club_unlocked")===passphrase && !!passphrase; }catch(e){ return false; }
+    try{return localStorage.getItem("lcc_club_unlocked")===passphrase&&!!passphrase;}catch(e){return false;}
   });
-  const[passModal,setPassModal]=React.useState(null); // {pendingAction:fn} — waiting on the shared passphrase
+  const[passModal,setPassModal]=React.useState(null);
   const[passTry,setPassTry]=React.useState("");
   const[passErr,setPassErr]=React.useState("");
-  const[plus1Open,setPlus1Open]=React.useState(null); // playerId currently showing the kid-name input
+  const[plus1Open,setPlus1Open]=React.useState(null);
 
-  React.useEffect(()=>{
-    try{
-      const saved=localStorage.getItem("lcc_poll_voted_as");
-      if(saved) setMyVote(saved);
-    }catch(e){}
-  },[]);
-
-  if(!poll) return <Centered emoji="📋" title="No poll open right now" sub="Ask the admin to publish this week's poll."/>;
+  if(!poll) return(
+    <div style={{textAlign:"center",padding:"40px 0"}}>
+      <div style={{fontSize:40,marginBottom:10}}>📋</div>
+      <p style={{fontWeight:600,marginBottom:4}}>No poll open right now</p>
+      <p style={{color:"#6b7280",fontSize:13}}>Ask the admin to publish this week's match poll.</p>
+    </div>
+  );
 
   const entries=Object.entries(roster||{}).sort((a,b)=>a[1].name.localeCompare(b[1].name));
+  const counts={yes:0,no:0,plus1:0};
+  Object.values(votes||{}).forEach(v=>{if(v?.choice==="yes")counts.yes++;if(v?.choice==="no")counts.no++;if(v?.plus1)counts.plus1++;});
 
-  // Every vote action goes through this gate: if no passphrase is configured at all, voting stays
-  // open to everyone (admin hasn't turned protection on). If this device already proved it knows
-  // the passphrase, proceed immediately. Otherwise ask for it once.
   const withClubAuth=(action)=>{
-    if(!passphrase){ action(); return; }
-    if(deviceUnlocked){ action(); return; }
-    setPassModal({pendingAction:action}); setPassTry(""); setPassErr("");
+    if(!passphrase||deviceUnlocked){action();return;}
+    setPassModal({pendingAction:action});setPassTry("");setPassErr("");
   };
   const confirmPass=()=>{
-    if(!passModal)return;
-    if(passTry.trim()!==passphrase){ setPassErr("Wrong passphrase — ask admin if you don't have it."); return; }
-    try{ localStorage.setItem("lcc_club_unlocked",passphrase); }catch(e){}
-    setDeviceUnlocked(true);
-    passModal.pendingAction();
-    setPassModal(null);
+    if(passTry.trim()!==passphrase){setPassErr("Wrong passphrase — ask admin if you don't have it.");return;}
+    try{localStorage.setItem("lcc_club_unlocked",passphrase);}catch(e){}
+    setDeviceUnlocked(true);passModal.pendingAction();setPassModal(null);
   };
 
-  // Each vote record is {choice:"yes"|"no"|null, plus1:boolean, kidName:string}.
-  // choice is mutually exclusive (a person is in exactly one of Yes/No, or has withdrawn — never both).
-  // Tapping the SAME choice again clears it back to null, so anyone can opt out of their vote entirely
-  // at any time, not just switch between Yes and No.
   const setChoice=(id,choice)=>withClubAuth(()=>{
     if(!FB_OK||!DB)return;
     const existing=votes?.[id]||{};
-    const next = existing.choice===choice ? null : choice; // tapping the active choice again clears it
+    const next=existing.choice===choice?null:choice;
     DB.ref("poll/votes/"+id).set(JSON.parse(JSON.stringify({...existing,choice:next})));
-    try{ localStorage.setItem("lcc_poll_voted_as",id); }catch(e){}
+    try{localStorage.setItem("lcc_poll_voted_as",id);}catch(e){}
     setMyVote(id);
   });
   const togglePlus1=(id)=>withClubAuth(()=>{
     if(!FB_OK||!DB)return;
     const existing=votes?.[id]||{};
-    const turningOn=!existing.plus1;
-    if(turningOn){
-      const nm=(kidDraft[id]||"").trim();
-      if(!nm){ alert("Enter your kid's name first."); return; }
-      DB.ref("poll/votes/"+id).set(JSON.parse(JSON.stringify({...existing,plus1:true,kidName:nm})));
-    }else{
+    if(existing.plus1){
       DB.ref("poll/votes/"+id).set(JSON.parse(JSON.stringify({...existing,plus1:false,kidName:null})));
+    }else{
+      const nm=(kidDraft[id]||"").trim();
+      if(!nm){alert("Enter your kid's name first.");return;}
+      DB.ref("poll/votes/"+id).set(JSON.parse(JSON.stringify({...existing,plus1:true,kidName:nm})));
     }
-  });
-
-  const counts={yes:0,no:0,plus1:0};
-  Object.values(votes||{}).forEach(v=>{
-    if(v?.choice==="yes")counts.yes++;
-    if(v?.choice==="no")counts.no++;
-    if(v?.plus1)counts.plus1++;
   });
 
   return(
     <div>
-      <div className="mini-card" style={{marginBottom:16,textAlign:"center"}}>
+      <div className="mini-card" style={{marginBottom:14,textAlign:"center"}}>
         <p style={{color:"#fbbf24",fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:700,marginBottom:4}}>{poll.venue}</p>
-        <p style={{color:"#a5b4fc",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>{new Date(poll.date+"T"+poll.time).toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"})} · {poll.time}</p>
-        <div style={{display:"flex",justifyContent:"center",gap:18,marginTop:12,marginBottom:14}}>
-          <span style={{color:"#34d399",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>✅ {counts.yes} Yes</span>
-          <span style={{color:"#f87171",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>❌ {counts.no} No</span>
-          <span style={{color:"#fbbf24",fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>➕ {counts.plus1} Kids</span>
+        <p style={{color:"#a5b4fc",fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}>{new Date(poll.date+"T"+poll.time).toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"})} · {poll.time}</p>
+        <div style={{display:"flex",justifyContent:"center",gap:18,marginTop:10,marginBottom:12}}>
+          <span style={{color:"#34d399",fontSize:13,fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>✅ {counts.yes} Yes</span>
+          <span style={{color:"#f87171",fontSize:13,fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>❌ {counts.no} No</span>
+          <span style={{color:"#fbbf24",fontSize:13,fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>➕ {counts.plus1} Kids</span>
         </div>
         <ShareButton label="📤 Share Poll" buildText={()=>{
           const yesNames=Object.entries(votes||{}).filter(([,v])=>v?.choice==="yes").map(([id])=>roster?.[id]?.name).filter(Boolean).sort();
@@ -3421,7 +3481,8 @@ function PollVoteTab({roster,poll,votes,passphrase}){
           return txt;
         }}/>
       </div>
-      <p className="section-title">Tap a name to vote</p>
+
+      <p className="section-title">Tap your name to vote</p>
       {entries.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No players in the roster yet — ask admin to add the team.</p>}
       {entries.map(([id,p])=>{
         const v=votes?.[id]||{};
@@ -3429,56 +3490,47 @@ function PollVoteTab({roster,poll,votes,passphrase}){
         const hasVoted=v.choice==="yes"||v.choice==="no";
         const showKidInput=plus1Open===id;
         return(
-          <div key={id} className="mini-card" style={{marginBottom:6,padding:"10px 12px",border:isMe?"1.5px solid rgba(245,158,11,.5)":undefined}}>
-            <div className="flex items-center justify-between">
-              <span style={{fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:4,minWidth:0}}>
+          <div key={id} className="mini-card" style={{marginBottom:6,padding:"10px 12px",border:isMe?"1.5px solid rgba(245,158,11,.5)":"1px solid #3730a3"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+              <span style={{fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:5,overflow:"hidden"}}>
                 <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>
                 {p.keeper&&<span style={{fontSize:11}}>🧤</span>}
-                {isMe&&<span style={{color:"#fbbf24",fontSize:9}}>(you)</span>}
+                {isMe&&<span style={{color:"#fbbf24",fontSize:9,fontFamily:"'JetBrains Mono',monospace"}}>(you)</span>}
               </span>
-
-              {/* Default: compact icon row. After voting: a single tappable badge showing the choice. */}
-              {hasVoted ? (
-                <button onClick={()=>setChoice(id,v.choice)} style={{
-                  flexShrink:0,padding:"4px 10px",borderRadius:20,border:"none",cursor:"pointer",fontWeight:700,fontSize:11,fontFamily:"'Inter',sans-serif",
-                  background:v.choice==="yes"?"linear-gradient(135deg,#34d399,#10b981)":"linear-gradient(135deg,#dc2626,#991b1b)",
-                  color:v.choice==="yes"?"#111":"#fff"
-                }} title="Tap to change">{v.choice==="yes"?"✅ Yes":"❌ No"} ✕</button>
-              ) : (
-                <div style={{display:"flex",gap:6,flexShrink:0}}>
-                  <button onClick={()=>setChoice(id,"yes")} style={{width:30,height:30,borderRadius:"50%",border:"1.5px solid rgba(52,211,153,.4)",background:"rgba(52,211,153,.1)",color:"#34d399",cursor:"pointer",fontSize:14}}>✅</button>
-                  <button onClick={()=>setChoice(id,"no")} style={{width:30,height:30,borderRadius:"50%",border:"1.5px solid rgba(239,68,68,.4)",background:"rgba(239,68,68,.1)",color:"#f87171",cursor:"pointer",fontSize:14}}>❌</button>
-                </div>
-              )}
-
-              {/* +1 toggle — always available regardless of Yes/No, sits to the right of the choice */}
-              <button onClick={()=>{
-                  if(v.plus1){ togglePlus1(id); return; } // already on -> tapping removes it directly
-                  setPlus1Open(plus1Open===id?null:id); // not on yet -> reveal the name field
-                }}
-                style={{flexShrink:0,marginLeft:8,width:30,height:30,borderRadius:"50%",border:`1.5px solid ${v.plus1?"transparent":"rgba(245,158,11,.4)"}`,
-                background:v.plus1?"linear-gradient(135deg,#f59e0b,#d97706)":"rgba(245,158,11,.1)",color:v.plus1?"#111":"#fbbf24",cursor:"pointer",fontSize:14}}
-                title={v.plus1?`Bringing ${v.kidName} — tap to remove`:"Bringing a kid?"}>➕</button>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                {hasVoted?(
+                  <button onClick={()=>setChoice(id,v.choice)} style={{padding:"4px 10px",borderRadius:20,border:"none",cursor:"pointer",fontWeight:700,fontSize:11,
+                    background:v.choice==="yes"?"linear-gradient(135deg,#34d399,#10b981)":"linear-gradient(135deg,#dc2626,#991b1b)",
+                    color:v.choice==="yes"?"#111":"#fff"}}>{v.choice==="yes"?"✅ Yes":"❌ No"} ✕</button>
+                ):(
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>setChoice(id,"yes")} style={{width:32,height:32,borderRadius:"50%",border:"1.5px solid rgba(52,211,153,.4)",background:"rgba(52,211,153,.1)",color:"#34d399",cursor:"pointer",fontSize:15}}>✅</button>
+                    <button onClick={()=>setChoice(id,"no")} style={{width:32,height:32,borderRadius:"50%",border:"1.5px solid rgba(239,68,68,.4)",background:"rgba(239,68,68,.1)",color:"#f87171",cursor:"pointer",fontSize:15}}>❌</button>
+                  </div>
+                )}
+                <button onClick={()=>{if(v.plus1){togglePlus1(id);return;}setPlus1Open(plus1Open===id?null:id);}}
+                  style={{width:32,height:32,borderRadius:"50%",border:`1.5px solid ${v.plus1?"transparent":"rgba(245,158,11,.4)"}`,
+                  background:v.plus1?"linear-gradient(135deg,#f59e0b,#d97706)":"rgba(245,158,11,.1)",
+                  color:v.plus1?"#111":"#fbbf24",cursor:"pointer",fontSize:15}}
+                  title={v.plus1?`Bringing ${v.kidName} — tap to remove`:"Bringing a kid?"}>➕</button>
+              </div>
             </div>
-
-            {/* Kid's name field — only appears the moment you tap ➕ and haven't set one yet */}
             {showKidInput&&!v.plus1&&(
               <div style={{display:"flex",gap:6,marginTop:8}}>
                 <input value={kidDraft[id]||""} onChange={e=>setKidDraft(d=>({...d,[id]:e.target.value}))}
-                  onKeyDown={e=>e.key==="Enter"&&togglePlus1(id)} placeholder="Kid's name" autoFocus
-                  style={{flex:1,fontSize:12,padding:"7px 10px"}}/>
-                <button onClick={()=>togglePlus1(id)} style={{padding:"7px 12px",borderRadius:10,border:"1.5px solid rgba(245,158,11,.4)",background:"transparent",color:"#fbbf24",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Add</button>
+                  onKeyDown={e=>e.key==="Enter"&&togglePlus1(id)} placeholder="Kid's name" autoFocus style={{flex:1,fontSize:12,padding:"7px 10px"}}/>
+                <button onClick={()=>togglePlus1(id)} style={{padding:"7px 12px",borderRadius:10,border:"1.5px solid rgba(245,158,11,.4)",background:"transparent",color:"#fbbf24",cursor:"pointer",fontWeight:700,fontSize:12}}>Add</button>
               </div>
             )}
             {v.plus1&&<p style={{fontSize:11,color:"#fbbf24",marginTop:6}}>➕ Bringing {v.kidName}</p>}
           </div>
         );
       })}
-      <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:14}}>{passphrase?"First vote on this device asks for the club passphrase — stays unlocked after that.":""} Tap your colored badge to change your vote.</p>
+      {passphrase&&<p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:14}}>Club passphrase required once per device.</p>}
 
       {passModal&&(
         <Modal onClose={()=>setPassModal(null)} title="🔑 Club Passphrase">
-          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Enter the shared club passphrase to vote. Ask admin if you don't have it — only needed once on this device.</p>
+          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Enter the shared club passphrase to vote. Only needed once on this device.</p>
           <input value={passTry} onChange={e=>{setPassTry(e.target.value);setPassErr("");}} placeholder="Passphrase" autoFocus onKeyDown={e=>e.key==="Enter"&&confirmPass()} style={{marginBottom:8}}/>
           {passErr&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{passErr}</p>}
           <button className="btn btn-primary w-full" onClick={confirmPass}>Confirm</button>
@@ -3487,140 +3539,126 @@ function PollVoteTab({roster,poll,votes,passphrase}){
     </div>
   );
 }
-
-// ── Captain-led team builder — anyone can open this and assign players, then publish ──
-function PollTeamsTab({roster,poll,votes,teams}){
+function PollTeamsTab({roster,poll,votes,teams,role}){
+  const[showBuilder,setShowBuilder]=React.useState(false);
   const[capA,setCapA]=React.useState(teams?.captainA||"");
   const[capB,setCapB]=React.useState(teams?.captainB||"");
   const[teamA,setTeamA]=React.useState(teams?.teamA||[]);
   const[teamB,setTeamB]=React.useState(teams?.teamB||[]);
-  const[unlocked,setUnlocked]=React.useState(false);   // becomes true once the admin PIN has been entered THIS session
-  const[pinPrompt,setPinPrompt]=React.useState(false);  // showing the "enter admin PIN to edit" modal
-  const[pinTry,setPinTry]=React.useState("");
-  const[pinErr,setPinErr]=React.useState("");
+  const isAdmin=role==="admin";
 
   React.useEffect(()=>{
-    setCapA(teams?.captainA||""); setCapB(teams?.captainB||"");
-    setTeamA(teams?.teamA||[]); setTeamB(teams?.teamB||[]);
+    setCapA(teams?.captainA||"");setCapB(teams?.captainB||"");
+    setTeamA(teams?.teamA||[]);setTeamB(teams?.teamB||[]);
   },[teams]);
 
-  if(!poll) return <Centered emoji="🏏" title="No poll open right now" sub="Teams are built from this week's poll responses."/>;
-
-  // Once a lineup is published, it's "live" and shouldn't be casually rearranged by anyone with the
-  // link — that's the actual bug being fixed here. Editing controls are locked behind the admin PIN
-  // until unlocked for this session; admin can share the PIN with whichever captain needs to make a
-  // change, same as they already do for scoring access.
-  const isLocked = teams?.published && !unlocked;
-  const requireUnlock=(action)=>{
-    if(!isLocked){ action(); return; }
-    setPinPrompt(true);
+  const nameOf=(id)=>roster?.[id]?.name||"(removed)";
+  const publish=()=>{
+    if(!capA.trim()||!capB.trim()){alert("Enter both captains' names.");return;}
+    if(teamA.length===0||teamB.length===0){alert("Both teams need at least one player.");return;}
+    if(!FB_OK||!DB){alert("Offline.");return;}
+    DB.ref("poll/teams").set({captainA:capA.trim(),captainB:capB.trim(),teamA,teamB,published:true,publishedAt:Date.now()})
+      .then(()=>{alert("Teams published!");setShowBuilder(false);})
+      .catch(e=>alert("Failed: "+e.message));
   };
-  const confirmPin=()=>{
-    if(pinTry!==ADMIN_PIN){ setPinErr("Wrong PIN."); return; }
-    setUnlocked(true); setPinPrompt(false); setPinTry(""); setPinErr("");
+  const moveTo=(id,team)=>{
+    setTeamA(a=>a.filter(x=>x!==id));setTeamB(b=>b.filter(x=>x!==id));
+    if(team==="A")setTeamA(a=>[...a,id]);
+    if(team==="B")setTeamB(b=>[...b,id]);
   };
-
+  const remove=(id)=>{setTeamA(a=>a.filter(x=>x!==id));setTeamB(b=>b.filter(x=>x!==id));};
   const yesIds=Object.entries(votes||{}).filter(([,v])=>v?.choice==="yes").map(([id])=>id);
-  const yesPlayers=yesIds.map(id=>({id,...(roster?.[id]||{name:"(removed player)"})})).sort((a,b)=>a.name.localeCompare(b.name));
+  const yesPlayers=yesIds.map(id=>({id,...(roster?.[id]||{name:"(removed)"})})).sort((a,b)=>a.name.localeCompare(b.name));
   const assigned=new Set([...teamA,...teamB]);
   const unassigned=yesPlayers.filter(p=>!assigned.has(p.id));
 
-  const moveTo=(id,team)=>requireUnlock(()=>{
-    setTeamA(a=>a.filter(x=>x!==id));
-    setTeamB(b=>b.filter(x=>x!==id));
-    if(team==="A") setTeamA(a=>[...a.filter(x=>x!==id),id]);
-    if(team==="B") setTeamB(b=>[...b.filter(x=>x!==id),id]);
-  });
-  const remove=(id)=>requireUnlock(()=>{ setTeamA(a=>a.filter(x=>x!==id)); setTeamB(b=>b.filter(x=>x!==id)); });
-
-  const publish=()=>requireUnlock(()=>{
-    if(!capA.trim()||!capB.trim()){alert("Enter both captains' names.");return;}
-    if(teamA.length===0||teamB.length===0){alert("Both teams need at least one player.");return;}
-    if(!FB_OK||!DB){alert("Offline — can't publish right now.");return;}
-    DB.ref("poll/teams").set({captainA:capA.trim(),captainB:capB.trim(),teamA,teamB,published:true,publishedAt:Date.now()})
-      .then(()=>alert("Teams published! Everyone can now see the lineup."))
-      .catch(e=>alert("Failed: "+e.message));
-  });
-
-  const nameOf=(id)=>roster?.[id]?.name||"(removed player)";
-
-  return(
+  // ── Published teams view — for everyone ───────────────────────────────────
+  const PublishedView=()=>(
     <div>
-      {isLocked&&(
-        <div style={{background:"rgba(245,158,11,.1)",border:"1px solid rgba(245,158,11,.35)",borderRadius:14,padding:"12px 14px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-          <span style={{fontSize:12,color:"#fbbf24",fontFamily:"'Inter',sans-serif"}}>🔒 Teams are published — ask admin for the PIN to make changes.</span>
-          <button onClick={()=>setPinPrompt(true)} style={{background:"rgba(245,158,11,.2)",border:"1px solid rgba(245,158,11,.5)",color:"#fbbf24",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Unlock</button>
-        </div>
-      )}
-      <div className="mini-card" style={{marginBottom:16,opacity:isLocked?.6:1}}>
-        <p className="section-title">👑 Captains for this week</p>
-        <div className="grid-2">
-          <div>
-            <label>Team A Captain</label>
-            <input value={capA} onChange={e=>requireUnlock(()=>setCapA(e.target.value))} readOnly={isLocked} placeholder="Captain A's name"/>
-          </div>
-          <div>
-            <label>Team B Captain</label>
-            <input value={capB} onChange={e=>requireUnlock(()=>setCapB(e.target.value))} readOnly={isLocked} placeholder="Captain B's name"/>
-          </div>
+      <div style={{background:"rgba(52,211,153,.1)",border:"1px solid rgba(52,211,153,.3)",borderRadius:14,padding:"10px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:16}}>✅</span>
+        <div>
+          <p style={{fontWeight:700,fontSize:13,color:"#34d399"}}>Teams Announced!</p>
+          {teams.publishedAt&&<p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>{new Date(teams.publishedAt).toLocaleString()}</p>}
         </div>
       </div>
+      <div className="grid-2" style={{gap:12,marginBottom:16}}>
+        {[["A","#fbbf24","🟡",teams.captainA,teamA],["B","#6ee7b7","⚡",teams.captainB,teamB]].map(([t,col,em,cap,list])=>(
+          <div key={t} style={{background:"rgba(255,255,255,.04)",border:`1.5px solid ${t==="A"?"rgba(245,158,11,.3)":"rgba(52,211,153,.3)"}`,borderRadius:16,padding:"14px 12px"}}>
+            <p style={{fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,color:col,marginBottom:2}}>{em} Team {t}</p>
+            {cap&&<p style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:10}}>Captain: {cap}</p>}
+            {(list||[]).map(id=>(
+              <div key={id} style={{fontSize:12,padding:"5px 0",borderBottom:"1px solid rgba(255,255,255,.05)",display:"flex",alignItems:"center",gap:6}}>
+                <span style={{width:5,height:5,borderRadius:"50%",background:col,flexShrink:0,display:"inline-block"}}/>
+                {nameOf(id)}{roster?.[id]?.keeper&&" 🧤"}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      <ShareButton label="📤 Share Lineup" buildText={()=>{
+        const dateStr=poll?new Date(poll.date+"T"+poll.time).toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"}):"";
+        return `🏏 LCC Teams${poll?` — ${poll.venue} · ${dateStr} ${poll.time}`:""}\n\n🟡 Team A${teams.captainA?` (${teams.captainA})`:""}:\n${(teamA||[]).map(id=>"  • "+nameOf(id)).join("\n")||"  —"}\n\n⚡ Team B${teams.captainB?` (${teams.captainB})`:""}:\n${(teamB||[]).map(id=>"  • "+nameOf(id)).join("\n")||"  —"}`;
+      }}/>
+      {isAdmin&&<button onClick={()=>setShowBuilder(true)} style={{width:"100%",marginTop:12,padding:"10px",borderRadius:12,border:"1px solid rgba(99,102,241,.35)",background:"transparent",color:"#a5b4fc",cursor:"pointer",fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}>✏️ Edit Teams (Admin)</button>}
+    </div>
+  );
 
-      <p className="section-title">Available (voted Yes) — {unassigned.length} unassigned</p>
-      {unassigned.length===0&&yesPlayers.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"14px 0"}}>No Yes votes yet — check the Vote tab.</p>}
+  // ── Team builder — admin only ──────────────────────────────────────────────
+  const BuilderView=()=>(
+    <div>
+      {teams?.published&&<button onClick={()=>setShowBuilder(false)} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",marginBottom:12}}>← Back to published teams</button>}
+      <div className="mini-card" style={{marginBottom:14}}>
+        <p className="section-title">👑 Captains</p>
+        <div className="grid-2">
+          <div><label>Team A Captain</label><input value={capA} onChange={e=>setCapA(e.target.value)} placeholder="Captain A"/></div>
+          <div><label>Team B Captain</label><input value={capB} onChange={e=>setCapB(e.target.value)} placeholder="Captain B"/></div>
+        </div>
+      </div>
+      <p className="section-title">Available — {unassigned.length} unassigned</p>
+      {unassigned.length===0&&yesPlayers.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"12px 0"}}>No Yes votes yet.</p>}
       {unassigned.map(p=>(
-        <div key={p.id} className="mini-card" style={{marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between",opacity:isLocked?.6:1}}>
-          <span style={{fontSize:13,fontWeight:600}}>{p.name} {p.keeper&&"🧤"} <span style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>{p.role}</span></span>
+        <div key={p.id} className="mini-card" style={{marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:13,fontWeight:600}}>{p.name}{p.keeper&&" 🧤"} <span style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>{p.role}</span></span>
           <div style={{display:"flex",gap:6}}>
             <button onClick={()=>moveTo(p.id,"A")} style={{background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.4)",color:"#fbbf24",borderRadius:8,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>→ A</button>
             <button onClick={()=>moveTo(p.id,"B")} style={{background:"rgba(52,211,153,.15)",border:"1px solid rgba(52,211,153,.4)",color:"#6ee7b7",borderRadius:8,padding:"6px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>→ B</button>
           </div>
         </div>
       ))}
-
-      <div className="divider" style={{margin:"18px 0"}}/>
-      <div className="grid-2" style={{gap:12,opacity:isLocked?.6:1}}>
-        <div>
-          <p className="section-title" style={{color:"#fbbf24"}}>🟡 Team A ({teamA.length}){capA&&` · ${capA}`}</p>
-          {teamA.map(id=>(
-            <div key={id} className="mini-card" style={{marginBottom:6,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:12}}>{nameOf(id)}</span>
-              <button onClick={()=>remove(id)} style={{background:"none",border:"none",color:"#6b7280",cursor:"pointer",fontSize:14}}>×</button>
-            </div>
-          ))}
-        </div>
-        <div>
-          <p className="section-title" style={{color:"#6ee7b7"}}>⚡ Team B ({teamB.length}){capB&&` · ${capB}`}</p>
-          {teamB.map(id=>(
-            <div key={id} className="mini-card" style={{marginBottom:6,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:12}}>{nameOf(id)}</span>
-              <button onClick={()=>remove(id)} style={{background:"none",border:"none",color:"#6b7280",cursor:"pointer",fontSize:14}}>×</button>
-            </div>
-          ))}
-        </div>
+      <div className="divider" style={{margin:"16px 0"}}/>
+      <div className="grid-2" style={{gap:12}}>
+        {[["A","#fbbf24","🟡",capA,teamA],["B","#6ee7b7","⚡",capB,teamB]].map(([t,col,em,cap,list])=>(
+          <div key={t}>
+            <p className="section-title" style={{color:col}}>{em} Team {t} ({list.length}){cap&&` · ${cap}`}</p>
+            {list.map(id=>(
+              <div key={id} className="mini-card" style={{marginBottom:6,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:12}}>{nameOf(id)}</span>
+                <button onClick={()=>remove(id)} style={{background:"none",border:"none",color:"#6b7280",cursor:"pointer",fontSize:14}}>×</button>
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
+      <button className="btn btn-primary w-full" style={{marginTop:16}} onClick={publish}>📢 {teams?.published?"Update & Re-publish":"Publish Teams"}</button>
+    </div>
+  );
 
-      <button className="btn btn-primary w-full" style={{marginTop:18}} onClick={publish}>📢 {teams?.published?"Update & Re-publish":"Publish Teams"}</button>
-      {teams?.published&&(
-        <div style={{textAlign:"center",marginTop:10}}>
-          <p style={{color:"#34d399",fontSize:11,fontFamily:"'JetBrains Mono',monospace",marginBottom:10}}>✓ Published — visible to everyone</p>
-          <ShareButton label="📤 Share Lineup" buildText={()=>{
-            const dateStr=poll?new Date(poll.date+"T"+poll.time).toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"}):"";
-            let txt=`🏏 LCC Teams${poll?` — ${poll.venue} · ${dateStr} ${poll.time}`:""}\n\n🟡 Team A${capA?` (${capA})`:""}:\n${teamA.map(id=>"  • "+nameOf(id)).join("\n")||"  —"}\n\n⚡ Team B${capB?` (${capB})`:""}:\n${teamB.map(id=>"  • "+nameOf(id)).join("\n")||"  —"}`;
-            return txt;
-          }}/>
-        </div>
-      )}
-      <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:10}}>Even after the match starts, you can come back here and adjust who's on which team if plans change.</p>
-
-      {pinPrompt&&(
-        <Modal onClose={()=>{setPinPrompt(false);setPinTry("");setPinErr("");}} title="🔒 Admin PIN required">
-          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Teams are already published. Enter the admin PIN to make further changes — ask admin if you don't have it.</p>
-          <input value={pinTry} onChange={e=>{setPinTry(e.target.value.replace(/\D/g,"").slice(0,4));setPinErr("");}} placeholder="••••" inputMode="numeric" maxLength={4} autoFocus onKeyDown={e=>e.key==="Enter"&&confirmPin()} style={{marginBottom:8,letterSpacing:"0.4em",textAlign:"center",fontSize:18}}/>
-          {pinErr&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{pinErr}</p>}
-          <button className="btn btn-primary w-full" onClick={confirmPin}>Unlock</button>
-        </Modal>
-      )}
+  // ── Routing ───────────────────────────────────────────────────────────────
+  if(!poll) return(
+    <div style={{textAlign:"center",padding:"40px 0"}}>
+      <div style={{fontSize:40,marginBottom:10}}>🏏</div>
+      <p style={{fontWeight:600,marginBottom:4}}>No poll open</p>
+      <p style={{color:"#6b7280",fontSize:13}}>Teams are built from this week's poll responses.</p>
+    </div>
+  );
+  if(teams?.published&&!showBuilder) return <PublishedView/>;
+  if(isAdmin) return <BuilderView/>;
+  return(
+    <div style={{textAlign:"center",padding:"40px 0"}}>
+      <div style={{fontSize:40,marginBottom:10}}>⏳</div>
+      <p style={{fontWeight:600,marginBottom:4}}>Teams not announced yet</p>
+      <p style={{color:"#6b7280",fontSize:13}}>Check back once the admin has finalised and published the teams.</p>
     </div>
   );
 }
