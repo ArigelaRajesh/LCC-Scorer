@@ -2879,6 +2879,76 @@ function LCCLogo(){
   );
 }
 
+// ── WeatherWidget — cycles between ⛅ temp and 🕐 time under the logo ─────────
+function wmoEmoji(code){
+  if(code===0)return"☀️";
+  if(code<=3)return"⛅";
+  if(code<=48)return"🌫️";
+  if(code<=67)return"🌧️";
+  if(code<=77)return"❄️";
+  if(code<=82)return"🌦️";
+  return"⛈️";
+}
+function WeatherWidget(){
+  const[temp,setTemp]=React.useState(null);
+  const[emoji,setEmoji]=React.useState("🌡️");
+  const[time,setTime]=React.useState("");
+  const[show,setShow]=React.useState(0); // 0=weather, 1=time
+
+  const tick=()=>setTime(new Date().toLocaleTimeString("en-US",
+    {timeZone:"America/Chicago",hour:"numeric",minute:"2-digit",hour12:true}));
+
+  const fetchWx=()=>{
+    // Open-Meteo v1 — free, no key, Lindenhurst IL
+    fetch("https://api.open-meteo.com/v1/forecast?latitude=42.3831&longitude=-87.8939"+
+      "&current=temperature_2m,weather_code&temperature_unit=fahrenheit"+
+      "&timezone=America/Chicago&forecast_days=1")
+      .then(r=>r.json())
+      .then(d=>{
+        if(d?.current){
+          setTemp(Math.round(d.current.temperature_2m));
+          setEmoji(wmoEmoji(d.current.weather_code||0));
+        }
+      })
+      .catch(()=>{});
+  };
+
+  React.useEffect(()=>{
+    tick();fetchWx();
+    const ti=setInterval(tick,60*1000);
+    const wi=setInterval(fetchWx,15*60*1000);
+    // Cycle between weather and time every 3 seconds
+    const ci=setInterval(()=>setShow(s=>(s+1)%2),3000);
+    return()=>{clearInterval(ti);clearInterval(wi);clearInterval(ci);};
+  },[]);
+
+  if(!time)return null;
+
+  const base={
+    fontSize:10,fontFamily:"'JetBrains Mono',monospace",
+    color:"rgba(165,180,252,.7)",letterSpacing:".04em",
+    whiteSpace:"nowrap",textAlign:"center",
+    transition:"opacity .5s ease, transform .5s ease",
+  };
+
+  return(
+    <div style={{marginTop:5,height:14,overflow:"hidden",position:"relative",minWidth:90}}>
+      {/* Weather */}
+      <div style={{...base,position:"absolute",left:0,right:0,
+        opacity:show===0&&temp?1:0,
+        transform:show===0?`translateY(0)`:`translateY(-8px)`}}>
+        {emoji} {temp!==null?`${temp}°F`:"—"}
+      </div>
+      {/* Time */}
+      <div style={{...base,position:"absolute",left:0,right:0,
+        opacity:show===1?1:0,
+        transform:show===1?`translateY(0)`:`translateY(8px)`}}>
+        {time} CT
+      </div>
+    </div>
+  );
+}
+
 function Landing({onPick}){
   const[menuOpen,setMenuOpen]=React.useState(false);
   const[announcement,setAnnouncement]=React.useState(null);
@@ -2931,9 +3001,10 @@ function Landing({onPick}){
 
         {/* ── Top bar: LCC badge (left) · Club name (center) · Menu (right) ── */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4,position:"relative",zIndex:30,gap:8}}>
-          {/* LCC circular badge — just display, no tap action */}
-          <div style={{flexShrink:0}}>
+          {/* LCC logo + weather stacked on the left */}
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0}}>
             <LCCLogo/>
+            <WeatherWidget/>
           </div>
           {/* Lindenhurst Cricket Club — single line, centered */}
           <p style={{flex:1,textAlign:"center",color:"#fff",fontSize:15,fontWeight:700,letterSpacing:".02em",
