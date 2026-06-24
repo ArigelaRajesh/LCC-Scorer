@@ -2881,13 +2881,17 @@ function LCCLogo(){
 
 // ── WeatherWidget — cycles between ⛅ temp and 🕐 time under the logo ─────────
 function wmoEmoji(code){
-  if(code===0)return"☀️";
-  if(code<=3)return"⛅";
-  if(code<=48)return"🌫️";
-  if(code<=67)return"🌧️";
-  if(code<=77)return"❄️";
-  if(code<=82)return"🌦️";
-  return"⛈️";
+  if(code===0)return"☀️";                          // clear sky
+  if(code<=2)return"🌤️";                           // mainly clear
+  if(code===3)return"☁️";                           // overcast
+  if(code<=48)return"🌫️";                          // fog
+  if(code<=55)return"🌦️";                          // drizzle
+  if(code<=65)return"🌧️";                          // rain
+  if(code<=67)return"🌨️";                          // freezing rain
+  if(code<=77)return"❄️";                           // snow
+  if(code<=82)return"🌧️";                          // rain showers
+  if(code<=86)return"🌨️";                          // snow showers
+  return"⛈️";                                       // thunderstorm
 }
 function WeatherWidget(){
   const[temp,setTemp]=React.useState(null);
@@ -2899,15 +2903,19 @@ function WeatherWidget(){
     {timeZone:"America/Chicago",hour:"numeric",minute:"2-digit",hour12:true}));
 
   const fetchWx=()=>{
-    // Open-Meteo v1 — free, no key, Lindenhurst IL
+    // Request both current formats — Open-Meteo sometimes returns
+    // weather_code in `current` and sometimes in `current_weather`
     fetch("https://api.open-meteo.com/v1/forecast?latitude=42.3831&longitude=-87.8939"+
-      "&current=temperature_2m,weather_code&temperature_unit=fahrenheit"+
-      "&timezone=America/Chicago&forecast_days=1")
+      "&current=temperature_2m,weather_code&current_weather=true"+
+      "&temperature_unit=fahrenheit&timezone=America/Chicago&forecast_days=1")
       .then(r=>r.json())
       .then(d=>{
-        if(d?.current){
-          setTemp(Math.round(d.current.temperature_2m));
-          setEmoji(wmoEmoji(d.current.weather_code||0));
+        // Try both response shapes — use whichever has the data
+        const t=d?.current?.temperature_2m??d?.current_weather?.temperature;
+        const code=d?.current?.weather_code??d?.current_weather?.weathercode;
+        if(t!=null){
+          setTemp(Math.round(t));
+          setEmoji(wmoEmoji(code??0));
         }
       })
       .catch(()=>{});
