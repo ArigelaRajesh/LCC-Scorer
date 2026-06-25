@@ -366,33 +366,59 @@ function chipLbl(ev){
 // ── Setup (Admin only: teams, venue, toss — NO players) ──────────────────────
 function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
   const rA=useRef(),rB=useRef();
-  const[venue,setVenue]=useState(null);     // "lakes" | "millennium"
+  const[venue,setVenue]=useState(null);
   const[overs,setOvers]=useState(8);
   const[wkts,setWkts]=useState(6);
   const[customOv,setCustomOv]=useState(false);
   const[customWk,setCustomWk]=useState(false);
-  const[mWkts,setMWkts]=useState(10);        // Millennium Park wickets per side (default 10, raisable for extra players)
+  const[mWkts,setMWkts]=useState(10);
   const[customMWk,setCustomMWk]=useState(false);
-  const[mOvers,setMOvers]=useState(20);       // Millennium Park overs per side (default 20/T20, adjustable)
+  const[mOvers,setMOvers]=useState(20);
   const[customMOv,setCustomMOv]=useState(false);
-  // New/custom venue (typed by admin whenever playing somewhere not yet listed)
   const[customVenueName,setCustomVenueName]=useState("");
-  const[customVenueStyle,setCustomVenueStyle]=useState("lakes"); // "lakes" = flexible single/pair, "millennium" = fixed-format style
+  const[customVenueStyle,setCustomVenueStyle]=useState("lakes");
   const[cvOvers,setCvOvers]=useState(8);
   const[cvWkts,setCvWkts]=useState(10);
   const[cvSingle,setCvSingle]=useState(false);
   const[customCvOv,setCustomCvOv]=useState(false);
   const[customCvWk,setCustomCvWk]=useState(false);
-  const[single,setSingle]=useState(false);   // single-batsman mode (Lakes)
+  const[single,setSingle]=useState(false);
   const[pinA,setPinA]=useState(()=>String(Math.floor(1000+Math.random()*9000)));
   const[pinB,setPinB]=useState(()=>String(Math.floor(1000+Math.random()*9000)));
-  const[tossWinner,setTossWinner]=useState(null); // "A" | "B"
-  const[tossChoice,setTossChoice]=useState(null); // "bat" | "bowl"
+  const[tossWinner,setTossWinner]=useState(null);
+  const[tossChoice,setTossChoice]=useState(null);
   const[flipping,setFlipping]=useState(false);
-  const[coinResult,setCoinResult]=useState(null); // "heads" | "tails"
-  const[flipCount,setFlipCount]=useState(0); // increments each flip, used as a React key to force the result animation to restart
+  const[coinResult,setCoinResult]=useState(null);
+  const[flipCount,setFlipCount]=useState(0);
   const mountedRef=useRef(true);
-  const audioCtxRef = useRef(null);
+  const audioCtxRef=useRef(null);
+
+  // ── Published teams from poll ──────────────────────────────────────────────
+  const[pubTeams,setPubTeams]=useState(null);   // {captainA,captainB,teamA:[pids],teamB:[pids]}
+  const[roster,setRoster]=useState({});
+  const[imported,setImported]=useState(false);  // true once admin tapped "Use these teams"
+
+  React.useEffect(()=>{
+    if(!FB_OK||!DB) return;
+    const tRef=DB.ref("poll/teams");
+    const rRef=DB.ref("roster");
+    const tCb=tRef.on("value",s=>{const v=s.val();if(v?.published)setPubTeams(v);else setPubTeams(null);});
+    const rCb=rRef.on("value",s=>setRoster(s.val()||{}));
+    return()=>{tRef.off("value",tCb);rRef.off("value",rCb);};
+  },[]);
+
+  const importTeams=()=>{
+    if(!pubTeams) return;
+    const nameA=pubTeams.captainA||"Team A";
+    const nameB=pubTeams.captainB||"Team B";
+    if(rA.current) rA.current.value=nameA;
+    if(rB.current) rB.current.value=nameB;
+    setImported(true);
+  };
+
+  // Convert PIDs → player names for a team list
+  const teamNames=(pids)=>(pids||[]).map(id=>roster[id]?.name).filter(Boolean);
+
   React.useEffect(()=>()=>{mountedRef.current=false;},[]);
 
   // Defense in depth: Setup creates/configures matches and exposes the "reset live data" tool —
@@ -523,7 +549,10 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
       ?{venue:customVenueName.trim(),format:customVenueStyle==="millennium"?(Number(cvOvers)===20?"T20":"Custom"):"Casual",overs:Number(cvOvers),maxWkts:Number(cvWkts),single:customVenueStyle==="lakes"&&cvSingle}
       :{venue:"Lakes High School",format:"Casual",overs:Number(overs),maxWkts:Number(wkts),single:isSingle};
     onStart({teamA:a,teamB:b,battingFirst,bowlingFirst,pinA,pinB,
-      tossSummary:`${winnerName} won the toss, chose to ${tossChoice} first`,...v});
+      tossSummary:`${winnerName} won the toss, chose to ${tossChoice} first`,
+      pubTeamA: imported&&pubTeams ? teamNames(pubTeams.teamA) : [],
+      pubTeamB: imported&&pubTeams ? teamNames(pubTeams.teamB) : [],
+      ...v});
   };
   const clr=()=>{[rA,rB].forEach(r=>{if(r.current)r.current.value=""});setTossWinner(null);setTossChoice(null);rA.current?.focus();};
 
@@ -697,6 +726,45 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
 
           {venue&&<>
             <div className="divider"/>
+
+            {/* ── Published teams banner ── */}
+            {pubTeams&&(
+              <div style={{background:imported?"rgba(16,185,129,.1)":"rgba(167,139,250,.1)",
+                border:`1.5px solid ${imported?"rgba(16,185,129,.4)":"rgba(167,139,250,.4)"}`,
+                borderRadius:14,padding:"12px 14px",marginBottom:4}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                  <div>
+                    <p style={{fontSize:10,color:imported?"#34d399":"#c4b5fd",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:3}}>
+                      {imported?"✅ TEAMS IMPORTED":"📋 PUBLISHED TEAMS AVAILABLE"}
+                    </p>
+                    <p style={{fontSize:13,fontWeight:700}}>
+                      {pubTeams.captainA||"Team A"} <span style={{color:"#6b7280",fontWeight:400}}>vs</span> {pubTeams.captainB||"Team B"}
+                    </p>
+                    <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>
+                      {teamNames(pubTeams.teamA).length} players · {teamNames(pubTeams.teamB).length} players
+                    </p>
+                  </div>
+                  {!imported&&(
+                    <button onClick={importTeams} style={{
+                      flexShrink:0,padding:"9px 14px",borderRadius:12,border:"none",cursor:"pointer",
+                      background:"linear-gradient(135deg,#8b5cf6,#6366f1)",
+                      color:"#fff",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"
+                    }}>Use These →</button>
+                  )}
+                </div>
+                {imported&&(
+                  <div style={{marginTop:10,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    {[["🟡",pubTeams.captainA,pubTeams.teamA],["⚡",pubTeams.captainB,pubTeams.teamB]].map(([em,cap,pids])=>(
+                      <div key={cap} style={{background:"rgba(0,0,0,.2)",borderRadius:10,padding:"8px 10px"}}>
+                        <p style={{fontSize:10,color:"#9ca3af",marginBottom:4}}>{em} {cap}</p>
+                        {teamNames(pids).map(n=><p key={n} style={{fontSize:11,color:"#e2e8f0",lineHeight:1.6}}>{n}</p>)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid-2">
               <div><label>🏏 Team A</label><input ref={rA} placeholder="e.g. Mumbai XI"/></div>
               <div><label>⚡ Team B</label><input ref={rB} placeholder="e.g. Delhi XI"/></div>
@@ -799,14 +867,15 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
   const[nbwn,setNBWN]=useState("");
   const[ib,setIB]=useState(false);
   const[mo,setMO]=useState(null);
+  const[potm,setPotm]=useState(null); // Player of the Match voting
   const[flash,setFlash]=useState(false);
   const[inn1,setInn1]=useState(null);
   const[saved,setSaved]=useState(false);
   const[syncErr,setSyncErr]=useState(null);
   const[loaded,setLoaded]=useState(!FB_OK||!DB); // becomes true once we've checked Firebase for an existing match
   const[preEnd,setPreEnd]=useState(null); // snapshot before ending innings/match, so admin can revert
-  const[slotsA,setSlotsA]=useState([]);  // device IDs holding Team A's 2 scorer slots
-  const[slotsB,setSlotsB]=useState([]);  // device IDs holding Team B's 2 scorer slots
+
+
   const[roster,setRoster]=useState({});  // club roster — used to autocomplete names & stamp profile ids for stats
   const localChange=React.useRef(false); // true right after THIS device makes a change — skip the next incoming sync to avoid clobbering our own optimistic update
 
@@ -852,26 +921,34 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
       setInn1(v.inn1||null);
       setIB(!!v.ib);
       setMO(v.mo||null);
-      setSlotsA(Array.isArray(v.slotsA)?v.slotsA:[]);
-      setSlotsB(Array.isArray(v.slotsB)?v.slotsB:[]);
+      // potm is now on its own path — don't read from live node
+      // scorer slots removed
       setLoaded(true);
     },err=>{ console.error("live listener error",err); setSyncErr(err.message||"Could not read live match"); setLoaded(true); });
     return ()=>ref.off("value",cb);
   },[isScorer]);
 
+  // ── Standalone POTM listener — separate from live so sync never overwrites it ──
+  React.useEffect(()=>{
+    if(!FB_OK||!DB)return;
+    const pRef=DB.ref("potm");
+    const pCb=pRef.on("value",s=>setPotm(s.val()||null));
+    return()=>pRef.off("value",pCb);
+  },[]);
+
   React.useEffect(()=>{
     if(!isScorer||!FB_OK||!DB||!loaded)return;
     // Firebase rejects undefined — strip via JSON round-trip
-    // NOTE: slotsA/slotsB are included here (preserved from the last read) so this full-node
-    // overwrite never erases the scorer-slot locks claimed via ScorerGate.
-    const payload=JSON.parse(JSON.stringify({match,inn,inn1,ib,mo,pinA:match?.pinA||null,pinB:match?.pinB||null,teamA:match?.teamA||null,teamB:match?.teamB||null,battingTeam:inn?.battingTeam||null,slotsA,slotsB,t:Date.now()}));
+
+
+    const payload=JSON.parse(JSON.stringify({match,inn,inn1,ib,mo,pinA:match?.pinA||null,pinB:match?.pinB||null,teamA:match?.teamA||null,teamB:match?.teamB||null,battingTeam:inn?.battingTeam||null,t:Date.now()}));
     localChange.current=true;
     DB.ref("live").set(payload).then(()=>{if(syncErr)setSyncErr(null);}).catch(e=>{console.error("sync failed",e);setSyncErr(e.message||"Write blocked — check Firebase rules");});
-  },[match,inn,inn1,ib,mo,isScorer,loaded,slotsA,slotsB]);
+  },[match,inn,inn1,ib,mo,isScorer,loaded]);
 
   React.useEffect(()=>{
     if(!isScorer||!FB_OK||!DB||!mo||saved||!inn)return;
-    const histPayload=JSON.parse(JSON.stringify({result:mo,inn1:inn1||null,inn2:inn,teamA:match?.teamA,teamB:match?.teamB,tossSummary:match?.tossSummary||null,venue:inn.venue,format:inn.format,overs:inn.overs,maxWkts:inn.maxWkts,finishedAt:Date.now()}));
+    const histPayload=JSON.parse(JSON.stringify({result:mo,inn1:inn1||null,inn2:inn,teamA:match?.teamA,teamB:match?.teamB,tossSummary:match?.tossSummary||null,venue:inn.venue,format:inn.format,overs:inn.overs,maxWkts:inn.maxWkts,potm:potm?.winner||null,finishedAt:Date.now()}));
     DB.ref("history").push(histPayload).then(()=>setSaved(true)).catch(e=>console.error("hist save failed",e));
   },[mo,saved,isScorer,inn,inn1,match]);
 
@@ -932,23 +1009,29 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
   const endInnings=(i)=>{
     if(i.inningsNum===1){setInn1(JSON.parse(JSON.stringify(i)));setIB(true);return;}
     const t=i.target;
-    if(i.totalRuns<t-1) setMO({winner:i.bowlingTeam,margin:`${t-1-i.totalRuns} run${t-1-i.totalRuns===1?"":"s"}`});
-    else if(i.totalRuns===t-1) setMO({winner:null});
-    else setMO({winner:i.battingTeam,margin:`${i.maxWkts-i.wickets} wicket${i.maxWkts-i.wickets===1?"":"s"}`});
+    if(i.totalRuns<t-1){setMO({winner:i.bowlingTeam,margin:`${t-1-i.totalRuns} run${t-1-i.totalRuns===1?"":"s"}`});if(FB_OK&&DB)DB.ref("potm").set({open:true,votes:{}}).catch(()=>{});}
+    else if(i.totalRuns===t-1){setMO({winner:null});if(FB_OK&&DB)DB.ref("potm").set({open:true,votes:{}}).catch(()=>{});}
+    else{setMO({winner:i.battingTeam,margin:`${i.maxWkts-i.wickets} wicket${i.maxWkts-i.wickets===1?"":"s"}`});if(FB_OK&&DB)DB.ref("potm").set({open:true,votes:{}}).catch(()=>{});}
   };
 
   // Snapshot before ending innings/match, so admin can revert
   const manualEndInnings=()=>{
     if(!inn)return;
     if(!confirm(inn.inningsNum===1?"End the 1st innings now?":"End the match now?"))return;
+    // Save preEnd snapshot to Firebase so super admin can revert after refresh
     setPreEnd({inn:JSON.parse(JSON.stringify(inn)),inn1:inn1?JSON.parse(JSON.stringify(inn1)):null,ib,mo});
+    if(FB_OK&&DB) DB.ref("live/_preEnd").set(JSON.parse(JSON.stringify({inn,inn1:inn1||null,ib:!!ib,mo:mo||null}))).catch(()=>{});
     endInnings(inn);
   };
   const revert=()=>{
-    if(!preEnd)return;
+    if(!preEnd&&FB_OK&&DB){
+      DB.ref("live/_preEnd").once("value").then(s=>{const v=s.val();if(v?.inn)setPreEnd(v);}).catch(()=>{});
+    }
     if(!confirm("Revert and bring the match back to live? This undoes the innings/match end."))return;
+    if(!preEnd)return;
     setInn(preEnd.inn);setInn1(preEnd.inn1);setIB(false);setMO(null);setSaved(false);
     setPreEnd(null);
+    if(FB_OK&&DB) DB.ref("live/_preEnd").remove().catch(()=>{});
   };
 
   const undo=()=>{
@@ -956,6 +1039,12 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     const prev=hist[hist.length-1];
     setHist(h=>h.slice(0,-1));
     setInn({...prev,pending:null});
+    // Clear all pending states so "who bowls/bats next?" UI disappears after undo
+    setNNB(false);
+    setPW(false);
+    setPR(false);
+    setNBN("");
+    setNBWN("");
     setFlash(true);setTimeout(()=>setFlash(false),500);
   };
 
@@ -992,11 +1081,13 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
       const r=parseInt(ev.runs)||0; rT=r;rS=r;rB=r;cross=false;
     }
     else if(ev.type==="OT"){
-      // Overthrow: total runs = base + overthrow, both credited to striker.
-      // Strike rotates based on BASE RUNS only (the runs they actually ran before the overthrow).
-      // Overthrow runs themselves never affect strike rotation.
-      const r=(ev.baseRuns||0)+(ev.overthrowRuns||0); rT=r;rS=r;rB=r;
-      cross=(ev.baseRuns||0)%2===1;
+      // Overthrow strike rotation rules:
+      // D1/D2 (declared overthrow): only batter's physical runs determine strike — overthrow runs DON'T count
+      // Normal overthrow (1,2,3,4): TOTAL runs (bat runs + overthrow) determine strike change
+      const bRuns=ev.baseRuns||0;
+      const oRuns=ev.overthrowRuns||0;
+      const r=bRuns+oRuns; rT=r;rS=r;rB=r;
+      cross=ev.isDeclOT ? bRuns%2===1 : (bRuns+oRuns)%2===1;
     }
     else{const r=parseInt(ev.type);rT=r;rS=r;rB=r;if(r%2===1)cross=true;}
 
@@ -1047,7 +1138,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     if(cross){ i=swap(i); }
     setInn(i);
     if(i.totalBalls>=i.overs*6){endInnings(i);return;}
-    if(i.target!==null&&i.totalRuns>=i.target){setMO({winner:i.battingTeam,margin:`${i.maxWkts-i.wickets} wicket${i.maxWkts-i.wickets===1?"":"s"}`});return;}
+    if(i.target!==null&&i.totalRuns>=i.target){setMO({winner:i.battingTeam,margin:`${i.maxWkts-i.wickets} wicket${i.maxWkts-i.wickets===1?"":"s"}`});if(FB_OK&&DB)DB.ref("potm").set({open:true,votes:{}}).catch(()=>{});return;}
     if(overDone){ setInn(p=>({...p,pending:"newBowler"})); }
   };
 
@@ -1108,7 +1199,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
   if(!inn)   return null;
   if(inn.awaitingOpeners) return<OpenersForm inn={inn} match={match} onSubmit={fillOpeners} role={role} onExit={onExit} rosterNames={rosterNames}/>;
   if(ib)     return<InningsBreak inn={inn} match={match} onStart={start2} role={role} onRevert={revert} canRevert={!!preEnd} onExit={onExit} rosterNames={rosterNames}/>;
-  if(mo)     return<MatchOver result={mo} inn={inn} inn1={inn1} match={match} role={role} onRevert={revert} canRevert={!!preEnd} onNew={()=>{setMatch(null);setInn(null);setMO(null);setInn1(null);setPreEnd(null);}}/>;
+  if(mo) return<MatchOver result={mo} inn={inn} inn1={inn1} match={match} potm={potm} role={role} onRevert={revert} canRevert={!!preEnd} onNew={()=>{setMatch(null);setInn(null);setMO(null);setInn1(null);setPreEnd(null);setPotm(null);if(FB_OK&&DB)DB.ref("potm").remove().catch(()=>{});}}/>;
 
   const SK=inn.batsmen[inn.strikerName];
   const NS=inn.nonStrikerName?inn.batsmen[inn.nonStrikerName]:null;
@@ -1119,7 +1210,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
   const rrr=inn.target&&bLeft>0?((req/bLeft)*6).toFixed(2):null;
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e 0%,#0a2540 24%,#1c1150 52%,#2d0f5c 76%,#0a0414 100%)",minHeight:"100vh"}}>
+    <div style={{background:"linear-gradient(165deg,#022c1e 0%,#0a2540 24%,#1c1150 52%,#2d0f5c 76%,#0a0414 100%)",minHeight:"100dvh"}}>
 
       {syncErr&&(
         <div style={{background:"rgba(239,68,68,.15)",borderBottom:"1px solid rgba(239,68,68,.5)",padding:"8px 14px",textAlign:"center"}}>
@@ -1141,8 +1232,8 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
             {role==="admin"&&<AdminActionsMenu
               onHistory={onHistory} onAnnounce={onAnnounce}
               inn={inn} onEditMatchSave={({overs,maxWkts})=>setInn(p=>({...p,overs,maxWkts}))}
-              match={match} slotsA={slotsA} slotsB={slotsB}
-              onClearSlots={()=>{setSlotsA([]);setSlotsB([]);}}
+              match={match}
+             
             />}
             {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
           </div>
@@ -1169,6 +1260,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
 
       <div className="content">
         {tab==="score"&&<ScoreTab inn={inn} SK={SK} NS={NS} BW={BW} record={record} rosterNames={rosterNames}
+          match={match}
           pw={pw} nbn={nbn} setNBN={setNBN} confBatsman={confBatsman}
           nnb={nnb} nbwn={nbwn} setNBWN={setNBWN} confBowler={confBowler}
           pr={pr} onRetire={retire}
@@ -1243,7 +1335,7 @@ function QuickAddPlayer({onAdded,onCancel}){
   );
 }
 
-function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onSwapStrike,onFixPlayers,onEndInnings,onRevert,canRevert,role,onUndo,canUndo}){
+function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onSwapStrike,onFixPlayers,onEndInnings,onRevert,canRevert,role,onUndo,canUndo}){
   const[wt,setWT]=useState("Bowled");
   const[fielder,setFielder]=useState("");
   const[roRuns,setRoRuns]=useState(0);      // runs completed before the run-out happened
@@ -1298,7 +1390,9 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb
     setEM(null);setER(0);
   };
   const doOT=()=>{
-    record({type:"OT",baseRuns:otBase,overthrowRuns:otThrow});
+    const isDeclOT=typeof otThrow==="string";
+    const oRuns=isDeclOT?parseInt(otThrow[1]):otThrow;
+    record({type:"OT",baseRuns:otBase,overthrowRuns:oRuns,isDeclOT});
     setShowOT(false);setOTBase(0);setOTThrow(1);
   };
 
@@ -1314,18 +1408,40 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb
             const batting=new Set([SK,NS].filter(Boolean));
             const avail=(rosterNames||[]).filter(n=>!batting.has(n)&&!dismissed.includes(n));
             if(!avail.length) return null;
+            // Show published team players first, then rest of roster
+            const pubPlayers=(match?.pubTeamA&&match?.pubTeamB)
+              ? (inn.battingTeam===match.teamA ? match.pubTeamA : match.pubTeamB)
+              : [];
+            const teamFirst=avail.filter(n=>pubPlayers.includes(n));
+            const others=avail.filter(n=>!pubPlayers.includes(n));
             return(
               <div style={{marginBottom:10}}>
                 <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Tap to bring in:</p>
-                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                  {avail.map(n=>(
-                    <button key={n} onClick={()=>confBatsman(n)} style={{
-                      padding:"7px 13px",borderRadius:10,border:"1.5px solid rgba(99,102,241,.4)",
-                      background:"rgba(99,102,241,.12)",color:"#c4b5fd",fontSize:13,cursor:"pointer",
-                      fontFamily:"'Inter',sans-serif",fontWeight:600,touchAction:"manipulation"
-                    }}>{n}</button>
-                  ))}
-                </div>
+                {teamFirst.length>0&&<>
+                  <p style={{fontSize:9,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>— {inn.battingTeam} squad —</p>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                    {teamFirst.map(n=>(
+                      <button key={n} onClick={()=>confBatsman(n)} style={{
+                        padding:"7px 13px",borderRadius:10,
+                        border:"1.5px solid rgba(245,158,11,.5)",
+                        background:"rgba(245,158,11,.12)",color:"#fbbf24",fontSize:13,cursor:"pointer",
+                        fontFamily:"'Inter',sans-serif",fontWeight:600,touchAction:"manipulation"
+                      }}>{n}</button>
+                    ))}
+                  </div>
+                </>}
+                {others.length>0&&<>
+                  {teamFirst.length>0&&<p style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>— other players —</p>}
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {others.map(n=>(
+                      <button key={n} onClick={()=>confBatsman(n)} style={{
+                        padding:"7px 13px",borderRadius:10,border:"1.5px solid rgba(99,102,241,.4)",
+                        background:"rgba(99,102,241,.12)",color:"#a5b4fc",fontSize:13,cursor:"pointer",
+                        fontFamily:"'Inter',sans-serif",fontWeight:600,touchAction:"manipulation"
+                      }}>{n}</button>
+                    ))}
+                  </div>
+                </>}
               </div>
             );
           })()}
@@ -1367,38 +1483,46 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb
           {(()=>{
             const avail=(rosterNames||[]).filter(n=>n!==inn.bowlerName);
             if(!avail.length) return null;
-            // Split: already bowled (familiar) vs fresh bowlers
             const bowled=new Set(inn.bowlingOrder||[]);
-            const fresh=avail.filter(n=>!bowled.has(n));
-            const prev=avail.filter(n=>bowled.has(n));
+            // Published bowling team players
+            const pubPlayers=(match?.pubTeamA&&match?.pubTeamB)
+              ? (inn.battingTeam===match.teamA ? match.pubTeamB : match.pubTeamA)
+              : [];
+            const teamFresh=avail.filter(n=>pubPlayers.includes(n)&&!bowled.has(n));
+            const teamPrev=avail.filter(n=>pubPlayers.includes(n)&&bowled.has(n));
+            const otherFresh=avail.filter(n=>!pubPlayers.includes(n)&&!bowled.has(n));
+            const otherPrev=avail.filter(n=>!pubPlayers.includes(n)&&bowled.has(n));
+            const BowlBtn=({n,prev})=>{
+              const b=inn.bowlers?.[n];
+              return(
+                <button key={n} onClick={()=>confBowler(n)} style={{
+                  padding:"7px 13px",borderRadius:10,touchAction:"manipulation",
+                  border:`1.5px solid ${prev?"rgba(99,102,241,.4)":"rgba(245,158,11,.5)"}`,
+                  background:prev?"rgba(99,102,241,.12)":"rgba(245,158,11,.1)",
+                  color:prev?"#a5b4fc":"#fbbf24",fontSize:13,cursor:"pointer",
+                  fontFamily:"'Inter',sans-serif",fontWeight:600
+                }}>{n}{prev&&b?<span style={{fontSize:10,opacity:.7,marginLeft:4}}>{b.overs}.{b.ballsThisOver}-{b.runs}-{b.wickets}</span>:""}</button>
+              );
+            };
+            const bowlingTeam=inn.battingTeam===match?.teamA?match?.teamB:match?.teamA;
             return(
               <div style={{marginBottom:10}}>
-                {fresh.length>0&&<>
-                  <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>New bowlers:</p>
+                {teamFresh.length>0&&<>
+                  <p style={{fontSize:9,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>{bowlingTeam?`— ${bowlingTeam} bowlers —`:"New bowlers:"}</p>
                   <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
-                    {fresh.map(n=>(
-                      <button key={n} onClick={()=>confBowler(n)} style={{
-                        padding:"7px 13px",borderRadius:10,border:"1.5px solid rgba(99,102,241,.4)",
-                        background:"rgba(99,102,241,.12)",color:"#a5b4fc",fontSize:13,cursor:"pointer",
-                        fontFamily:"'Inter',sans-serif",fontWeight:600,touchAction:"manipulation"
-                      }}>{n}</button>
-                    ))}
+                    {teamFresh.map(n=><BowlBtn key={n} n={n} prev={false}/>)}
                   </div>
                 </>}
-                {prev.length>0&&<>
-                  <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Bowled before:</p>
+                {teamPrev.length>0&&<>
+                  <p style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>Bowled before:</p>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                    {teamPrev.map(n=><BowlBtn key={n} n={n} prev={true}/>)}
+                  </div>
+                </>}
+                {(otherFresh.length>0||otherPrev.length>0)&&<>
+                  {(teamFresh.length>0||teamPrev.length>0)&&<p style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>— other —</p>}
                   <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                    {prev.map(n=>{
-                      const b=inn.bowlers?.[n];
-                      return(
-                        <button key={n} onClick={()=>confBowler(n)} style={{
-                          padding:"7px 13px",borderRadius:10,border:"1.5px solid rgba(99,102,241,.4)",
-                          background:nbwn===n?"linear-gradient(135deg,#6366f1,#8b5cf6)":"rgba(99,102,241,.12)",
-                          color:nbwn===n?"#fff":"#a5b4fc",fontSize:13,cursor:"pointer",
-                          fontFamily:"'Inter',sans-serif",fontWeight:600,touchAction:"manipulation"
-                        }}>{n}{b?<span style={{fontSize:10,opacity:.7,marginLeft:4}}>{b.overs}.{b.ballsThisOver}-{b.runs}-{b.wickets}</span>:""}</button>
-                      );
-                    })}
+                    {[...otherFresh,...otherPrev].map(n=><BowlBtn key={n} n={n} prev={bowled.has(n)}/>)}
                   </div>
                 </>}
               </div>
@@ -1569,21 +1693,63 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,pw,nbn,setNBN,confBatsman,nnb
 
       {/* Overthrow modal */}
       {showOT&&<Modal onClose={()=>setShowOT(false)} title="🔄 Overthrow">
-        <p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:4}}>Runs completed before the overthrow:</p>
+        <p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:4}}>Runs batters completed before the overthrow:</p>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14}}>
           {[0,1,2,3].map(r=>(
-            <button key={r} onClick={()=>setOTBase(r)} style={{padding:"10px",borderRadius:12,border:`1.5px solid ${otBase===r?"transparent":"#374151"}`,background:otBase===r?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:otBase===r?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>{r}</button>
+            <button key={r} onClick={()=>setOTBase(r)} style={{padding:"10px",borderRadius:12,
+              border:`1.5px solid ${otBase===r?"transparent":"#374151"}`,
+              background:otBase===r?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",
+              color:otBase===r?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,
+              fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>{r}</button>
           ))}
         </div>
-        <p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:4}}>Overthrow runs <span style={{color:"#fb923c"}}>(credited to striker · doesn't affect who faces next)</span>:</p>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14}}>
+
+        <p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:4}}>
+          Overthrow runs <span style={{color:"#fb923c"}}>(normal: 1-4)</span>:
+        </p>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:8}}>
           {[1,2,3,4].map(r=>(
-            <button key={r} onClick={()=>setOTThrow(r)} style={{padding:"10px",borderRadius:12,border:`1.5px solid ${otThrow===r?"transparent":"#374151"}`,background:otThrow===r?"linear-gradient(135deg,#fb923c,#ea580c)":"transparent",color:otThrow===r?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>{r}</button>
+            <button key={r} onClick={()=>setOTThrow(r)} style={{padding:"10px",borderRadius:12,
+              border:`1.5px solid ${otThrow===r?"transparent":"#374151"}`,
+              background:otThrow===r?"linear-gradient(135deg,#fb923c,#ea580c)":"transparent",
+              color:otThrow===r?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,
+              fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>{r}</button>
           ))}
         </div>
-        <div style={{background:"rgba(251,146,60,.1)",border:"1px solid rgba(251,146,60,.3)",borderRadius:12,padding:"10px 14px",marginBottom:14,textAlign:"center"}}>
-          <span style={{color:"#fb923c",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>{otBase} runs + {otThrow} overthrow = <strong style={{fontSize:16,color:"#fff"}}>{otBase+otThrow} runs</strong> to striker · strike stays</span>
+
+        <p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:4}}>
+          Declared overthrow <span style={{color:"#a78bfa"}}>(D1/D2 — strike based on batter runs only):</span>
+        </p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+          {["D1","D2"].map(d=>(
+            <button key={d} onClick={()=>setOTThrow(d)} style={{padding:"10px",borderRadius:12,
+              border:`1.5px solid ${otThrow===d?"transparent":"rgba(167,139,250,.4)"}`,
+              background:otThrow===d?"linear-gradient(135deg,#7c3aed,#6d28d9)":"rgba(167,139,250,.08)",
+              color:otThrow===d?"#fff":"#a78bfa",cursor:"pointer",fontWeight:700,
+              fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>{d}</button>
+          ))}
         </div>
+
+        {/* Strike preview */}
+        {(()=>{
+          const isDeclOT=typeof otThrow==="string";
+          const oRuns=isDeclOT?parseInt(otThrow[1]):otThrow;
+          const total=otBase+oRuns;
+          const strikeChanges=isDeclOT?otBase%2===1:(total)%2===1;
+          return(
+            <div style={{background:"rgba(251,146,60,.1)",border:"1px solid rgba(251,146,60,.3)",
+              borderRadius:12,padding:"10px 14px",marginBottom:14,textAlign:"center"}}>
+              <p style={{color:"#fb923c",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>
+                {otBase} bat + {isDeclOT?otThrow:otThrow+" overthrow"} = <strong style={{fontSize:16,color:"#fff"}}>{total} total</strong>
+              </p>
+              <p style={{color:strikeChanges?"#34d399":"#a5b4fc",fontSize:11,fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>
+                {strikeChanges?"⇄ Strike CHANGES":"→ Strike STAYS"}
+                {isDeclOT&&<span style={{color:"#6b7280"}}> (declared — only bat runs count)</span>}
+              </p>
+            </div>
+          );
+        })()}
+
         <button className="btn btn-primary w-full" style={{borderRadius:14}} onClick={doOT}>Confirm Overthrow</button>
       </Modal>}
     </div>
@@ -1676,7 +1842,7 @@ function PinMgmtModal({onClose}){
 // Replaces the 6-button overflow row with a tidy dropdown. Navigation items
 // (History, Notice) close the menu and navigate. Modal items manage their own
 // open state locally so the dropdown stays out of their way.
-function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,slotsA,slotsB,onClearSlots}){
+function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match}){
   const[open,setOpen]=React.useState(false);
   const[editOpen,setEditOpen]=React.useState(false);
   const[pinMgmtOpen,setPinMgmtOpen]=React.useState(false);
@@ -1757,7 +1923,6 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,slotsA
                 <p style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700,letterSpacing:"0.2em",color:"#fff"}}>{pin}</p>
               </div>
             ))}
-            {slotsA?.length>0||slotsB?.length>0?<button onClick={()=>{onClearSlots&&onClearSlots();setPinViewOpen(false);}} style={{marginTop:4,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",borderRadius:10,padding:"8px",fontSize:12,cursor:"pointer",fontWeight:600}}>🔄 Clear Scorer Slots</button>:null}
           </div>
         </Modal>
       )}
@@ -1919,32 +2084,24 @@ function EditMatchButton({inn,onSave}){
   </>);
 }
 
-function PinButton({match,slotsA,slotsB,onClearSlots}){
+function PinButton({match}){
   const[open,setOpen]=React.useState(false);
   if(!match||!match.pinA||!match.pinB) return null;
   const copy=(txt)=>{ if(navigator.clipboard) navigator.clipboard.writeText(txt).catch(()=>{}); };
-  const sA = slotsA||[], sB = slotsB||[];
   return(<>
     <button onClick={()=>setOpen(true)} style={{background:"rgba(245,158,11,.12)",border:"1px solid rgba(245,158,11,.35)",color:"#fbbf24",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>🔑 PINs</button>
     {open&&(
       <Modal onClose={()=>setOpen(false)} title="🔑 Team Scorer PINs">
-        {[["🏏",match.teamA,match.pinA,"#fbbf24",sA],["⚡",match.teamB,match.pinB,"#34d399",sB]].map(([emoji,team,pin,color,slots])=>(
+        {[["🏏",match.teamA,match.pinA,"#fbbf24"],["⚡",match.teamB,match.pinB,"#34d399"]].map(([emoji,team,pin,color])=>(
           <div key={team} style={{marginBottom:14}}>
-            <p style={{color:color,fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:6}}>{emoji} {team}</p>
-            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
-              <div style={{flex:1,textAlign:"center",letterSpacing:"0.4em",fontSize:24,fontWeight:700,background:"rgba(7,5,15,.8)",border:`1.5px solid ${color}66`,borderRadius:12,padding:"10px",color:color,fontFamily:"'JetBrains Mono',monospace"}}>{pin}</div>
-              <button onClick={()=>copy(pin)} style={{padding:"10px 13px",borderRadius:12,border:`1.5px solid ${color}66`,background:"transparent",color:color,cursor:"pointer",fontSize:16}} title="Copy PIN">📋</button>
+            <p style={{color,fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:6}}>{emoji} {team}</p>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <div style={{flex:1,textAlign:"center",letterSpacing:"0.4em",fontSize:24,fontWeight:700,background:"rgba(7,5,15,.8)",border:`1.5px solid ${color}66`,borderRadius:12,padding:"10px",color,fontFamily:"'JetBrains Mono',monospace"}}>{pin}</div>
+              <button onClick={()=>copy(pin)} style={{padding:"10px 13px",borderRadius:12,border:`1.5px solid ${color}66`,background:"transparent",color,cursor:"pointer",fontSize:16}} title="Copy PIN">📋</button>
             </div>
-            <p style={{fontSize:10,color:slots.length>=2?"#f87171":"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>{slots.length}/2 scorer slots in use{slots.length>=2?" · full":""}</p>
           </div>
         ))}
-        {(sA.length>0||sB.length>0)&&(
-          <button onClick={()=>{ if(confirm("Free up all scorer slots? Both teams' currently-connected scorers will need to re-enter their PIN to continue.")) onClearSlots&&onClearSlots(); }}
-            style={{width:"100%",marginTop:4,padding:"9px",borderRadius:10,border:"1px solid rgba(239,68,68,.4)",background:"rgba(239,68,68,.1)",color:"#f87171",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',sans-serif"}}>
-            🔓 Free All Slots (if a scorer's device is lost)
-          </button>
-        )}
-        <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:10}}>Admin PIN ({ADMIN_PIN}) always works as a master key too.</p>
+        <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:10}}>Admin PIN ({ADMIN_PIN}) always works as master key.</p>
       </Modal>
     )}
   </>);
@@ -2225,7 +2382,120 @@ function buildScorecardCanvas(i1,i2,result,match){
 }
 
 // ── Match Over ────────────────────────────────────────────────────────────────
-function MatchOver({result,inn,inn1,match,role,onRevert,canRevert,onNew}){
+// ── Player of the Match Voting ────────────────────────────────────────────────
+function POTMVoting({inn,inn1,potm,role}){
+  const deviceId=React.useMemo(()=>{try{let id=localStorage.getItem("lcc_device_id");return id||"d_"+Math.random().toString(36).slice(2);}catch(e){return "d_"+Math.random().toString(36).slice(2);}},[]);
+  const[myName,setMyName]=React.useState(()=>{try{return localStorage.getItem("lcc_potm_voter")||null;}catch(e){return null;}});
+
+  // All players who batted or bowled in either innings
+  const participants=React.useMemo(()=>{
+    const s=new Set();
+    [inn1,inn].forEach(i=>{if(!i)return;Object.keys(i.batsmen||{}).forEach(n=>s.add(n));(i.bowlingOrder||[]).forEach(n=>s.add(n));});
+    return[...s].sort();
+  },[inn,inn1]);
+
+  const votes=potm?.votes||{};
+  const counts={};
+  Object.values(votes).forEach(v=>{if(v?.votedFor)counts[v.votedFor]=(counts[v.votedFor]||0)+1;});
+  const totalVotes=Object.values(counts).reduce((a,b)=>a+b,0);
+  const myVote=votes[deviceId]?.votedFor||null;
+
+  const castVote=(name)=>{
+    if(!myName||!FB_OK||!DB)return;
+    DB.ref("potm/votes/"+deviceId).set({voter:myName,votedFor:name,at:Date.now()}).catch(()=>{});
+  };
+
+  const closeAndAnnounce=()=>{
+    if(!FB_OK||!DB)return;
+    let winner=null,max=0;
+    Object.entries(counts).forEach(([n,c])=>{if(c>max){max=c;winner=n;}});
+    if(!winner&&participants.length>0)winner=participants[0];
+    DB.ref("potm").update({open:false,winner,closedAt:Date.now()}).catch(()=>{});
+    // Show on home screen ticker
+    DB.ref("announcement").set({text:`🏆 Player of the Match: ${winner}! (${max} vote${max===1?"":"s"})`,by:"LCC",ts:Date.now()}).catch(()=>{});
+  };
+
+  // ── Winner declared ────────────────────────────────────────────────────────
+  if(potm?.winner){
+    const winnerVotes=counts[potm.winner]||0;
+    return(
+      <div style={{background:"linear-gradient(135deg,rgba(245,158,11,.18),rgba(239,68,68,.1))",border:"2px solid rgba(245,158,11,.5)",borderRadius:20,padding:"20px 18px",marginTop:20,textAlign:"center"}}>
+        <div style={{fontSize:42,marginBottom:6}}>🏆</div>
+        <p style={{fontSize:10,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".2em",marginBottom:6}}>PLAYER OF THE MATCH</p>
+        <p style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700,color:"#fbbf24",marginBottom:4}}>{potm.winner}</p>
+        <p style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>{winnerVotes} vote{winnerVotes===1?"":"s"} · {totalVotes} total</p>
+      </div>
+    );
+  }
+
+  if(!potm?.open) return null;
+
+  // ── Step 1: Identify yourself ──────────────────────────────────────────────
+  if(!myName){
+    return(
+      <div style={{background:"rgba(99,102,241,.08)",border:"1.5px solid rgba(99,102,241,.3)",borderRadius:20,padding:"18px 16px",marginTop:20}}>
+        <p style={{fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:700,marginBottom:4}}>🏆 Player of the Match</p>
+        <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Who are you? Pick your name to cast your vote.</p>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+          {participants.map(n=>(
+            <button key={n} onClick={()=>{setMyName(n);try{localStorage.setItem("lcc_potm_voter",n);}catch(e){}}}
+              style={{padding:"8px 14px",borderRadius:10,border:"1.5px solid rgba(99,102,241,.4)",
+                background:"rgba(99,102,241,.12)",color:"#a5b4fc",fontSize:13,cursor:"pointer",
+                fontFamily:"'Inter',sans-serif",fontWeight:600}}>
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Step 2: Cast your vote ─────────────────────────────────────────────────
+  const sorted=[...participants].sort((a,b)=>(counts[b]||0)-(counts[a]||0));
+  return(
+    <div style={{background:"rgba(99,102,241,.08)",border:"1.5px solid rgba(99,102,241,.3)",borderRadius:20,padding:"18px 16px",marginTop:20}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <div>
+          <p style={{fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:700,marginBottom:2}}>🏆 Player of the Match</p>
+          <p style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>Voting as {myName}{myVote?` · voted for ${myVote}`:""}</p>
+        </div>
+        <button onClick={()=>{setMyName(null);try{localStorage.removeItem("lcc_potm_voter");}catch(e){}}}
+          style={{background:"none",border:"none",color:"#6b7280",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Not you?</button>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+        {sorted.filter(n=>n!==myName).map(n=>{
+          const c=counts[n]||0;
+          const pct=totalVotes>0?Math.round((c/totalVotes)*100):0;
+          const isMyVote=myVote===n;
+          return(
+            <button key={n} onClick={()=>castVote(n)} style={{
+              display:"flex",alignItems:"center",justifyContent:"space-between",
+              padding:"11px 14px",borderRadius:14,cursor:"pointer",
+              border:isMyVote?"2px solid #fbbf24":"1.5px solid rgba(99,102,241,.3)",
+              background:isMyVote?"rgba(245,158,11,.15)":"rgba(255,255,255,.03)",
+              color:"#fff",textAlign:"left",position:"relative",overflow:"hidden"
+            }}>
+              {/* vote bar */}
+              <div style={{position:"absolute",left:0,top:0,bottom:0,width:pct+"%",background:"rgba(245,158,11,.08)",transition:"width .4s ease"}}/>
+              <span style={{fontWeight:isMyVote?700:500,fontSize:14,position:"relative"}}>{n}{isMyVote&&<span style={{color:"#fbbf24",marginLeft:6,fontSize:11}}>✓ your vote</span>}</span>
+              <span style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",position:"relative"}}>{c} vote{c===1?"":"s"}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p style={{fontSize:10,color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",marginBottom:role==="admin"?10:0}}>{totalVotes} vote{totalVotes===1?"":"s"} cast · {Object.keys(votes).length} player{Object.keys(votes).length===1?"":"s"} voted</p>
+      {role==="admin"&&(
+        <button onClick={closeAndAnnounce} style={{
+          width:"100%",padding:"12px",borderRadius:14,border:"none",cursor:"pointer",
+          background:"linear-gradient(135deg,#f59e0b,#d97706)",
+          color:"#111",fontWeight:700,fontSize:14,fontFamily:"'Inter',sans-serif"
+        }}>🏆 Close Voting & Announce Winner</button>
+      )}
+    </div>
+  );
+}
+
+function MatchOver({result,inn,inn1,match,potm,role,onRevert,canRevert,onNew}){
   const[saving,setSaving]=React.useState(false);
 
   const downloadScorecard=()=>{
@@ -2279,6 +2549,10 @@ function MatchOver({result,inn,inn1,match,role,onRevert,canRevert,onNew}){
           )}
           <button className="btn btn-ghost" onClick={onNew} style={{padding:"13px 20px",fontSize:14}}>🏏 New Match</button>
         </div>
+
+        {/* Player of the Match voting */}
+        <POTMVoting inn={inn} inn1={inn1} potm={potm} role={role}/>
+
         <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,marginTop:16}}>Full batting & bowling scorecard saved as image</p>
       </div>
     </div>
@@ -2333,7 +2607,7 @@ function ViewerLive({onExit}){
   const BW=inn.bowlers[inn.bowlerName];
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh"}}>
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh"}}>
       <div className="score-header">
         <div className="flex items-center justify-between" style={{marginBottom:6}}>
           <span style={{fontSize:10,background:"rgba(16,185,129,.18)",color:"#34d399",border:"1px solid rgba(16,185,129,.4)",borderRadius:6,padding:"3px 9px",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>● LIVE</span>
@@ -2463,7 +2737,7 @@ function HistoryPage({role,onExit}){
   if(opened) return <MatchDetailView match={opened} role={role} onBack={()=>setOpenId(null)} onDelete={(id)=>{DB.ref("history/"+id).remove();setOpenId(null);}}/>;
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",padding:"20px 16px"}}>
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:18}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700}}>📚 Match History</h1>
@@ -2486,7 +2760,8 @@ function HistoryPage({role,onExit}){
               {m.inn2&&<div style={{fontSize:12,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn2.battingTeam}: {m.inn2.totalRuns}/{m.inn2.wickets} ({ovStr(m.inn2.totalBalls)})</div>}
               <div className="flex items-center justify-between" style={{marginTop:6}}>
                 <span style={{fontSize:10,color:"#4338ca",fontFamily:"'JetBrains Mono',monospace"}}>{m.venue}</span>
-                <span style={{fontSize:11,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>View scorecard →</span>
+                {m.potm&&<span style={{fontSize:10,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace"}}>🏆 {m.potm}</span>}
+                <span style={{fontSize:11,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>View →</span>
               </div>
               {role==="admin"&&<button onClick={(e)=>del(m.id,e)} style={{marginTop:8,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",borderRadius:10,padding:"6px 12px",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>🗑️ Delete</button>}
             </div>
@@ -2541,7 +2816,7 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
   const d=new Date(m.finishedAt);
   const r=m.result||{};
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",padding:"20px 16px"}}>
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:14}}>
           <button onClick={onBack} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← all matches</button>
@@ -2573,6 +2848,16 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
             {r.winner?`🏆 ${r.winner} won`:"Match Tied"}
           </h1>
           {r.winner&&r.margin&&<p style={{color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>by {r.margin}</p>}
+          {m.potm&&(
+            <div style={{marginTop:12,display:"inline-flex",alignItems:"center",gap:8,
+              background:"rgba(245,158,11,.12)",border:"1.5px solid rgba(245,158,11,.4)",
+              borderRadius:30,padding:"6px 16px"}}>
+              <span style={{fontSize:16}}>🏆</span>
+              <span style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontWeight:700}}>
+                POTM: {m.potm}
+              </span>
+            </div>
+          )}
           <div className="divider" style={{margin:"14px 0"}}/>
           {m.inn1&&<div className="score-summary-row"><span style={{fontWeight:600,fontSize:14}}>{m.inn1.battingTeam}</span><span style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:"#a5b4fc"}}>{m.inn1.totalRuns}/{m.inn1.wickets} <span style={{fontSize:12,color:"#6b7280"}}>({ovStr(m.inn1.totalBalls)})</span></span></div>}
           {m.inn2&&<div className="score-summary-row"><span style={{fontWeight:600,fontSize:14}}>{m.inn2.battingTeam}</span><span style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:"#a5b4fc"}}>{m.inn2.totalRuns}/{m.inn2.wickets} <span style={{fontSize:12,color:"#6b7280"}}>({ovStr(m.inn2.totalBalls)})</span></span></div>}
@@ -2923,11 +3208,26 @@ function WeatherWidget(){
 
   React.useEffect(()=>{
     tick();fetchWx();
-    const ti=setInterval(tick,60*1000);
-    const wi=setInterval(fetchWx,15*60*1000);
+
+    // Tick every second — guarantees clock is never stale, even after Chrome throttles the tab
+    const ti=setInterval(tick,1000);
+
+    // Refresh weather every 10 min
+    const wi=setInterval(fetchWx,10*60*1000);
+
     // Cycle between weather and time every 3 seconds
     const ci=setInterval(()=>setShow(s=>(s+1)%2),3000);
-    return()=>{clearInterval(ti);clearInterval(wi);clearInterval(ci);};
+
+    // Snap to current values the moment user returns to the tab
+    const onVisible=()=>{
+      if(document.visibilityState==='visible'){tick();fetchWx();}
+    };
+    document.addEventListener('visibilitychange',onVisible);
+
+    return()=>{
+      clearInterval(ti);clearInterval(wi);clearInterval(ci);
+      document.removeEventListener('visibilitychange',onVisible);
+    };
   },[]);
 
   if(!time)return null;
@@ -3007,24 +3307,27 @@ function Landing({onPick}){
       background:"linear-gradient(150deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#1c1150,#0a2540,#022c1e)",backgroundSize:"400% 400%",animation:"bgShift 22s ease infinite"}}>
       <div style={{width:"100%",maxWidth:"min(400px, 100%)",position:"relative",zIndex:1,paddingTop:"max(8px, env(safe-area-inset-top))"}}>
 
-        {/* ── Top bar: LCC badge (left) · Club name (center) · Menu (right) ── */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4,position:"relative",zIndex:30,gap:8}}>
-          {/* LCC logo + weather stacked on the left */}
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0}}>
+        {/* ── Top bar: CSS grid ensures club name is truly centred ── */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",
+          marginBottom:4,position:"relative",zIndex:30,gap:8}}>
+          {/* LCC logo + weather — left */}
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",flexShrink:0}}>
             <LCCLogo/>
             <WeatherWidget/>
           </div>
-          {/* Lindenhurst Cricket Club — single line, centered */}
-          <p style={{flex:1,textAlign:"center",color:"#fff",fontSize:15,fontWeight:700,letterSpacing:".02em",
+          {/* Club name — truly centred in the grid middle column */}
+          <p style={{textAlign:"center",color:"#fff",fontSize:15,fontWeight:700,letterSpacing:".02em",
             margin:0,whiteSpace:"nowrap",textShadow:"0 2px 10px rgba(2,4,15,.9)"}}>Lindenhurst Cricket Club</p>
-          {/* ☰ menu button — right, pulsing to draw attention */}
-          <button onClick={()=>setMenuOpen(o=>!o)} aria-label="Menu" style={{
-            flexShrink:0,width:50,height:50,borderRadius:14,cursor:"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",
-            background:"rgba(20,17,55,.85)",border:"1.5px solid rgba(99,102,241,.55)",
-            color:"#a5b4fc",fontSize:20,backdropFilter:"blur(10px)",
-            animation:menuOpen?"none":"menuPulse 2.4s ease-in-out infinite"
-          }}>{menuOpen?"✕":"☰"}</button>
+          {/* ☰ menu — right aligned */}
+          <div style={{display:"flex",justifyContent:"flex-end"}}>
+            <button onClick={()=>setMenuOpen(o=>!o)} aria-label="Menu" style={{
+              width:50,height:50,borderRadius:14,cursor:"pointer",
+              display:"flex",alignItems:"center",justifyContent:"center",
+              background:"rgba(20,17,55,.85)",border:"1.5px solid rgba(99,102,241,.55)",
+              color:"#a5b4fc",fontSize:20,backdropFilter:"blur(10px)",
+              animation:menuOpen?"none":"menuPulse 2.4s ease-in-out infinite"
+            }}>{menuOpen?"✕":"☰"}</button>
+          </div>
         </div>
 
         {menuOpen&&(<>
@@ -3121,57 +3424,35 @@ function Landing({onPick}){
 }
 
 function ScorerGate({onOk,onCancel}){
-  const[data,setData]=React.useState(undefined); // undefined=loading, null=no match, obj=match info
-  const[slotMsg,setSlotMsg]=React.useState(null); // transient message when a slot claim fails
+  const[data,setData]=React.useState(undefined);
   React.useEffect(()=>{
     if(!FB_OK||!DB){setData(null);return;}
     const ref=DB.ref("live");
     const cb=ref.on("value",s=>{
       const v=s.val();
       if(!v||!v.inn||!v.pinA||!v.pinB){setData(null);return;}
-      setData({pinA:v.pinA,pinB:v.pinB,teamA:v.teamA,teamB:v.teamB,battingTeam:v.battingTeam,
-        awaitingOpeners:!!v.inn.awaitingOpeners,ib:!!v.ib,mo:!!v.mo,
-        slotsA:Array.isArray(v.slotsA)?v.slotsA:[],slotsB:Array.isArray(v.slotsB)?v.slotsB:[]});
+      setData({pinA:v.pinA,pinB:v.pinB,teamA:v.teamA,teamB:v.teamB,
+        battingTeam:v.battingTeam,awaitingOpeners:!!v.inn.awaitingOpeners,ib:!!v.ib,mo:!!v.mo});
     });
     return ()=>ref.off("value",cb);
   },[]);
 
   if(data===undefined) return <Centered emoji="🔑" title="Checking match…" sub="Loading scorer access"/>;
-  if(data===null) return <Centered emoji="🏏" title="No active match yet" sub="Waiting for admin to start a match… this screen will update automatically once they do." onExit={onCancel}/>;
+  if(data===null) return <Centered emoji="🏏" title="No active match yet" sub="Waiting for admin to start a match." onExit={onCancel}/>;
   if(data.mo) return <Centered emoji="🏆" title="Match has ended" sub="Ask the admin to start a new match." onExit={onCancel}/>;
 
-  // Try to claim (or confirm an existing claim on) one of a team's 2 scorer slots for this device.
-  // Returns true if this device now has (or already had) a slot; false if both slots are taken by others.
-  const claimSlot=(teamKey, slotsField)=>{
-    const slots = data[slotsField];
-    if(slots.includes(DEVICE_ID)) return true; // already has a slot — always allowed back in
-    if(slots.length < 2){
-      const updated = [...slots, DEVICE_ID];
-      DB.ref(`live/${slotsField}`).set(updated).catch(e=>console.error("slot claim failed",e));
-      return true;
-    }
-    return false; // both slots full, and this device isn't one of them
-  };
-
   const verify=(entered)=>{
-    if(entered===ADMIN_PIN) return {ok:true};  // admin master key — not subject to the 2-slot limit
+    if(entered===ADMIN_PIN||entered===BASIC_ADMIN_PIN) return {ok:true};
     const isTeamA=entered===data.pinA, isTeamB=entered===data.pinB;
     if(!isTeamA&&!isTeamB) return {ok:false,msg:"❌ Wrong PIN, try again"};
     const myTeam=isTeamA?data.teamA:data.teamB;
-
-    // Enforce max 2 scorers per team (tracked by device, so the same phone can always rejoin)
-    const slotOk = isTeamA ? claimSlot(myTeam,"slotsA") : claimSlot(myTeam,"slotsB");
-    if(!slotOk) return {ok:false,msg:`🚫 Already 2 scorers active for ${myTeam}. Ask one of them to hand off, or have admin reset the match.`};
-
-    // During opener setup OR innings break (new team about to bat), both team scorers may enter
     if(data.awaitingOpeners||data.ib) return {ok:true};
-    // Otherwise only the currently-batting team can use the live scoring buttons
     if(myTeam===data.battingTeam) return {ok:true};
-    return {ok:false,msg:`🔒 ${myTeam} isn't batting right now. ${data.battingTeam} is batting — wait for your innings.`};
+    return {ok:false,msg:`🔒 ${myTeam} isn't batting yet — ${data.battingTeam} is batting now.`};
   };
 
   return <PinGate title="Team Scorer Access" verify={verify} onOk={onOk} onCancel={onCancel}
-    hint={data.awaitingOpeners?"Setting up openers — both teams can enter":data.ib?"Innings break — new batting team can set up":`${data.battingTeam} is batting now`}/>;
+    hint={data.awaitingOpeners?"Setting up openers":data.ib?"Innings break — new team sets up":`${data.battingTeam} batting`}/>;
 }
 
 // ── Weekend Poll: roster, RSVP voting, and captain-led team building ──────────
@@ -3197,7 +3478,7 @@ function PollPage({role,onExit}){
   if(roster===undefined||poll===undefined||passphrase===undefined) return <Centered emoji="📋" title="Loading poll…" onExit={onExit}/>;
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",padding:"20px 16px"}}>
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:16}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📋 Weekend Poll</h1>
@@ -3232,7 +3513,7 @@ function RosterPage({role,onExit}){
   if(roster===undefined||passphrase===undefined) return <Centered emoji="🏏" title="Loading…" onExit={onExit}/>;
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",padding:"20px 16px"}}>
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:4}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>🏏 Join the Club</h1>
@@ -3291,7 +3572,7 @@ function PollAdminPage({onExit}){
   },[]);
   if(poll===undefined) return <Centered emoji="📋" title="Loading…" onExit={onExit}/>;
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",padding:"20px 16px"}}>
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:18}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📋 This Week's Poll</h1>
@@ -3877,7 +4158,7 @@ function StatsPage({onExit}){
   };
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh"}}>
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh"}}>
       {/* ── Header ── */}
       <div style={{padding:"18px 16px 0"}}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
@@ -4089,7 +4370,7 @@ function AnnouncementPage({onExit}){
   };
   if(current===undefined) return <Centered emoji="📢" title="Loading…" onExit={onExit}/>;
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",padding:"20px 16px"}}>
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:18}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📢 Announcements</h1>
@@ -4245,7 +4526,7 @@ function PlayerToolsPage({onExit}){
   }
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",padding:"20px 16px"}}>
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:4}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:700}}>🔧 Player Tools</h1>
@@ -4292,7 +4573,7 @@ function VoteOnBehalfPage({onExit}){
   };
   const entries=Object.entries(roster||{}).sort((a,b)=>a[1].name.localeCompare(b[1].name));
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100vh",padding:"20px 16px"}}>
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",padding:"20px 16px"}}>
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:4}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:700}}>🗳️ Vote on Behalf</h1>
@@ -4413,37 +4694,65 @@ function AdminHome({tier,onPick,onExit}){
   const timeStr=hour<12?"Good morning ☀️":hour<17?"Good afternoon ⛅":"Good evening 🌙";
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",paddingBottom:32}}>
+    <div style={{
+      background: isSuper
+        ? "linear-gradient(165deg,#1a0a00,#2d1200,#1c1150,#2d0f5c,#0a0414)"
+        : "linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",
+      minHeight:"100dvh",paddingBottom:32
+    }}>
 
       {/* ── Header ── */}
-      <div style={{padding:"20px 18px 0"}}>
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
+      <div style={{
+        padding:"20px 18px 16px",
+        borderBottom: isSuper ? "1px solid rgba(245,158,11,.2)" : "1px solid rgba(99,102,241,.15)",
+        background: isSuper ? "rgba(245,158,11,.06)" : "rgba(99,102,241,.04)",
+        marginBottom:16
+      }}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12}}>
           <div>
-            <p style={{fontSize:12,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:3}}>{timeStr}</p>
-            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,lineHeight:1}}>
+            <p style={{fontSize:11,color:isSuper?"#fbbf24":"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginBottom:3,letterSpacing:".1em"}}>
+              {isSuper?"⚡ FULL ACCESS":"🛠️ HELPER ACCESS"}
+            </p>
+            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700,lineHeight:1,
+              color: isSuper?"#fde68a":"#fff"}}>
               {isSuper?"👑 Super Admin":"🛠️ Basic Admin"}
             </h1>
           </div>
-          <button onClick={onExit} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.3)",
-            color:"#a5b4fc",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",
+          <button onClick={onExit} style={{
+            background: isSuper?"rgba(245,158,11,.12)":"rgba(99,102,241,.12)",
+            border: isSuper?"1px solid rgba(245,158,11,.3)":"1px solid rgba(99,102,241,.3)",
+            color: isSuper?"#fbbf24":"#a5b4fc",
+            fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",
             borderRadius:10,padding:"7px 12px"}}>← home</button>
         </div>
-
-        {/* ── Live status pills ── */}
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:20}}>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {hasLive
             ?<Pill label={`● LIVE · ${live.battingTeam} ${live.totalRuns||0}/${live.wickets||0}`} color="52,211,153" dot/>
             :<Pill label="No active match" color="107,114,128"/>}
           {poll
-            ?<Pill label={`Poll open · ${yesCount} Yes / ${totalVotes} voted`} color="167,139,250" dot/>
+            ?<Pill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>
             :<Pill label="No poll open" color="107,114,128"/>}
           <Pill label={`${rosterCount} members`} color="99,102,241"/>
           <Pill label={`${histCount} matches`} color="245,158,11"/>
         </div>
       </div>
 
-      {/* ── Content ── */}
       <div style={{padding:"0 18px"}}>
+
+        {/* ── Super Admin exclusive section — shown FIRST so it's always visible ── */}
+        {isSuper&&(
+          <div style={{background:"rgba(239,68,68,.07)",border:"1.5px solid rgba(239,68,68,.25)",
+            borderRadius:18,padding:"14px 14px 12px",marginBottom:14}}>
+            <p style={{fontSize:9,color:"rgba(239,68,68,.8)",fontFamily:"'JetBrains Mono',monospace",
+              letterSpacing:".2em",fontWeight:700,marginBottom:10}}>👑 SUPER ADMIN ONLY</p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <Tile em="📢" title="Post Notice" sub="Home screen announcement" col="245,158,11"
+                onClick={()=>onPick("announce")} delay={.02}/>
+              <Tile em="🔐" title="Manage PINs" sub="Change admin PINs" col="239,68,68"
+                onClick={()=>onPick("pinMgmt")} delay={.04}/>
+            </div>
+          </div>
+        )}
 
         {/* Primary hero — Score a Match */}
         <Hero
@@ -4452,7 +4761,7 @@ function AdminHome({tier,onPick,onExit}){
           grad={hasLive
             ?"linear-gradient(135deg,#10b981,#059669)"
             :"linear-gradient(135deg,#f59e0b,#d97706)"}
-          onClick={()=>onPick("admin")}
+          onClick={()=>onPick(tier==="super"?"admin":"adminScore")}
         />
 
         {/* ── 2-column grid ── */}
@@ -4468,30 +4777,15 @@ function AdminHome({tier,onPick,onExit}){
             badge={rosterCount} onClick={()=>onPick("roster")} delay={.14}/>
         </div>
 
-        {/* ── Full-width tiles ── */}
         <Tile em="🔧" title="Player Tools" sub="Merge duplicates · link profiles · bulk add"
           col="52,211,153" full onClick={()=>onPick("playerTools")} delay={.17}/>
         <div style={{height:8}}/>
-        <Tile em="📚" title="Match History" sub={`${histCount} matches · view scorecards`+(isSuper?" · edit & delete":"")}
+        <Tile em="📚" title="Match History"
+          sub={`${histCount} matches · view scorecards`+(isSuper?" · edit & delete":"")}
           col="99,102,241" full onClick={()=>onPick("history")} delay={.2}/>
         <div style={{height:8}}/>
         <Tile em="📊" title="Stats & Records" sub="Leaderboard · player profiles · venue filter"
           col="245,158,11" full onClick={()=>onPick("stats")} delay={.23}/>
-
-        {/* ── Super admin only ── */}
-        {isSuper&&<>
-          <div style={{display:"flex",alignItems:"center",gap:8,margin:"16px 0 8px"}}>
-            <div style={{flex:1,height:1,background:"rgba(239,68,68,.2)"}}/>
-            <span style={{fontSize:9,color:"rgba(239,68,68,.6)",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".15em"}}>SUPER ADMIN ONLY</span>
-            <div style={{flex:1,height:1,background:"rgba(239,68,68,.2)"}}/>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <Tile em="📢" title="Post Notice" sub="Scrolling home screen ticker" col="245,158,11"
-              onClick={()=>onPick("announce")} delay={.26}/>
-            <Tile em="🔐" title="Manage PINs" sub="Change admin PINs" col="239,68,68"
-              onClick={()=>onPick("pinMgmt")} delay={.29}/>
-          </div>
-        </>}
       </div>
     </div>
   );
@@ -4520,30 +4814,54 @@ function Root(){
   const[screen,setScreen]=React.useState("landing");
   const[gate,setGate]=React.useState(null);
   const[adminTier,setAdminTier]=React.useState(null);
-  const[dynPins,setDynPins]=React.useState(null); // {super,basic} loaded from Firebase, null=not yet loaded
+  const[dynPins,setDynPins]=React.useState(null);
 
-  // Load any admin PINs the super-admin has changed via in-app PIN management.
-  // Falls back to the hardcoded constants when Firebase is unreachable.
+  // ── Browser back button handling ──────────────────────────────────────────
+  // Maintain an in-app navigation stack. Every setScreen() pushes a browser
+  // history entry so the back button stays inside the app instead of leaving.
+  const navStack=React.useRef(["landing"]);
+
+  const go=(s)=>{
+    navStack.current=[...navStack.current,s];
+    window.history.pushState({screen:s,depth:navStack.current.length},"");
+    setScreen(s);
+    setGate(null);
+  };
+  const goBack=()=>{
+    if(navStack.current.length>1){
+      navStack.current=navStack.current.slice(0,-1);
+      const prev=navStack.current[navStack.current.length-1];
+      setScreen(prev);
+      // If going back past any admin screen to landing, clear admin state
+      if(prev==="landing") setGate(null);
+    } else {
+      setScreen("landing");
+      setGate(null);
+    }
+  };
+
   React.useEffect(()=>{
-    if(!FB_OK||!DB){setDynPins({super:ADMIN_PIN,basic:BASIC_ADMIN_PIN});return;}
-    const ref=DB.ref("adminPins");
-    const cb=ref.on("value",s=>{
-      const v=s.val()||{};
-      setDynPins({super:v.super||ADMIN_PIN, basic:v.basic||BASIC_ADMIN_PIN});
-    });
-    return ()=>ref.off("value",cb);
+    // Seed the initial history entry
+    window.history.replaceState({screen:"landing",depth:1},"");
+    const onPop=()=>goBack();
+    window.addEventListener("popstate",onPop);
+    return()=>window.removeEventListener("popstate",onPop);
   },[]);
 
-  const isAdmin = adminTier!==null;
-  const isSuper = adminTier==="super";
-  const adminHome = adminTier==="super"?"superAdmin":adminTier==="basic"?"basicAdmin":"landing";
-
+  // Wrap setScreen so it also updates navStack and browser history
+  const nav=(s)=>go(s);
+  const home=()=>{
+    navStack.current=["landing"];
+    window.history.replaceState({screen:"landing",depth:1},"");
+    setScreen("landing");
+    setGate(null);
+    setAdminTier(null); // Clear admin tier so stale tier never contaminates next login
+  };
   const pick=(r)=>{
     if(r==="scorer"){setGate("scorer");}
     else if(r==="admin"){setGate("admin");}
-    else setScreen(r);
+    else nav(r);
   };
-  const home=()=>{setScreen("landing");setGate(null);};
 
   if(gate==="scorer") return <ScorerGate onOk={()=>{setGate(null);setScreen("scorer");}} onCancel={home}/>;
   if(gate==="admin")  return <PinGate title="Admin Access" hint="Super or Basic admin PIN"
@@ -4553,36 +4871,48 @@ function Root(){
       if(v===pins.basic) return {ok:true, tier:"basic"};
       return {ok:false, msg:"❌ Wrong PIN, try again"};
     }}
-    onOk={(r)=>{ setGate(null); setAdminTier(r.tier); setScreen(r.tier==="super"?"superAdmin":"basicAdmin"); }}
+    onOk={(r)=>{
+      setGate(null);
+      setAdminTier(r.tier);
+      const dest=r.tier==="super"?"superAdmin":"basicAdmin";
+      // Reset navStack on every login so browser back can never reach wrong screen
+      navStack.current=["landing",dest];
+      window.history.replaceState({screen:"landing",depth:1},"");
+      window.history.pushState({screen:dest,depth:2},"");
+      setScreen(dest);
+    }}
     onCancel={home}/>;
+
+  const isAdmin=adminTier!==null;
+  const isSuper=adminTier==="super";
+  const adminHome=adminTier==="super"?"superAdmin":adminTier==="basic"?"basicAdmin":"landing";
 
   if(screen==="landing") return <Landing onPick={pick}/>;
   if(screen==="viewer")  return <ViewerLive onExit={home}/>;
-  if(screen==="basicAdmin") return <BasicAdminHome onPick={setScreen} onExit={home}/>;
-  // History delete is destructive → super-admin only; basic admin & viewers get read-only.
-  if(screen==="history") return <HistoryPage role={isSuper?"admin":"viewer"} onExit={()=>setScreen(adminHome)}/>;
-  if(screen==="poll")    return <PollPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(adminHome)}/>;
-  if(screen==="roster")  return <RosterPage role={isAdmin?"admin":"viewer"} onExit={()=>setScreen(adminHome)}/>;
-  if(screen==="stats")   return <StatsPage onExit={()=>setScreen(adminHome)}/>;
-  if(screen==="pollAdmin") return <PollAdminPage onExit={()=>setScreen(adminHome)}/>;
-  if(screen==="announce") return <AnnouncementPage onExit={()=>setScreen(adminHome)}/>;
-  if(screen==="playerTools") return <PlayerToolsPage onExit={()=>setScreen(adminHome)}/>;
-  if(screen==="voteOnBehalf") return <VoteOnBehalfPage onExit={()=>setScreen(adminHome)}/>;
+  if(screen==="basicAdmin") return <BasicAdminHome onPick={nav} onExit={home}/>;
+  if(screen==="history") return <HistoryPage role={isSuper?"admin":"viewer"} onExit={()=>nav(adminHome)}/>;
+  if(screen==="poll")    return <PollPage role={isAdmin?"admin":"viewer"} onExit={()=>nav(adminHome)}/>;
+  if(screen==="roster")  return <RosterPage role={isAdmin?"admin":"viewer"} onExit={()=>nav(adminHome)}/>;
+  if(screen==="stats")   return <StatsPage onExit={()=>nav(adminHome)}/>;
+  if(screen==="pollAdmin") return <PollAdminPage onExit={()=>nav(adminHome)}/>;
+  if(screen==="announce") return <AnnouncementPage onExit={()=>nav(adminHome)}/>;
+  if(screen==="playerTools") return <PlayerToolsPage onExit={()=>nav(adminHome)}/>;
+  if(screen==="voteOnBehalf") return <VoteOnBehalfPage onExit={()=>nav(adminHome)}/>;
   if(screen==="scorer")    return <App role="scorer" onExit={home}/>;
-  if(screen==="adminScore") return <App role="admin" onExit={()=>setScreen(adminHome)} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("pollAdmin")} onRoster={()=>setScreen("roster")} onAnnounce={()=>setScreen("announce")}/>;
+  if(screen==="adminScore") return <App role="admin" onExit={()=>nav(adminHome)} onHistory={()=>nav("history")} onPoll={()=>nav("pollAdmin")} onRoster={()=>nav("roster")} onAnnounce={()=>nav("announce")}/>;
   if(screen==="superAdmin") return <SuperAdminHome
-    onScore={()=>setScreen("admin")}
-    onHistory={()=>setScreen("history")}
-    onStats={()=>setScreen("stats")}
-    onPoll={()=>setScreen("pollAdmin")}
-    onRoster={()=>setScreen("roster")}
-    onAnnounce={()=>setScreen("announce")}
-    onPins={()=>setScreen("pinMgmt")}
-    onVoteOnBehalf={()=>setScreen("voteOnBehalf")}
-    onPlayerTools={()=>setScreen("playerTools")}
+    onScore={()=>nav("admin")}
+    onHistory={()=>nav("history")}
+    onStats={()=>nav("stats")}
+    onPoll={()=>nav("pollAdmin")}
+    onRoster={()=>nav("roster")}
+    onAnnounce={()=>nav("announce")}
+    onPins={()=>nav("pinMgmt")}
+    onVoteOnBehalf={()=>nav("voteOnBehalf")}
+    onPlayerTools={()=>nav("playerTools")}
     onExit={home}/>;
-  if(screen==="pinMgmt") return <PinMgmtModal onClose={()=>setScreen(adminHome)}/>;
-  if(screen==="admin") return <App role="admin" onExit={()=>setScreen("superAdmin")} onHistory={()=>setScreen("history")} onPoll={()=>setScreen("pollAdmin")} onRoster={()=>setScreen("roster")} onAnnounce={()=>setScreen("announce")}/>;
+  if(screen==="pinMgmt") return <PinMgmtModal onClose={()=>nav(adminHome)}/>;
+  if(screen==="admin") return <App role="admin" onExit={()=>nav(adminHome)} onHistory={()=>nav("history")} onPoll={()=>nav("pollAdmin")} onRoster={()=>nav("roster")} onAnnounce={()=>nav("announce")}/>;
   return <Landing onPick={pick}/>;
 }
 
