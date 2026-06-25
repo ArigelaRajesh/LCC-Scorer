@@ -269,6 +269,14 @@ const T=20;
 // Scorecards store players by typed name; profiles use ids. We bridge them by
 // matching on a normalized full name (trim + lowercase + collapse spaces).
 function normName(n){return (n||"").trim().toLowerCase().replace(/\s+/g," ");}
+function timeAgo(ts){
+  const s=Math.floor((Date.now()-ts)/1000);
+  if(s<60)return"just now";
+  if(s<3600)return Math.floor(s/60)+"m ago";
+  if(s<86400)return Math.floor(s/3600)+"h ago";
+  if(s<604800)return Math.floor(s/86400)+"d ago";
+  return new Date(ts).toLocaleDateString(undefined,{month:"short",day:"numeric"});
+}
 // Map any stored venue string to a short canonical label so Lakes / Millennium
 // group cleanly even though they're stored as "Lakes High School" /
 // "Millennium Park, Lindenhurst" etc. Custom venues keep their own name.
@@ -393,30 +401,39 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
   const mountedRef=useRef(true);
   const audioCtxRef=useRef(null);
 
-  // ── Published teams from poll ──────────────────────────────────────────────
-  const[pubTeams,setPubTeams]=useState(null);   // {captainA,captainB,teamA:[pids],teamB:[pids]}
+  // ── Published teams history — load ALL past sets, newest first ────────────
+  const[pubTeamsList,setPubTeamsList]=useState([]);
+  const[selectedPub,setSelectedPub]=useState(null);
   const[roster,setRoster]=useState({});
-  const[imported,setImported]=useState(false);  // true once admin tapped "Use these teams"
+  const[imported,setImported]=useState(false);
 
   React.useEffect(()=>{
     if(!FB_OK||!DB) return;
-    const tRef=DB.ref("poll/teams");
     const rRef=DB.ref("roster");
-    const tCb=tRef.on("value",s=>{const v=s.val();if(v?.published)setPubTeams(v);else setPubTeams(null);});
     const rCb=rRef.on("value",s=>setRoster(s.val()||{}));
-    return()=>{tRef.off("value",tCb);rRef.off("value",rCb);};
+    const ptRef=DB.ref("publishedTeams");
+    const ptCb=ptRef.on("value",s=>{
+      const v=s.val()||{};
+      const list=Object.entries(v)
+        .map(([id,t])=>({id,...t}))
+        .sort((a,b)=>b.publishedAt-a.publishedAt)
+        .slice(0,8);
+      setPubTeamsList(list);
+      if(list.length>0) setSelectedPub(p=>p||list[0]);
+    });
+    return()=>{rRef.off("value",rCb);ptRef.off("value",ptCb);};
   },[]);
 
-  const importTeams=()=>{
-    if(!pubTeams) return;
-    const nameA=pubTeams.captainA||"Team A";
-    const nameB=pubTeams.captainB||"Team B";
-    if(rA.current) rA.current.value=nameA;
-    if(rB.current) rB.current.value=nameB;
+  const importTeams=(pub)=>{
+    const p=pub||selectedPub;
+    if(!p) return;
+    if(rA.current) rA.current.value=p.captainA||"Team A";
+    if(rB.current) rB.current.value=p.captainB||"Team B";
+    setSelectedPub(p);
     setImported(true);
   };
 
-  // Convert PIDs → player names for a team list
+  // Convert PIDs → player names
   const teamNames=(pids)=>(pids||[]).map(id=>roster[id]?.name).filter(Boolean);
 
   React.useEffect(()=>()=>{mountedRef.current=false;},[]);
@@ -550,8 +567,8 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
       :{venue:"Lakes High School",format:"Casual",overs:Number(overs),maxWkts:Number(wkts),single:isSingle};
     onStart({teamA:a,teamB:b,battingFirst,bowlingFirst,pinA,pinB,
       tossSummary:`${winnerName} won the toss, chose to ${tossChoice} first`,
-      pubTeamA: imported&&pubTeams ? teamNames(pubTeams.teamA) : [],
-      pubTeamB: imported&&pubTeams ? teamNames(pubTeams.teamB) : [],
+      pubTeamA: imported&&selectedPub ? teamNames(selectedPub.teamA) : [],
+      pubTeamB: imported&&selectedPub ? teamNames(selectedPub.teamB) : [],
       ...v});
   };
   const clr=()=>{[rA,rB].forEach(r=>{if(r.current)r.current.value=""});setTossWinner(null);setTossChoice(null);rA.current?.focus();};
@@ -727,39 +744,43 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
           {venue&&<>
             <div className="divider"/>
 
-            {/* ── Published teams banner ── */}
-            {pubTeams&&(
-              <div style={{background:imported?"rgba(16,185,129,.1)":"rgba(167,139,250,.1)",
-                border:`1.5px solid ${imported?"rgba(16,185,129,.4)":"rgba(167,139,250,.4)"}`,
-                borderRadius:14,padding:"12px 14px",marginBottom:4}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                  <div>
-                    <p style={{fontSize:10,color:imported?"#34d399":"#c4b5fd",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:3}}>
-                      {imported?"✅ TEAMS IMPORTED":"📋 PUBLISHED TEAMS AVAILABLE"}
-                    </p>
-                    <p style={{fontSize:13,fontWeight:700}}>
-                      {pubTeams.captainA||"Team A"} <span style={{color:"#6b7280",fontWeight:400}}>vs</span> {pubTeams.captainB||"Team B"}
-                    </p>
-                    <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>
-                      {teamNames(pubTeams.teamA).length} players · {teamNames(pubTeams.teamB).length} players
-                    </p>
-                  </div>
-                  {!imported&&(
-                    <button onClick={importTeams} style={{
-                      flexShrink:0,padding:"9px 14px",borderRadius:12,border:"none",cursor:"pointer",
-                      background:"linear-gradient(135deg,#8b5cf6,#6366f1)",
-                      color:"#fff",fontWeight:700,fontSize:12,fontFamily:"'Inter',sans-serif"
-                    }}>Use These →</button>
-                  )}
+            {/* ── Published teams selector — pick from any past set ── */}
+            {pubTeamsList.length>0&&(
+              <div style={{marginBottom:12}}>
+                <p style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".12em",marginBottom:8}}>📋 PUBLISHED TEAMS — TAP TO SELECT</p>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {pubTeamsList.map(pub=>{
+                    const isSel=selectedPub?.id===pub.id;
+                    const ago=pub.publishedAt?timeAgo(pub.publishedAt):"";
+                    return(
+                      <button key={pub.id} onClick={()=>importTeams(pub)} style={{
+                        display:"flex",alignItems:"center",justifyContent:"space-between",
+                        padding:"11px 14px",borderRadius:14,cursor:"pointer",textAlign:"left",
+                        border:isSel?"2px solid #6366f1":"1px solid rgba(99,102,241,.25)",
+                        background:isSel?"rgba(99,102,241,.15)":"rgba(255,255,255,.03)",color:"#fff"
+                      }}>
+                        <div>
+                          <p style={{fontWeight:700,fontSize:13}}>{pub.captainA||"Team A"} <span style={{color:"#6b7280",fontWeight:400}}>vs</span> {pub.captainB||"Team B"}</p>
+                          <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>
+                            {teamNames(pub.teamA).length}+{teamNames(pub.teamB).length} players · {ago}
+                          </p>
+                        </div>
+                        <span style={{fontSize:isSel?14:12,color:isSel?"#a5b4fc":"#4b5563"}}>{isSel?"✓ selected":"→"}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-                {imported&&(
-                  <div style={{marginTop:10,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    {[["🟡",pubTeams.captainA,pubTeams.teamA],["⚡",pubTeams.captainB,pubTeams.teamB]].map(([em,cap,pids])=>(
-                      <div key={cap} style={{background:"rgba(0,0,0,.2)",borderRadius:10,padding:"8px 10px"}}>
-                        <p style={{fontSize:10,color:"#9ca3af",marginBottom:4}}>{em} {cap}</p>
-                        {teamNames(pids).map(n=><p key={n} style={{fontSize:11,color:"#e2e8f0",lineHeight:1.6}}>{n}</p>)}
-                      </div>
-                    ))}
+                {imported&&selectedPub&&(
+                  <div style={{marginTop:8,background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.3)",borderRadius:12,padding:"10px 14px"}}>
+                    <p style={{fontSize:11,color:"#34d399",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>✅ Teams imported → team names pre-filled</p>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      {[["🟡",selectedPub.captainA,selectedPub.teamA],["⚡",selectedPub.captainB,selectedPub.teamB]].map(([em,cap,pids])=>(
+                        <div key={cap} style={{background:"rgba(0,0,0,.2)",borderRadius:8,padding:"6px 10px"}}>
+                          <p style={{fontSize:10,color:"#9ca3af",marginBottom:3}}>{em} {cap}</p>
+                          {teamNames(pids).map(n=><p key={n} style={{fontSize:11,color:"#e2e8f0",lineHeight:1.5}}>{n}</p>)}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -948,7 +969,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
 
   React.useEffect(()=>{
     if(!isScorer||!FB_OK||!DB||!mo||saved||!inn)return;
-    const histPayload=JSON.parse(JSON.stringify({result:mo,inn1:inn1||null,inn2:inn,teamA:match?.teamA,teamB:match?.teamB,tossSummary:match?.tossSummary||null,venue:inn.venue,format:inn.format,overs:inn.overs,maxWkts:inn.maxWkts,potm:potm?.winner||null,finishedAt:Date.now()}));
+    const histPayload=JSON.parse(JSON.stringify({result:mo,inn1:inn1||null,inn2:inn,teamA:match?.teamA,teamB:match?.teamB,tossSummary:match?.tossSummary||null,venue:inn.venue,format:inn.format,overs:inn.overs,maxWkts:inn.maxWkts,potm:potm?.winner||null,potmVoting:{open:true,votes:{}},finishedAt:Date.now()}));
     DB.ref("history").push(histPayload).then(()=>setSaved(true)).catch(e=>console.error("hist save failed",e));
   },[mo,saved,isScorer,inn,inn1,match]);
 
@@ -1232,8 +1253,8 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
             {role==="admin"&&<AdminActionsMenu
               onHistory={onHistory} onAnnounce={onAnnounce}
               inn={inn} onEditMatchSave={({overs,maxWkts})=>setInn(p=>({...p,overs,maxWkts}))}
-              match={match}
-             
+              match={match} role={role}
+              onUpdateTeams={(pubTeamA,pubTeamB)=>setMatch(m=>m?({...m,pubTeamA,pubTeamB}):m)}
             />}
             {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
           </div>
@@ -1402,48 +1423,57 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
         <div className={pr?"alert-indigo":"alert-red"}>
           <p style={{color:pr?"#818cf8":"#f87171",fontFamily:"'JetBrains Mono',monospace",fontSize:11,textTransform:"uppercase",letterSpacing:".15em",marginBottom:8}}>{pr?"🔁 Retired — who's in next?":"⚡ Wicket! Who's next?"}</p>
 
-          {/* Quick-tap roster buttons — filtered to available batters */}
+          {/* Quick-tap: show ONLY batting team's players */}
           {(()=>{
             const dismissed=Object.entries(inn.batsmen||{}).filter(([,b])=>b.out).map(([n])=>n);
             const batting=new Set([SK,NS].filter(Boolean));
-            const avail=(rosterNames||[]).filter(n=>!batting.has(n)&&!dismissed.includes(n));
-            if(!avail.length) return null;
-            // Show published team players first, then rest of roster
-            const pubPlayers=(match?.pubTeamA&&match?.pubTeamB)
-              ? (inn.battingTeam===match.teamA ? match.pubTeamA : match.pubTeamB)
-              : [];
-            const teamFirst=avail.filter(n=>pubPlayers.includes(n));
-            const others=avail.filter(n=>!pubPlayers.includes(n));
-            return(
-              <div style={{marginBottom:10}}>
-                <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Tap to bring in:</p>
-                {teamFirst.length>0&&<>
-                  <p style={{fontSize:9,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>— {inn.battingTeam} squad —</p>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
-                    {teamFirst.map(n=>(
-                      <button key={n} onClick={()=>confBatsman(n)} style={{
-                        padding:"7px 13px",borderRadius:10,
-                        border:"1.5px solid rgba(245,158,11,.5)",
-                        background:"rgba(245,158,11,.12)",color:"#fbbf24",fontSize:13,cursor:"pointer",
-                        fontFamily:"'Inter',sans-serif",fontWeight:600,touchAction:"manipulation"
-                      }}>{n}</button>
-                    ))}
-                  </div>
-                </>}
-                {others.length>0&&<>
-                  {teamFirst.length>0&&<p style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>— other players —</p>}
+            const hasPubTeam=(match?.pubTeamA?.length>0||match?.pubTeamB?.length>0);
+            const battingPub=hasPubTeam
+              ?(inn.battingTeam===match?.teamA?match.pubTeamA:match.pubTeamB)||[]
+              :null;
+
+            if(battingPub&&battingPub.length>0){
+              // TEAM MODE: only show this team's players
+              const teamAvail=battingPub.filter(n=>!batting.has(n)&&!dismissed.includes(n));
+              return(
+                <div style={{marginBottom:10}}>
+                  <p style={{fontSize:10,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>
+                    🟡 {inn.battingTeam} squad:
+                  </p>
+                  {teamAvail.length===0
+                    ?<p style={{fontSize:12,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>All squad members have batted</p>
+                    :<div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      {teamAvail.map(n=>(
+                        <button key={n} onClick={()=>confBatsman(n)} style={{
+                          padding:"8px 14px",borderRadius:10,
+                          border:"1.5px solid rgba(245,158,11,.5)",
+                          background:"rgba(245,158,11,.12)",color:"#fbbf24",fontSize:13,
+                          cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,
+                          touchAction:"manipulation"
+                        }}>{n}</button>
+                      ))}
+                    </div>
+                  }
+                </div>
+              );
+            }else{
+              // FALLBACK: full roster when no pub team imported
+              const avail=(rosterNames||[]).filter(n=>!batting.has(n)&&!dismissed.includes(n));
+              return avail.length===0?null:(
+                <div style={{marginBottom:10}}>
+                  <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Tap to bring in:</p>
                   <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                    {others.map(n=>(
+                    {avail.map(n=>(
                       <button key={n} onClick={()=>confBatsman(n)} style={{
-                        padding:"7px 13px",borderRadius:10,border:"1.5px solid rgba(99,102,241,.4)",
+                        padding:"8px 14px",borderRadius:10,border:"1.5px solid rgba(99,102,241,.4)",
                         background:"rgba(99,102,241,.12)",color:"#a5b4fc",fontSize:13,cursor:"pointer",
                         fontFamily:"'Inter',sans-serif",fontWeight:600,touchAction:"manipulation"
                       }}>{n}</button>
                     ))}
                   </div>
-                </>}
-              </div>
-            );
+                </div>
+              );
+            }
           })()}
 
           {/* Retired batters — return to crease */}
@@ -1479,54 +1509,82 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           <p style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:12,textTransform:"uppercase",letterSpacing:".12em",marginBottom:4,fontWeight:700}}>🎯 Over Complete!</p>
           <p style={{color:"#818cf8",fontSize:12,marginBottom:10}}>Who bowls next? <span style={{color:"#4338ca",fontSize:11}}>(not {inn.bowlerName})</span></p>
 
-          {/* Quick-tap roster — exclude current/last bowler */}
+          {/* Quick-tap: show ONLY bowling team's players */}
           {(()=>{
-            const avail=(rosterNames||[]).filter(n=>n!==inn.bowlerName);
-            if(!avail.length) return null;
             const bowled=new Set(inn.bowlingOrder||[]);
-            // Published bowling team players
-            const pubPlayers=(match?.pubTeamA&&match?.pubTeamB)
-              ? (inn.battingTeam===match.teamA ? match.pubTeamB : match.pubTeamA)
-              : [];
-            const teamFresh=avail.filter(n=>pubPlayers.includes(n)&&!bowled.has(n));
-            const teamPrev=avail.filter(n=>pubPlayers.includes(n)&&bowled.has(n));
-            const otherFresh=avail.filter(n=>!pubPlayers.includes(n)&&!bowled.has(n));
-            const otherPrev=avail.filter(n=>!pubPlayers.includes(n)&&bowled.has(n));
-            const BowlBtn=({n,prev})=>{
+            const hasPubTeam=(match?.pubTeamA?.length>0||match?.pubTeamB?.length>0);
+            const bowlingPub=hasPubTeam
+              ?(inn.battingTeam===match?.teamA?match.pubTeamB:match.pubTeamA)||[]
+              :null;
+            const bowlingTeam=inn.battingTeam===match?.teamA?match?.teamB:match?.teamA;
+
+            const BowlBtn=({n})=>{
               const b=inn.bowlers?.[n];
+              const prev=bowled.has(n);
               return(
                 <button key={n} onClick={()=>confBowler(n)} style={{
-                  padding:"7px 13px",borderRadius:10,touchAction:"manipulation",
-                  border:`1.5px solid ${prev?"rgba(99,102,241,.4)":"rgba(245,158,11,.5)"}`,
-                  background:prev?"rgba(99,102,241,.12)":"rgba(245,158,11,.1)",
-                  color:prev?"#a5b4fc":"#fbbf24",fontSize:13,cursor:"pointer",
+                  padding:"8px 14px",borderRadius:10,touchAction:"manipulation",
+                  border:prev?"1.5px solid rgba(99,102,241,.4)":"1.5px solid rgba(52,211,153,.4)",
+                  background:prev?"rgba(99,102,241,.12)":"rgba(52,211,153,.1)",
+                  color:prev?"#a5b4fc":"#6ee7b7",fontSize:13,cursor:"pointer",
                   fontFamily:"'Inter',sans-serif",fontWeight:600
-                }}>{n}{prev&&b?<span style={{fontSize:10,opacity:.7,marginLeft:4}}>{b.overs}.{b.ballsThisOver}-{b.runs}-{b.wickets}</span>:""}</button>
+                }}>
+                  {n}{prev&&b?<span style={{fontSize:10,opacity:.65,marginLeft:4}}>{b.overs}.{b.ballsThisOver}-{b.runs}-{b.wickets}</span>:""}
+                </button>
               );
             };
-            const bowlingTeam=inn.battingTeam===match?.teamA?match?.teamB:match?.teamA;
-            return(
-              <div style={{marginBottom:10}}>
-                {teamFresh.length>0&&<>
-                  <p style={{fontSize:9,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>{bowlingTeam?`— ${bowlingTeam} bowlers —`:"New bowlers:"}</p>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
-                    {teamFresh.map(n=><BowlBtn key={n} n={n} prev={false}/>)}
-                  </div>
-                </>}
-                {teamPrev.length>0&&<>
-                  <p style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>Bowled before:</p>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
-                    {teamPrev.map(n=><BowlBtn key={n} n={n} prev={true}/>)}
-                  </div>
-                </>}
-                {(otherFresh.length>0||otherPrev.length>0)&&<>
-                  {(teamFresh.length>0||teamPrev.length>0)&&<p style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>— other —</p>}
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                    {[...otherFresh,...otherPrev].map(n=><BowlBtn key={n} n={n} prev={bowled.has(n)}/>)}
-                  </div>
-                </>}
-              </div>
-            );
+
+            if(bowlingPub&&bowlingPub.length>0){
+              // TEAM MODE: only show bowling team's players
+              const fresh=bowlingPub.filter(n=>n!==inn.bowlerName&&!bowled.has(n));
+              const prev=bowlingPub.filter(n=>n!==inn.bowlerName&&bowled.has(n));
+              return(
+                <div style={{marginBottom:10}}>
+                  {fresh.length>0&&(
+                    <>
+                      <p style={{fontSize:10,color:"#6ee7b7",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>
+                        ⚡ {bowlingTeam||"Bowling team"} — fresh:
+                      </p>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                        {fresh.map(n=><BowlBtn key={n} n={n}/>)}
+                      </div>
+                    </>
+                  )}
+                  {prev.length>0&&(
+                    <>
+                      <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Bowled before:</p>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                        {prev.map(n=><BowlBtn key={n} n={n}/>)}
+                      </div>
+                    </>
+                  )}
+                  {fresh.length===0&&prev.length===0&&(
+                    <p style={{fontSize:12,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>No available bowlers from team</p>
+                  )}
+                </div>
+              );
+            }else{
+              // FALLBACK: full roster
+              const avail=(rosterNames||[]).filter(n=>n!==inn.bowlerName);
+              const fresh=avail.filter(n=>!bowled.has(n));
+              const prev=avail.filter(n=>bowled.has(n));
+              return(
+                <div style={{marginBottom:10}}>
+                  {fresh.length>0&&<>
+                    <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>New bowlers:</p>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                      {fresh.map(n=><BowlBtn key={n} n={n}/>)}
+                    </div>
+                  </>}
+                  {prev.length>0&&<>
+                    <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Bowled before:</p>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      {prev.map(n=><BowlBtn key={n} n={n}/>)}
+                    </div>
+                  </>}
+                </div>
+              );
+            }
           })()}
 
           {/* Text input fallback */}
@@ -1842,11 +1900,17 @@ function PinMgmtModal({onClose}){
 // Replaces the 6-button overflow row with a tidy dropdown. Navigation items
 // (History, Notice) close the menu and navigate. Modal items manage their own
 // open state locally so the dropdown stays out of their way.
-function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match}){
+function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,onUpdateTeams}){
   const[open,setOpen]=React.useState(false);
   const[editOpen,setEditOpen]=React.useState(false);
   const[pinMgmtOpen,setPinMgmtOpen]=React.useState(false);
   const[pinViewOpen,setPinViewOpen]=React.useState(false);
+  const[teamEditOpen,setTeamEditOpen]=React.useState(false);
+  const[editPubA,setEditPubA]=React.useState([]);
+  const[editPubB,setEditPubB]=React.useState([]);
+  const[newNameA,setNewNameA]=React.useState("");
+  const[newNameB,setNewNameB]=React.useState("");
+  const isSuper=role==="admin"; // only admin role (super admin) can edit teams
   const close=()=>setOpen(false);
 
   const row=(icon,label,color,onClick)=>(
@@ -1893,8 +1957,14 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match}){
           {onAnnounce&&row("📢","Post Notice","#fbbf24",onAnnounce||close)}
           <div style={{borderTop:"1px solid #1e1b4b",margin:"4px 0"}}/>
           {row("✏️","Edit Match (overs/wkts)","#c4b5fd",()=>{setOv(inn?.overs||0);setWk(inn?.maxWkts||0);setEditOpen(true);})}
+          {isSuper&&onUpdateTeams&&row("👥","Edit Match Teams","#34d399",()=>{
+            setEditPubA(match?.pubTeamA||[]);
+            setEditPubB(match?.pubTeamB||[]);
+            setNewNameA("");setNewNameB("");
+            setTeamEditOpen(true);
+          })}
           {row("🔐","Manage Admin PINs","#f87171",()=>setPinMgmtOpen(true))}
-          {match?.pinA&&row("👥","View Team PINs","#6ee7b7",()=>setPinViewOpen(true))}
+          {match?.pinA&&row("👁","View Team PINs","#6ee7b7",()=>setPinViewOpen(true))}
         </div>
       </>}
 
@@ -1911,6 +1981,38 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match}){
       </Modal>}
 
       {/* Manage PINs modal */}
+      {teamEditOpen&&(
+        <Modal onClose={()=>setTeamEditOpen(false)} title="👥 Edit Match Teams">
+          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Add or remove players from each team. Changes take effect immediately for everyone.</p>
+          {[["🟡",match?.teamA||"Team A",editPubA,setEditPubA,newNameA,setNewNameA,"A"],
+            ["⚡",match?.teamB||"Team B",editPubB,setEditPubB,newNameB,setNewNameB,"B"]
+          ].map(([em,teamName,list,setList,newName,setNewName,side])=>(
+            <div key={side} style={{marginBottom:16}}>
+              <p style={{fontWeight:700,fontSize:13,marginBottom:8,color:side==="A"?"#fbbf24":"#6ee7b7"}}>{em} {teamName} ({list.length})</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                {list.map(n=>(
+                  <div key={n} style={{display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,.06)",borderRadius:8,padding:"4px 8px"}}>
+                    <span style={{fontSize:12}}>{n}</span>
+                    <button onClick={()=>setList(l=>l.filter(x=>x!==n))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:14,lineHeight:1,padding:0}}>×</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <input value={newName} onChange={e=>setNewName(e.target.value)}
+                  onKeyDown={e=>{if(e.key==="Enter"&&newName.trim()){setList(l=>[...l,newName.trim()]);setNewName("");}}}
+                  placeholder="Add player name…" style={{flex:1,fontSize:13}}/>
+                <button onClick={()=>{if(newName.trim()){setList(l=>[...l,newName.trim()]);setNewName("");}}}
+                  style={{padding:"8px 12px",borderRadius:10,border:"none",background:"rgba(99,102,241,.3)",color:"#a5b4fc",cursor:"pointer",fontWeight:700,fontSize:13}}>Add</button>
+              </div>
+            </div>
+          ))}
+          <button onClick={()=>{onUpdateTeams(editPubA,editPubB);setTeamEditOpen(false);}}
+            style={{width:"100%",padding:"12px",borderRadius:14,border:"none",cursor:"pointer",
+              background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",fontWeight:700,fontSize:14}}>
+            ✓ Save Teams
+          </button>
+        </Modal>
+      )}
       {pinMgmtOpen&&<PinMgmtModal onClose={()=>setPinMgmtOpen(false)}/>}
 
       {/* View Team PINs modal */}
@@ -2564,12 +2666,16 @@ function MatchOver({result,inn,inn1,match,potm,role,onRevert,canRevert,onNew}){
 // ════════════════════════════════════════════════════════════════════
 function ViewerLive({onExit}){
   const[snap,setSnap]=React.useState(undefined);
-  const[tab,setTab]=React.useState("live"); // "live" | "scorecard"
+  const[potm,setPotm]=React.useState(null);
+  const[tab,setTab]=React.useState("live");
   React.useEffect(()=>{
     if(!FB_OK||!DB){setSnap(null);return;}
     const ref=DB.ref("live");
     const cb=ref.on("value",s=>setSnap(s.val()));
-    return ()=>ref.off("value",cb);
+    // Also listen to POTM so viewers can vote + see winner
+    const pRef=DB.ref("potm");
+    const pCb=pRef.on("value",s=>setPotm(s.val()||null));
+    return ()=>{ref.off("value",cb);pRef.off("value",pCb);};
   },[]);
 
   if(snap===undefined) return <Centered emoji="📡" title="Connecting…" sub="Loading live match" onExit={onExit}/>;
@@ -2593,6 +2699,8 @@ function ViewerLive({onExit}){
         </div>
         {inn1&&<ScoreRow team={inn1.battingTeam} runs={inn1.totalRuns} wkts={inn1.wickets} balls={inn1.totalBalls}/>}
         <ScoreRow team={i2.battingTeam} runs={i2.totalRuns} wkts={i2.wickets} balls={i2.totalBalls}/>
+        {/* POTM voting — same component, viewer role so no Close button */}
+        <POTMVoting inn={inn} inn1={inn1} potm={potm} role="viewer"/>
         <button className="btn btn-ghost w-full" style={{marginTop:16}} onClick={onExit}>← Back</button>
       </div></div>
     );
@@ -2773,6 +2881,183 @@ function HistoryPage({role,onExit}){
 }
 
 // ── Full scorecard for a completed match (from history) ──────────────────────
+// ── Match Highlights — best figures from both innings ────────────────────────
+function MatchHighlights({m}){
+  const combined=(key)=>{
+    const out={};
+    [m.inn1,m.inn2].forEach(inn=>{
+      if(!inn)return;
+      Object.entries(inn[key]||{}).forEach(([name,d])=>{
+        if(!out[name])out[name]={runs:0,balls:0,fours:0,sixes:0,wickets:0,bowlerRuns:0,overs:0};
+        if(key==="batsmen"){out[name].runs+=(d.runs||0);out[name].balls+=(d.balls||0);out[name].fours+=(d.fours||0);out[name].sixes+=(d.sixes||0);}
+        if(key==="bowlers"){out[name].wickets+=(d.wickets||0);out[name].bowlerRuns+=(d.runs||0);out[name].overs+=(d.overs||0);}
+      });
+    });
+    return out;
+  };
+  const bat=combined("batsmen");
+  const bowl=combined("bowlers");
+
+  // Catches from howOut field
+  const catches={};
+  [m.inn1,m.inn2].forEach(inn=>{
+    Object.values(inn?.batsmen||{}).forEach(b=>{
+      if(b?.howOut&&b.howOut.startsWith("c ")){
+        const name=b.howOut.split(" b ")[0].replace("c ","").trim();
+        if(name&&name!=="sub")catches[name]=(catches[name]||0)+1;
+      }
+    });
+  });
+
+  const highlights=[];
+  const topBat=Object.entries(bat).sort((a,b)=>b[1].runs-a[1].runs)[0];
+  if(topBat)highlights.push({em:"🏏",title:"Top Scorer",name:topBat[0],val:`${topBat[1].runs} runs (${topBat[1].balls}b)`});
+  const topBowl=Object.entries(bowl).filter(([,d])=>d.wickets>0).sort((a,b)=>b[1].wickets-a[1].wickets||a[1].bowlerRuns-b[1].bowlerRuns)[0];
+  if(topBowl)highlights.push({em:"🎯",title:"Best Bowling",name:topBowl[0],val:`${topBowl[1].wickets}/${topBowl[1].bowlerRuns}`});
+  const mostSix=Object.entries(bat).filter(([,d])=>d.sixes>0).sort((a,b)=>b[1].sixes-a[1].sixes)[0];
+  if(mostSix)highlights.push({em:"6️⃣",title:"Most Sixes",name:mostSix[0],val:`${mostSix[1].sixes} sixes`});
+  const mostFour=Object.entries(bat).filter(([,d])=>d.fours>0).sort((a,b)=>b[1].fours-a[1].fours)[0];
+  if(mostFour)highlights.push({em:"4️⃣",title:"Most Fours",name:mostFour[0],val:`${mostFour[1].fours} fours`});
+  const topCatch=Object.entries(catches).sort((a,b)=>b[1]-a[1])[0];
+  if(topCatch)highlights.push({em:"🙌",title:"Most Catches",name:topCatch[0],val:`${topCatch[1]} catch${topCatch[1]>1?"es":""}`});
+  const bestEcon=Object.entries(bowl).filter(([,d])=>d.overs>=1).sort((a,b)=>(a[1].bowlerRuns/a[1].overs)-(b[1].bowlerRuns/b[1].overs))[0];
+  if(bestEcon)highlights.push({em:"💨",title:"Best Economy",name:bestEcon[0],val:`${(bestEcon[1].bowlerRuns/bestEcon[1].overs).toFixed(2)} rpo`});
+
+  if(!highlights.length)return null;
+  return(
+    <div style={{marginTop:16}}>
+      <p style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".15em",marginBottom:10}}>📊 MATCH HIGHLIGHTS</p>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {highlights.map(h=>(
+          <div key={h.title} style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(99,102,241,.2)",borderRadius:14,padding:"12px 12px"}}>
+            <p style={{fontSize:18,marginBottom:4}}>{h.em}</p>
+            <p style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:2}}>{h.title}</p>
+            <p style={{fontWeight:700,fontSize:13}}>{h.name}</p>
+            <p style={{fontSize:11,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace"}}>{h.val}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── MatchHistoryPOTM — permanent POTM voting accessible from match history ───
+// Lives at history/{matchId}/potmVoting so players can vote any time after match
+function MatchHistoryPOTM({m,role}){
+  const[voting,setVoting]=React.useState(null);
+  const deviceId=React.useMemo(()=>{try{let id=localStorage.getItem("lcc_device_id");return id||"d_"+Math.random().toString(36).slice(2);}catch(e){return "d_"+Math.random().toString(36).slice(2);}},[]);
+  const[myName,setMyName]=React.useState(()=>{try{return localStorage.getItem("lcc_potm_voter_"+m.id)||null;}catch(e){return null;}});
+
+  React.useEffect(()=>{
+    if(!FB_OK||!DB||!m.id)return;
+    const ref=DB.ref("history/"+m.id+"/potmVoting");
+    const cb=ref.on("value",s=>setVoting(s.val()));
+    return()=>ref.off("value",cb);
+  },[m.id]);
+
+  // All players who batted or bowled in either innings
+  const participants=React.useMemo(()=>{
+    const s=new Set();
+    [m.inn1,m.inn2].forEach(inn=>{if(!inn)return;Object.keys(inn.batsmen||{}).forEach(n=>s.add(n));(inn.bowlingOrder||[]).forEach(n=>s.add(n));});
+    return[...s].sort();
+  },[m.inn1,m.inn2]);
+
+  if(!voting)return null;
+
+  const votes=voting.votes||{};
+  const counts={};
+  Object.values(votes).forEach(v=>{if(v?.votedFor)counts[v.votedFor]=(counts[v.votedFor]||0)+1;});
+  const totalVotes=Object.values(counts).reduce((a,b)=>a+b,0);
+  const myVote=votes[deviceId]?.votedFor||null;
+
+  const castVote=(name)=>{
+    if(!myName||!FB_OK||!DB)return;
+    DB.ref("history/"+m.id+"/potmVoting/votes/"+deviceId).set({voter:myName,votedFor:name,at:Date.now()}).catch(()=>{});
+  };
+
+  const closeAndAnnounce=()=>{
+    if(!FB_OK||!DB)return;
+    let winner=null,max=0;
+    Object.entries(counts).forEach(([n,c])=>{if(c>max){max=c;winner=n;}});
+    if(!winner&&participants.length>0)winner=participants[0];
+    DB.ref("history/"+m.id+"/potmVoting").update({open:false,winner,closedAt:Date.now()}).catch(()=>{});
+    DB.ref("history/"+m.id+"/potm").set(winner).catch(()=>{});
+    DB.ref("announcement").set({text:`🏆 Player of the Match (${m.teamA||""} vs ${m.teamB||""}): ${winner}!`,by:"LCC",ts:Date.now()}).catch(()=>{});
+  };
+
+  // ── Winner card ───────────────────────────────────────────────────────────
+  if(voting.winner){
+    return(
+      <div style={{background:"linear-gradient(135deg,rgba(245,158,11,.18),rgba(239,68,68,.1))",border:"2px solid rgba(245,158,11,.5)",borderRadius:20,padding:"20px 18px",marginTop:16,textAlign:"center"}}>
+        <div style={{fontSize:36,marginBottom:6}}>🏆</div>
+        <p style={{fontSize:9,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".2em",marginBottom:4}}>PLAYER OF THE MATCH</p>
+        <p style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,color:"#fbbf24"}}>{voting.winner}</p>
+        <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{totalVotes} vote{totalVotes===1?"":"s"}</p>
+      </div>
+    );
+  }
+
+  if(!voting.open)return null;
+
+  // ── Step 1: Who are you? ──────────────────────────────────────────────────
+  if(!myName){
+    return(
+      <div style={{background:"rgba(99,102,241,.08)",border:"1.5px solid rgba(99,102,241,.3)",borderRadius:20,padding:"16px",marginTop:16}}>
+        <p style={{fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,marginBottom:4}}>🏆 Vote · Player of the Match</p>
+        <p style={{color:"#9ca3af",fontSize:11,marginBottom:12}}>Only players who participated can vote. Pick your name:</p>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+          {participants.map(n=>(
+            <button key={n} onClick={()=>{setMyName(n);try{localStorage.setItem("lcc_potm_voter_"+m.id,n);}catch(e){}}}
+              style={{padding:"8px 14px",borderRadius:10,border:"1.5px solid rgba(99,102,241,.4)",background:"rgba(99,102,241,.12)",color:"#a5b4fc",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Step 2: Cast vote ─────────────────────────────────────────────────────
+  const sorted=[...participants].sort((a,b)=>(counts[b]||0)-(counts[a]||0));
+  return(
+    <div style={{background:"rgba(99,102,241,.08)",border:"1.5px solid rgba(99,102,241,.3)",borderRadius:20,padding:"16px",marginTop:16}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div>
+          <p style={{fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,marginBottom:2}}>🏆 Player of the Match</p>
+          <p style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>Voting as {myName}{myVote?` · voted for ${myVote}`:""}</p>
+        </div>
+        <button onClick={()=>{setMyName(null);try{localStorage.removeItem("lcc_potm_voter_"+m.id);}catch(e){}}}
+          style={{background:"none",border:"none",color:"#6b7280",fontSize:10,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Not you?</button>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>
+        {sorted.filter(n=>n!==myName).map(n=>{
+          const c=counts[n]||0;
+          const pct=totalVotes>0?Math.round((c/totalVotes)*100):0;
+          const isMyVote=myVote===n;
+          return(
+            <button key={n} onClick={()=>castVote(n)} style={{
+              display:"flex",alignItems:"center",justifyContent:"space-between",
+              padding:"10px 14px",borderRadius:12,cursor:"pointer",position:"relative",overflow:"hidden",
+              border:isMyVote?"2px solid #fbbf24":"1.5px solid rgba(99,102,241,.3)",
+              background:isMyVote?"rgba(245,158,11,.15)":"rgba(255,255,255,.03)",color:"#fff",textAlign:"left"
+            }}>
+              <div style={{position:"absolute",left:0,top:0,bottom:0,width:pct+"%",background:"rgba(245,158,11,.08)",transition:"width .4s ease"}}/>
+              <span style={{fontWeight:isMyVote?700:400,fontSize:13,position:"relative"}}>{n}{isMyVote&&<span style={{color:"#fbbf24",marginLeft:6,fontSize:10}}>✓ your vote</span>}</span>
+              <span style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",position:"relative"}}>{c} vote{c===1?"":"s"}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p style={{fontSize:10,color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",marginBottom:role==="admin"?10:0}}>{totalVotes} vote{totalVotes===1?"":"s"} cast</p>
+      {role==="admin"&&(
+        <button onClick={closeAndAnnounce} style={{width:"100%",padding:"12px",borderRadius:14,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#111",fontWeight:700,fontSize:13}}>
+          🏆 Close Voting & Announce Winner
+        </button>
+      )}
+    </div>
+  );
+}
+
 function MatchDetailView({match:m,role,onBack,onDelete}){
   const[tab,setTab]=React.useState("summary");
   const[editOpen,setEditOpen]=React.useState(false);
@@ -2859,6 +3144,8 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
             </div>
           )}
           <div className="divider" style={{margin:"14px 0"}}/>
+          <MatchHighlights m={m}/>
+          <MatchHistoryPOTM m={m} role={role}/>
           {m.inn1&&<div className="score-summary-row"><span style={{fontWeight:600,fontSize:14}}>{m.inn1.battingTeam}</span><span style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:"#a5b4fc"}}>{m.inn1.totalRuns}/{m.inn1.wickets} <span style={{fontSize:12,color:"#6b7280"}}>({ovStr(m.inn1.totalBalls)})</span></span></div>}
           {m.inn2&&<div className="score-summary-row"><span style={{fontWeight:600,fontSize:14}}>{m.inn2.battingTeam}</span><span style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:"#a5b4fc"}}>{m.inn2.totalRuns}/{m.inn2.wickets} <span style={{fontSize:12,color:"#6b7280"}}>({ovStr(m.inn2.totalBalls)})</span></span></div>}
         </div>
@@ -3922,8 +4209,13 @@ function PollTeamsTab({roster,poll,votes,teams,role}){
     if(!capA.trim()||!capB.trim()){alert("Enter both captains' names.");return;}
     if(teamA.length===0||teamB.length===0){alert("Both teams need at least one player.");return;}
     if(!FB_OK||!DB){alert("Offline.");return;}
-    DB.ref("poll/teams").set({captainA:capA.trim(),captainB:capB.trim(),teamA,teamB,published:true,publishedAt:Date.now()})
-      .then(()=>{alert("Teams published!");setShowBuilder(false);})
+    const payload={captainA:capA.trim(),captainB:capB.trim(),teamA,teamB,published:true,publishedAt:Date.now()};
+    DB.ref("poll/teams").set(payload)
+      .then(()=>{
+        // Also save to publishedTeams history so admin can reuse for multiple matches
+        DB.ref("publishedTeams").push(payload).catch(()=>{});
+        alert("Teams published!");setShowBuilder(false);
+      })
       .catch(e=>alert("Failed: "+e.message));
   };
   const moveTo=(id,team)=>{
