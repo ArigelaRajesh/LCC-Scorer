@@ -1368,6 +1368,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
   const[otBase,setOTBase]=useState(0);
   const[otThrow,setOTThrow]=useState(1);
   const[showFH,setShowFH]=useState(false);
+  const[isFreeHit,setIsFreeHit]=useState(false); // true on the delivery AFTER a No Ball
   const[quickAdd,setQuickAdd]=useState(null); // "bat" | "bowl" | null
   const dis=pw||nnb||pr;
   const retiredList=(inn.battingOrder||[]).filter(n=>inn.batsmen&&inn.batsmen[n]&&inn.batsmen[n].retired);
@@ -1398,22 +1399,24 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
     setSW(false);setFielder("");setRoRuns(0);setRoEnd(null);
   };
   const doEx=()=>{
-    if(em==="WD")record({type:"WD",extraRuns:1+er});
+    if(em==="WD"){record({type:"WD",extraRuns:1+er});/* wide on free hit: free hit carries, don't clear */}
     else if(em==="NB"){
       record({type:"NB",extraRuns:1,batRuns:er});
       // Next delivery is a FREE HIT — play sound and show banner
       playFreeHitSound();
       setShowFH(true);
+      setIsFreeHit(true); // arm free hit for next legal delivery
       setTimeout(()=>setShowFH(false),3500);
     }
-    else if(em==="DECL")record({type:"DECL",runs:er||1});
-    else record({type:em,extraRuns:er||1});
+    else if(em==="DECL"){record({type:"DECL",runs:er||1});setIsFreeHit(false);}
+    else{record({type:em,extraRuns:er||1});setIsFreeHit(false);}
     setEM(null);setER(0);
   };
   const doOT=()=>{
     const isDeclOT=typeof otThrow==="string";
     const oRuns=isDeclOT?parseInt(otThrow[1]):otThrow;
     record({type:"OT",baseRuns:otBase,overthrowRuns:oRuns,isDeclOT});
+    setIsFreeHit(false); // OT is a legal ball
     setShowOT(false);setOTBase(0);setOTThrow(1);
   };
 
@@ -1676,12 +1679,12 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
       {/* Buttons */}
       <div style={{opacity:dis?.4:1,pointerEvents:dis?"none":"auto"}} className="space-y-3">
         <div className="grid-4">
-          {[0,1,2,3].map(r=><button key={r} className="btn-run" onClick={()=>record({type:String(r)})}>{r}</button>)}
+          {[0,1,2,3].map(r=><button key={r} className="btn-run" onClick={()=>{record({type:String(r)});setIsFreeHit(false);}}>{r}</button>)}
         </div>
         <div className="grid-3">
-          <button className="btn-run amber" onClick={()=>record({type:"4"})}>4</button>
-          <button className="btn-run green" onClick={()=>record({type:"6"})}>6</button>
-          <button className="btn-run" onClick={()=>record({type:"5"})}>5</button>
+          <button className="btn-run amber" onClick={()=>{record({type:"4"});setIsFreeHit(false);}}>4</button>
+          <button className="btn-run green" onClick={()=>{record({type:"6"});setIsFreeHit(false);}}>6</button>
+          <button className="btn-run" onClick={()=>{record({type:"5"});setIsFreeHit(false);}}>5</button>
         </div>
         <div className="grid-4" style={{gridTemplateColumns:"1fr 1fr 1fr"}}>
           <button className="btn btn-danger" onClick={()=>setSW(true)} style={{borderRadius:14,padding:"13px 8px",fontSize:13}}>Wicket</button>
@@ -1704,12 +1707,18 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
 
       {/* Wicket modal */}
       {showW&&<Modal onClose={()=>{setSW(false);setFielder("");}} title="🏏 How Out?">
+        {isFreeHit&&(
+          <div style={{background:"rgba(234,179,8,.12)",border:"1.5px solid rgba(234,179,8,.4)",borderRadius:12,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:18}}>🟡</span>
+            <span style={{fontSize:12,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>FREE HIT — only Run Out can dismiss</span>
+          </div>
+        )}
         <div className="grid-2 mb-4">
-          {["Bowled","Caught","LBW","Run Out","Stumped"].map(w=>(
+          {(isFreeHit?["Run Out"]:["Bowled","Caught","LBW","Run Out","Stumped"]).map(w=>(
             <button key={w} onClick={()=>setWT(w)} style={{padding:"10px 8px",borderRadius:12,border:`1.5px solid ${wt===w?"transparent":"#374151"}`,background:wt===w?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:wt===w?"#fff":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:13,fontFamily:"'Inter',sans-serif",marginBottom:4}}>{w}</button>
           ))}
         </div>
-        {wt==="Caught"&&(
+        {wt==="Caught"&&!isFreeHit&&(
           <div style={{marginBottom:14}}>
             <label>Caught by</label>
             <input value={fielder} onChange={e=>setFielder(e.target.value)} placeholder="Fielder's name (or bowler's, if c&b)" autoFocus/>
@@ -1735,7 +1744,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
             </div>
           )}
         </>)}
-        <button className="btn btn-danger w-full" style={{borderRadius:14}} onClick={doW}>Confirm Wicket</button>
+        <button className="btn btn-danger w-full" style={{borderRadius:14}} onClick={()=>{doW();setIsFreeHit(false);}}>Confirm Wicket</button>
       </Modal>}
 
       {/* Extra modal */}
