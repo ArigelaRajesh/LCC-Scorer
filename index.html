@@ -1339,10 +1339,8 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     const prev=hist[hist.length-1];
     setHist(h=>h.slice(0,-1));
     setInn({...prev,pending:null});
-    // Clear all pending states so "who bowls/bats next?" UI disappears after undo
-    setNNB(false);
-    setPW(false);
-    setPR(false);
+    // pending state (pw/nnb/pr) is DERIVED from inn.pending, which we just cleared above — so the
+    // "who bowls/bats next?" UI disappears automatically. Just clear the name input fields.
     setNBN("");
     setNBWN("");
     setFlash(true);setTimeout(()=>setFlash(false),500);
