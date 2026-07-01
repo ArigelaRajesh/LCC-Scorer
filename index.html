@@ -104,6 +104,12 @@
 @keyframes legSprint{0%{transform:scaleX(1)}20%{transform:scaleX(.75)}40%{transform:scaleX(1.25)}60%{transform:scaleX(.8)}80%{transform:scaleX(1.2)}100%{transform:scaleX(1)}}
 @keyframes floodSweep{0%{transform:translateX(0) rotate(8deg);opacity:.5}50%{transform:translateX(320%) rotate(8deg);opacity:.9}100%{transform:translateX(0) rotate(8deg);opacity:.5}}
 @keyframes crowdShimmer{0%{opacity:.3}50%{opacity:.6}100%{opacity:.3}}
+@keyframes runBounce{0%{transform:translateY(0)}50%{transform:translateY(-3px)}100%{transform:translateY(0)}}
+@keyframes thighSwingA{0%{transform:rotate(-30deg)}50%{transform:rotate(30deg)}100%{transform:rotate(-30deg)}}
+@keyframes thighSwingB{0%{transform:rotate(30deg)}50%{transform:rotate(-30deg)}100%{transform:rotate(30deg)}}
+@keyframes ballArc{0%{transform:translateY(0)}40%{transform:translateY(-22px)}100%{transform:translateY(0)}}
+@keyframes ballArcLow{0%{transform:translateY(0)}40%{transform:translateY(-8px)}100%{transform:translateY(0)}}
+@keyframes keeperSway{0%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}100%{transform:rotate(-2deg)}}
 @keyframes tossResultPop{0%{transform:scale(.4);opacity:0}12%{transform:scale(1.2);opacity:1}20%{transform:scale(1);opacity:1}88%{transform:scale(1);opacity:1}100%{transform:scale(.96);opacity:0}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes menuPulse{0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,.55),0 4px 16px rgba(0,0,0,.35)}60%{box-shadow:0 0 0 9px rgba(99,102,241,0),0 4px 16px rgba(0,0,0,.35)}}
@@ -1089,39 +1095,44 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
   // that writes `live` can touch `backup`. Only an active scorer/admin device backs up (viewers don't),
   // and only when there's a real match in progress (not at match-over or innings break with no data).
   // A small rolling window (latest + previous) is kept so the node never grows unbounded.
-  const lastBackupT=React.useRef(0);
+  //
+  // CRITICAL FIX: the timer must NOT be tied to [match,inn,inn1,ib,mo] in its effect dependencies.
+  // `inn` is a new object on EVERY ball scored, so an effect depending on it would tear down and
+  // restart its setTimeout from zero on every single ball — meaning the 20s countdown almost never
+  // reached completion during active scoring (only during a real lull, like between overs). That's
+  // why restores were pulling noticeably stale data. The fix: keep the latest state in a ref (updated
+  // every render, which is cheap), and run a single setInterval that's created ONCE per match session
+  // and just reads the ref each time it fires — so backups happen on a true, unbroken 20s cadence.
+  const backupStateRef=React.useRef({match,inn,inn1,ib,mo});
+  React.useEffect(()=>{ backupStateRef.current={match,inn,inn1,ib,mo}; }); // no deps: cheap, runs every render
   React.useEffect(()=>{
     if(!isScorer||!FB_OK||!DB||!loaded) return;
-    let alive=true, timer=null;
+    let alive=true;
     const doBackup=()=>{
       if(!alive) return;
+      const {match,inn,inn1,ib,mo}=backupStateRef.current;
       // Only back up a genuine in-progress match (has a matchId, an innings, and isn't over).
       const mid = match?.matchId;
       if(mid && inn && !mo){
         const now=Date.now();
-        // throttle: never more than once per 18s even if deps change rapidly
-        if(now-lastBackupT.current>18000){
-          lastBackupT.current=now;
-          const snap=JSON.parse(JSON.stringify({
-            match,inn,inn1:inn1||null,ib:!!ib,mo:mo||null,
-            backedUpAt:now, by:writerId.current
-          }));
-          // latest = always the newest; prev = the one before (so we keep two restore points)
-          const base="backup/"+mid;
-          DB.ref(base+"/latest").once("value").then(s=>{
-            const cur=s.val();
-            if(cur && cur.backedUpAt && cur.backedUpAt!==now){
-              DB.ref(base+"/prev").set(cur).catch(()=>{});
-            }
-            DB.ref(base+"/latest").set(snap).catch(()=>{});
-          }).catch(()=>{ DB.ref(base+"/latest").set(snap).catch(()=>{}); });
-        }
+        const snap=JSON.parse(JSON.stringify({
+          match,inn,inn1:inn1||null,ib:!!ib,mo:mo||null,
+          backedUpAt:now, by:writerId.current
+        }));
+        // latest = always the newest; prev = the one before (so we keep two restore points)
+        const base="backup/"+mid;
+        DB.ref(base+"/latest").once("value").then(s=>{
+          const cur=s.val();
+          if(cur && cur.backedUpAt && cur.backedUpAt!==now){
+            DB.ref(base+"/prev").set(cur).catch(()=>{});
+          }
+          DB.ref(base+"/latest").set(snap).catch(()=>{});
+        }).catch(()=>{ DB.ref(base+"/latest").set(snap).catch(()=>{}); });
       }
-      timer=setTimeout(doBackup, 20000);
     };
-    timer=setTimeout(doBackup, 20000); // first backup ~20s in
-    return ()=>{ alive=false; if(timer) clearTimeout(timer); };
-  },[isScorer,loaded,match,inn,inn1,ib,mo]);
+    const interval=setInterval(doBackup, 20000); // true, unbroken 20s cadence — never reset by scoring
+    return ()=>{ alive=false; clearInterval(interval); };
+  },[isScorer,loaded]); // intentionally NOT depending on match/inn/inn1/ib/mo — see note above
   // ──────────────────────────────────────────────────────────────────────────────────────────────
 
   React.useEffect(()=>{
@@ -1280,13 +1291,18 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
       if(!snap||!snap.inn||!snap.match){ return false; }
       const when=snap.backedUpAt?new Date(snap.backedUpAt).toLocaleTimeString():"unknown time";
       if(!confirm(`Restore the match from the ${label} backup (saved ${when})?\n\nThis replaces the current live match with that snapshot.`)) return true;
-      const t=Math.max(Date.now(), lastWriteT.current+1, lastAppliedT.current+1);
-      lastWriteT.current=t; lastAppliedT.current=t;
+      // Restore by setting React state and tagging the change as an admin "revert" intent. The normal
+      // sync effect then writes it to `live` (with all the right fields: pins, teams, battingTeam, the
+      // monotonic timestamp, and appliedSig kept in sync). We must NOT also write to `live` directly
+      // here — doing both caused two racing writes and left the scoring engine unable to add a bowler
+      // or score, because the device's own progress tracker (appliedSig) got out of step with Firebase.
       writeIntent.current="revert";
-      setMatch(snap.match);setInn(snap.inn);setInn1(snap.inn1||null);setIB(!!snap.ib);setMO(snap.mo||null);setSaved(false);
-      const payload=JSON.parse(JSON.stringify({...snap, writer:writerId.current, role:role==="admin"?"admin":"scorer", intent:"revert", t}));
-      delete payload.backedUpAt; delete payload.by;
-      DB.ref("live").set(payload).catch(e=>alert("Restore write failed: "+(e.message||"")));
+      setMatch(snap.match);
+      setInn(snap.inn);
+      setInn1(snap.inn1||null);
+      setIB(!!snap.ib);
+      setMO(snap.mo||null);
+      setSaved(false);
       return true;
     };
     const finishNoBackup=()=>alert("No backup found to restore. Backups are taken automatically ~20s into a live match.");
@@ -1611,6 +1627,60 @@ function playFreeHitSound(){
       osc.connect(gain);gain.connect(ctx.destination);
       osc.start(t);osc.stop(t+0.32);
     });
+  }catch(e){}
+}
+
+// ── Hero animation sounds: bat-hit crack + crowd cheer ─────────────────────────
+// Same lightweight, synthesized approach as the free-hit fanfare above (no audio files to host —
+// keeps the whole app a single HTML file). Shared context so repeated plays don't pile up nodes.
+let _heroCtx = null;
+function _getHeroCtx(){
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(!Ctx)return null;
+    if(!_heroCtx)_heroCtx=new Ctx();
+    if(_heroCtx.state==="suspended")_heroCtx.resume();
+    return _heroCtx;
+  }catch(e){ return null; }
+}
+// Short, sharp "crack" — a quick noise burst + a thump, like bat meeting ball.
+function playBatCrack(){
+  const ctx=_getHeroCtx(); if(!ctx)return;
+  try{
+    const t=ctx.currentTime;
+    // crack: short filtered noise burst
+    const bufLen=Math.floor(ctx.sampleRate*0.05);
+    const buf=ctx.createBuffer(1,bufLen,ctx.sampleRate);
+    const data=buf.getChannelData(0);
+    for(let i=0;i<bufLen;i++) data[i]=(Math.random()*2-1)*(1-i/bufLen);
+    const noise=ctx.createBufferSource(); noise.buffer=buf;
+    const hp=ctx.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=1200;
+    const ng=ctx.createGain(); ng.gain.setValueAtTime(0.35,t); ng.gain.exponentialRampToValueAtTime(0.0001,t+0.08);
+    noise.connect(hp); hp.connect(ng); ng.connect(ctx.destination); noise.start(t); noise.stop(t+0.08);
+    // thump: low sine for body
+    const osc=ctx.createOscillator(), og=ctx.createGain();
+    osc.type="sine"; osc.frequency.setValueAtTime(180,t); osc.frequency.exponentialRampToValueAtTime(70,t+0.09);
+    og.gain.setValueAtTime(0.25,t); og.gain.exponentialRampToValueAtTime(0.0001,t+0.1);
+    osc.connect(og); og.connect(ctx.destination); osc.start(t); osc.stop(t+0.1);
+  }catch(e){}
+}
+// Crowd cheer — filtered noise swell, for boundaries (SIX/FOUR).
+function playCrowdCheer(big){
+  const ctx=_getHeroCtx(); if(!ctx)return;
+  try{
+    const t=ctx.currentTime;
+    const dur=big?1.4:0.8;
+    const bufLen=Math.floor(ctx.sampleRate*dur);
+    const buf=ctx.createBuffer(1,bufLen,ctx.sampleRate);
+    const data=buf.getChannelData(0);
+    for(let i=0;i<bufLen;i++) data[i]=Math.random()*2-1;
+    const noise=ctx.createBufferSource(); noise.buffer=buf;
+    const bp=ctx.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=big?1100:900; bp.Q.value=0.7;
+    const g=ctx.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(big?0.18:0.12,t+dur*0.25);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    noise.connect(bp); bp.connect(g); g.connect(ctx.destination); noise.start(t); noise.stop(t+dur);
   }catch(e){}
 }
 
@@ -2339,16 +2409,21 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
       {teamEditOpen&&(
         <Modal onClose={()=>setTeamEditOpen(false)} title="👥 Edit Match Teams">
           <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Add or remove players from each team. Changes take effect immediately for everyone.</p>
-          {[["🟡",match?.teamA||"Team A",editPubA,setEditPubA,newNameA,setNewNameA,"A"],
-            ["⚡",match?.teamB||"Team B",editPubB,setEditPubB,newNameB,setNewNameB,"B"]
-          ].map(([em,teamName,list,setList,newName,setNewName,side])=>(
+          {[["🟡",match?.teamA||"Team A",editPubA,setEditPubA,newNameA,setNewNameA,"A",setEditPubB],
+            ["⚡",match?.teamB||"Team B",editPubB,setEditPubB,newNameB,setNewNameB,"B",setEditPubA]
+          ].map(([em,teamName,list,setList,newName,setNewName,side,setOther])=>(
             <div key={side} style={{marginBottom:16}}>
               <p style={{fontWeight:700,fontSize:13,marginBottom:8,color:side==="A"?"#fbbf24":"#6ee7b7"}}>{em} {teamName} ({list.length})</p>
               <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
                 {list.map(n=>(
-                  <div key={n} style={{display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,.06)",borderRadius:8,padding:"4px 8px"}}>
+                  <div key={n} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,.06)",borderRadius:8,padding:"4px 8px"}}>
                     <span style={{fontSize:12}}>{n}</span>
-                    <button onClick={()=>setList(l=>l.filter(x=>x!==n))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:14,lineHeight:1,padding:0}}>×</button>
+                    <button title={"Move to the other team"} onClick={()=>{
+                      // move this player to the OTHER team: remove here, add there (avoid dupes there)
+                      setList(l=>l.filter(x=>x!==n));
+                      setOther(o=>o.includes(n)?o:[...o,n]);
+                    }} style={{background:"none",border:"none",color:"#a5b4fc",cursor:"pointer",fontSize:13,lineHeight:1,padding:0}}>⇄</button>
+                    <button title={"Remove player"} onClick={()=>setList(l=>l.filter(x=>x!==n))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:14,lineHeight:1,padding:0}}>×</button>
                   </div>
                 ))}
               </div>
@@ -3732,6 +3807,13 @@ function CricketHero({hideText}){
     {label:"BOWLED!",color:"#f87171",type:"bowled"},
   ],[]);
   const[idx,setIdx]=React.useState(0);
+  // Refs mirroring idx/outcomes so the timer chain's callbacks (which only capture their closure ONCE,
+  // since the effect below never re-runs) can always read the CURRENT outcome — needed for triggering
+  // the right sound effect (bat-crack / crowd-cheer) at the right moment without a stale value.
+  const idxRef=React.useRef(idx);
+  const outcomesRef=React.useRef(outcomes);
+  React.useEffect(()=>{ idxRef.current=idx; },[idx]);
+  React.useEffect(()=>{ outcomesRef.current=outcomes; },[outcomes]);
   // 8-SECOND CINEMATIC TIMELINE — distinct phases so the bowler runs in, delivers, the ball travels,
   // the bat swings, the result pops, then a celebration beat before resetting. Each phase flows into
   // the next via a single recursive timeout chain (no parallel timers) so nothing desyncs.
@@ -3764,8 +3846,22 @@ function CricketHero({hideText}){
       });
       timers.push(setTimeout(()=>{ if(alive) setPhase("action"); },t_action));
       timers.push(setTimeout(()=>{ if(alive) setPhase("release"); },t_release));
-      timers.push(setTimeout(()=>{ if(alive) setPhase("swing"); },t_swing));     // contact moment
-      timers.push(setTimeout(()=>{ if(alive) setPhase("result"); },t_result));
+      timers.push(setTimeout(()=>{
+        if(!alive)return;
+        setPhase("swing");     // contact moment
+        // Sound effects: read the CURRENT outcome via idxRef (not the closure's idx, which would be
+        // stale since this effect only runs once and recurses internally) — same fix pattern used for
+        // the backup timer bug. Bat-crack plays on every contact except a wide (no shot played).
+        const t=outcomesRef.current[idxRef.current]?.type;
+        if(t&&t!=="wide") playBatCrack();
+      },t_swing));
+      timers.push(setTimeout(()=>{
+        if(!alive)return;
+        setPhase("result");
+        const t=outcomesRef.current[idxRef.current]?.type;
+        if(t==="six") playCrowdCheer(true);
+        else if(t==="four") playCrowdCheer(false);
+      },t_result));
       timers.push(setTimeout(()=>{ if(alive) setPhase("celebrate"); },t_celeb));
       timers.push(setTimeout(()=>{
         if(!alive)return;
@@ -3781,6 +3877,14 @@ function CricketHero({hideText}){
   const type=o.type;
   const isBowled=type==="bowled", isSix=type==="six", isCaught=type==="caught", isRunOut=type==="runout", isWide=type==="wide", isFour=type==="four";
   const isHit = isSix||isFour;
+  // Every outcome that involves contact now gets its OWN distinct bat motion (shot variety), instead
+  // of only six/four swinging and everything else staying still:
+  //   six     → lofted drive: big full arc, high follow-through (ball flies up and over)
+  //   four    → cover drive: smooth wide arc through the off side (ball races along the ground)
+  //   bowled  → defensive prod: small, late, weak push that doesn't get there in time
+  //   caught  → loose drive: a fuller swing that skies it (mistimed, hence the catch)
+  //   runout  → quick tap: short nudge for a single, bat barely moves
+  //   wide    → no shot at all (ball is too far away to play)
   // contact happens at the START of "swing"; everything from swing onward is post-contact
   const contactOrAfter = phase==="swing"||phase==="result"||phase==="celebrate";
   const settled = phase==="result"||phase==="celebrate";
@@ -3810,11 +3914,29 @@ function CricketHero({hideText}){
   const trailFrom = phase==="release" ? BOWLER_HAND : phase==="result" ? contactPt : null;
   const showTrail = (phase==="release"||phase==="result") && !isWide;
 
-  const swingRotation = settled ? 0 : contactOrAfter ? (isSix?-160:isFour?-100:0) : 0;
+  const swingRotation = settled ? 0 : contactOrAfter ? (
+    isSix ? -160        // lofted drive — big full arc
+    : isFour ? -100      // cover drive — wide smooth arc
+    : isCaught ? -130     // loose drive — fuller swing, mistimed
+    : isBowled ? -35      // defensive prod — small, late, doesn't get there
+    : isRunOut ? -45      // quick tap for a single
+    : 0                   // wide — no shot
+  ) : 0;
+  const swings = isSix||isFour||isCaught||isBowled||isRunOut; // every outcome except WIDE now swings
+  const isWicket = isBowled||isCaught||isRunOut;
+  // Fixed angles for the particle burst (deterministic — no per-frame randomness, so React state
+  // never has to track random values). 8-way spread reads as a believable little impact burst.
+  const particleAngles=React.useMemo(()=>[0,45,90,135,180,225,270,315],[]);
   // Bowler run-in: the whole bowler figure translates in from further back during runin, plants at action.
   const bowlerShift = runningIn ? (phase==="runin"? -26 : 0) : 0;
-  // Bowling arm windmills over during action/release.
-  const bowlArm = (phase==="action"||phase==="release"||contactOrAfter) ? -360 : (phase==="runin"? -120 : -150);
+  // Bowling arm windmills over during action/release. On a wicket, it switches to a raised
+  // fist-pump pose during the celebration beat instead of staying locked at the windmill-complete angle.
+  const bowlArm = celebrating&&isWicket ? -200
+                : (phase==="action"||phase==="release"||contactOrAfter) ? -360
+                : (phase==="runin"? -120 : -150);
+  // Camera punch-in — a quick subtle zoom at the moment of contact, easing back out over the
+  // result/celebrate window. Skipped for WIDE (nothing actually happens to punch into).
+  const cameraScale = (phase==="swing" && !isWide) ? 1.045 : 1;
 
   // viewBox is 320x170: a dedicated top band (y 0-40) for the result word,
   // and the pitch/figures live entirely below that (y 45-150) — no shared space, no overlap risk.
@@ -3834,7 +3956,9 @@ function CricketHero({hideText}){
         filter:"blur(6px)",transform:"rotate(8deg)",animation:"floodSweep 9s ease-in-out infinite"}}/>
       {/* Dark overlay so the stick figures + result text stay readable on the bright pitch */}
       <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(5,8,30,.35) 0%,rgba(5,8,30,.15) 55%,rgba(5,8,30,.45) 100%)",pointerEvents:"none"}}/>
-      <svg viewBox="0 0 320 170" preserveAspectRatio="xMidYMid meet" style={{position:"relative",width:"100%",height:"100%",display:"block"}}>
+      <svg viewBox="0 0 320 170" preserveAspectRatio="xMidYMid meet" style={{position:"relative",width:"100%",height:"100%",display:"block",
+        transform:`scale(${cameraScale})`,transformOrigin:"52% 60%",
+        transition:phase==="swing"?"transform 130ms cubic-bezier(.34,1.56,.64,1)":"transform 650ms ease-out"}}>
         <defs>
           {/* soft white glow for the stick figures (matches the reference's glowing white players) */}
           <filter id="figGlow" x="-40%" y="-40%" width="180%" height="180%">
@@ -3885,77 +4009,152 @@ function CricketHero({hideText}){
         <g transform="translate(51,46) scale(0.68)" filter="url(#figGlow)">
         <ellipse cx="160" cy="150" rx="150" ry="7" fill="rgba(0,0,0,.28)"/>
 
-        {/* Bowler — runs IN during runin, plants and windmills the arm over on action/release */}
+        {/* Bowler — runs IN during runin, plants and delivers on action/release. Drawn with CLEAN
+            even-width rounded-cap strokes (the crisp reference style), NOT tapered polygons. Limbs are
+            two-segment (thigh+shin, upper+forearm) so knees/elbows still articulate, but every segment
+            is a simple <line> via the S() style. All phase-driven values (bowlerShift, bowlArm,
+            runningIn) are reused untouched — only the drawing primitive changed back to clean lines. */}
         <g style={{transform:`translate(${56+bowlerShift}px,76px)`,transition:`transform ${runningIn?(phase==="runin"?T_RUNIN:T_ACTION):300}ms ease-in-out`}}>
-          {/* legs scissor while running in */}
+          <g style={{animation:phase==="runin"?"runBounce .3s ease-in-out infinite":"none"}}>
           <circle cx="0" cy="0" r="11" {...S("#eaf0ff")}/>
-          <line x1="0" y1="11" x2="0" y2="49" {...S("#eaf0ff")}/>
-          <g style={{transformOrigin:"0px 49px",animation:phase==="runin"?"legSprint .3s linear infinite":"none"}}>
-            <line x1="0" y1="49" x2="-12" y2="65" {...S("#eaf0ff")}/>
-            <line x1="0" y1="49" x2="12" y2="65" {...S("#eaf0ff")}/>
+          <line x1="0" y1="11" x2="0" y2="41" {...S("#eaf0ff")}/>
+          {/* front leg (plants toward the batsman, +x): thigh then shin, hinged at the knee. Run-cycle
+              while running in; fixed grounded lunge for delivery/follow-through/result/celebrate. */}
+          <g style={{transformOrigin:"0px 41px",
+            animation:phase==="runin"?"thighSwingA .3s linear infinite":"none",
+            transform:phase==="runin"?undefined:"rotate(38deg)",
+            transition:phase==="runin"?"none":"transform 300ms ease-out"}}>
+            <line x1="0" y1="41" x2="0" y2="57" {...S("#eaf0ff")}/>
+            <g style={{transformOrigin:"0px 57px",transform:"rotate(-22deg)"}}>
+              <line x1="0" y1="57" x2="0" y2="73" {...S("#eaf0ff")}/>
+            </g>
           </g>
-          {/* bowling arm windmills over */}
+          {/* back leg (trailing, -x) */}
+          <g style={{transformOrigin:"0px 41px",
+            animation:phase==="runin"?"thighSwingB .3s linear infinite":"none",
+            transform:phase==="runin"?undefined:"rotate(-30deg)",
+            transition:phase==="runin"?"none":"transform 300ms ease-out"}}>
+            <line x1="0" y1="41" x2="0" y2="57" {...S("#eaf0ff")}/>
+            <g style={{transformOrigin:"0px 57px",transform:"rotate(-28deg)"}}>
+              <line x1="0" y1="57" x2="0" y2="73" {...S("#eaf0ff")}/>
+            </g>
+          </g>
+          {/* bowling arm — reuses the EXISTING bowlArm rotation value untouched (windmills over on
+              delivery, raises to a fist-pump on a wicket celebration); forearm adds an elbow bend. */}
           <g style={{transformOrigin:"0px 19px",transform:`rotate(${bowlArm}deg)`,transition:`transform ${phase==="action"||phase==="release"?T_ACTION+T_RELEASE:300}ms ease-in-out`}}>
-            <line x1="0" y1="19" x2="19" y2="9" {...S("#eaf0ff")}/>
+            <line x1="0" y1="19" x2="0" y2="32" {...S("#eaf0ff")}/>
+            <g style={{transformOrigin:"0px 32px",transform:"rotate(-18deg)"}}>
+              <line x1="0" y1="32" x2="0" y2="43" {...S("#eaf0ff")}/>
+            </g>
+          </g>
+          {/* non-bowling arm — out for balance on delivery, tucked while running */}
+          <g style={{transformOrigin:"0px 19px",transform:`rotate(${runningIn?150:-145}deg)`,transition:"transform 300ms ease-in-out"}}>
+            <line x1="0" y1="19" x2="0" y2="30" {...S("#eaf0ff")}/>
+            <g style={{transformOrigin:"0px 30px",transform:"rotate(20deg)"}}>
+              <line x1="0" y1="30" x2="0" y2="40" {...S("#eaf0ff")}/>
+            </g>
+          </g>
           </g>
         </g>
 
-        {/* Batsman 1 (striker) */}
+        {/* Batsman 1 (striker) — CLEAN even-width strokes (crisp reference style), NOT tapered polygons.
+            Outer translate/rotate group (isRunOut sprint positioning, dismissal slump) is completely
+            untouched; only the drawing primitive changed back to clean lines. Legs show a wide
+            front-foot drive stance during contactOrAfter (narrow stance beforehand). */}
         <g transform={isRunOut?"translate(0,0)":"translate(264,76)"}>
           <g style={{
-            transform:isRunOut?(settled?"translate(56px,76px)":contactOrAfter?"translate(150px,76px)":"translate(264px,76px)"):"none",
-            transition:isRunOut?`transform ${contactOrAfter?(settled?'1100ms':'900ms'):'0ms'} ease-in-out`:"none"
+            transform:isRunOut
+              ?(settled?"translate(56px,76px)":contactOrAfter?"translate(150px,76px)":"translate(264px,76px)")
+              :(celebrating&&(isBowled||isCaught)?"rotate(8deg)":"none"),
+            transformOrigin:"0px 30px",
+            transition:isRunOut
+              ?`transform ${contactOrAfter?(settled?'1100ms':'900ms'):'0ms'} ease-in-out`
+              :(celebrating&&(isBowled||isCaught)?"transform 500ms ease-out":"none")
           }}>
             <circle cx="0" cy="0" r="11" {...S("#fff4dc")}/>
-            <line x1="0" y1="11" x2="0" y2="49" {...S("#fff4dc")}/>
-            <g style={{transformOrigin:"0px 49px",animation:isRunOut?"legSprint .3s linear infinite":"none"}}>
-              <line x1="0" y1="49" x2="-12" y2="65" {...S("#fff4dc")}/>
-              <line x1="0" y1="49" x2="12" y2="65" {...S("#fff4dc")}/>
+            <line x1="0" y1="11" x2="0" y2="41" {...S("#fff4dc")}/>
+            {/* front leg (toward the bowler, -x): thigh + shin hinged at knee */}
+            <g style={{transformOrigin:"0px 41px",
+              animation:isRunOut?"thighSwingA .3s linear infinite":"none",
+              transform:isRunOut?undefined:(contactOrAfter?"rotate(-34deg)":"rotate(-8deg)"),
+              transition:isRunOut?"none":"transform 200ms ease-out"}}>
+              <line x1="0" y1="41" x2="0" y2="57" {...S("#fff4dc")}/>
+              <g style={{transformOrigin:"0px 57px",transform:contactOrAfter&&!isRunOut?"rotate(18deg)":"rotate(0deg)"}}>
+                <line x1="0" y1="57" x2="0" y2="73" {...S("#fff4dc")}/>
+              </g>
             </g>
-            {/* Bat swing — same simple motion for every outcome that involves a swing (six and four alike).
-                A six is distinguished by the BALL flying further/higher afterward, not by a separate
-                celebration animation — keeps the scene simple and avoids any extra moving parts to desync.
-                The contact-transition duration (150ms) is matched EXACTLY to the result text's pop-in duration
-                below, so the bat finishes its swing at the same visual instant the word finishes appearing. */}
+            {/* back leg (trailing, +x) */}
+            <g style={{transformOrigin:"0px 41px",
+              animation:isRunOut?"thighSwingB .3s linear infinite":"none",
+              transform:isRunOut?undefined:(contactOrAfter?"rotate(28deg)":"rotate(6deg)"),
+              transition:isRunOut?"none":"transform 200ms ease-out"}}>
+              <line x1="0" y1="41" x2="0" y2="57" {...S("#fff4dc")}/>
+              <g style={{transformOrigin:"0px 57px",transform:contactOrAfter&&!isRunOut?"rotate(-8deg)":"rotate(0deg)"}}>
+                <line x1="0" y1="57" x2="0" y2="73" {...S("#fff4dc")}/>
+              </g>
+            </g>
+            {/* Bat arm — reuses the EXISTING swingRotation value untouched (per-outcome shot type).
+                Upper arm + forearm + a flat two-tone bat (light handle, slightly thicker blade) drawn
+                as clean lines. The 150ms contact transition still matches the result-text pop-in. */}
             <g style={{transformOrigin:"0px 19px",
-              transform:`rotate(${isHit?swingRotation:0}deg)`,
+              transform:`rotate(${swings?swingRotation:0}deg)`,
               transition:`transform ${runningIn?'250ms':contactOrAfter?(settled?'900ms':'150ms'):'0ms'} ease-in-out`}}>
-              <line x1="0" y1="19" x2="-7" y2="31" {...S("#fff4dc")}/>
-              <line x1="-7" y1="31" x2="-7" y2="62" stroke="#f0d9b5" strokeWidth="6" strokeLinecap="round"/>
+              <line x1="0" y1="19" x2="0" y2="31" {...S("#fff4dc")}/>
+              <g style={{transformOrigin:"0px 31px",transform:"rotate(-15deg)"}}>
+                <line x1="0" y1="31" x2="0" y2="39" {...S("#fff4dc")}/>
+                {/* bat: handle then blade, continuing roughly in line with the forearm */}
+                <line x1="0" y1="39" x2="0" y2="47" stroke="#c9b48a" strokeWidth="4" strokeLinecap="round"/>
+                <line x1="0" y1="47" x2="0" y2="60" stroke="#f0d9b5" strokeWidth="7" strokeLinecap="round"/>
+              </g>
+            </g>
+            {/* Free arm raised in celebration on a SIX (celebrate beat only) — additive, opacity-driven */}
+            <g opacity={celebrating&&isSix?1:0} style={{transition:"opacity 300ms ease-out"}}>
+              <g style={{transformOrigin:"0px 19px",transform:"rotate(-140deg)"}}>
+                <line x1="0" y1="19" x2="0" y2="30" {...S("#fff4dc")}/>
+              </g>
             </g>
           </g>
         </g>
 
-        {/* Batsman 2 (non-striker) — only for run-out, mirrors batsman 1's phase-driven motion exactly */}
+        {/* Batsman 2 (non-striker) — only for run-out, mirrors batsman 1's phase-driven motion exactly.
+            Upgraded to tapered limbs with a real running-stride leg cycle instead of the old scaleX trick. */}
         {isRunOut&&(
           <g style={{
             transform:settled?"translate(264px,76px)":contactOrAfter?"translate(170px,76px)":"translate(56px,76px)",
             transition:`transform ${contactOrAfter?(settled?'1100ms':'900ms'):'0ms'} ease-in-out`
           }}>
             <circle cx="0" cy="0" r="11" {...S("#ffffff")}/>
-            <line x1="0" y1="11" x2="0" y2="49" {...S("#ffffff")}/>
-            <g style={{transformOrigin:"0px 49px",animation:"legSprint .3s linear infinite"}}>
-              <line x1="0" y1="49" x2="-12" y2="65" {...S("#ffffff")}/>
-              <line x1="0" y1="49" x2="12" y2="65" {...S("#ffffff")}/>
+            <line x1="0" y1="11" x2="0" y2="41" {...S("#ffffff")}/>
+            <g style={{transformOrigin:"0px 41px",animation:"thighSwingA .3s linear infinite"}}>
+              <line x1="0" y1="41" x2="0" y2="57" {...S("#ffffff")}/>
+              <g style={{transformOrigin:"0px 57px"}}><line x1="0" y1="57" x2="0" y2="73" {...S("#ffffff")}/></g>
             </g>
-            <line x1="0" y1="19" x2="14" y2="10" {...S("#ffffff")}/>
+            <g style={{transformOrigin:"0px 41px",animation:"thighSwingB .3s linear infinite"}}>
+              <line x1="0" y1="41" x2="0" y2="57" {...S("#ffffff")}/>
+              <g style={{transformOrigin:"0px 57px"}}><line x1="0" y1="57" x2="0" y2="73" {...S("#ffffff")}/></g>
+            </g>
+            <g style={{transformOrigin:"0px 19px",transform:"rotate(-35deg)"}}>
+              <line x1="0" y1="19" x2="0" y2="33" {...S("#ffffff")}/>
+            </g>
           </g>
         )}
 
-        {/* Fielder — only for a catch, dives in exactly when phase becomes "contact" */}
+        {/* Fielder — dives in exactly when phase becomes "contact", then eases up into a less-prone
+            triumphant lean during the celebration beat (small reaction touch, same dive logic intact).
+            Clean even-width line strokes; the outer dive translate+rotate is completely untouched. */}
         {isCaught&&(
           <g transform="translate(222,60)">
             <g style={{
               opacity:contactOrAfter?1:0,
-              transform:contactOrAfter?"translate(-16px,8px) rotate(-30deg)":"translate(0,0) rotate(0deg)",
-              transition:`transform ${contactOrAfter?'350ms':'0ms'} ease-out, opacity 150ms ease-out`
+              transform:celebrating?"translate(-16px,2px) rotate(-8deg)":contactOrAfter?"translate(-16px,8px) rotate(-30deg)":"translate(0,0) rotate(0deg)",
+              transition:`transform ${contactOrAfter?(celebrating?'500ms':'350ms'):'0ms'} ease-out, opacity 150ms ease-out`
             }}>
               <circle cx="0" cy="0" r="10" {...S("#d6ffe9")}/>
               <line x1="0" y1="10" x2="0" y2="40" {...S("#d6ffe9")}/>
-              <line x1="0" y1="16" x2="-14" y2="4" {...S("#d6ffe9")}/>
-              <line x1="0" y1="16" x2="14" y2="4" {...S("#d6ffe9")}/>
-              <line x1="0" y1="40" x2="-10" y2="54" {...S("#d6ffe9")}/>
-              <line x1="0" y1="40" x2="10" y2="54" {...S("#d6ffe9")}/>
+              <g style={{transformOrigin:"0px 16px",transform:"rotate(-55deg)"}}><line x1="0" y1="16" x2="0" y2="30" {...S("#d6ffe9")}/></g>
+              <g style={{transformOrigin:"0px 16px",transform:"rotate(55deg)"}}><line x1="0" y1="16" x2="0" y2="30" {...S("#d6ffe9")}/></g>
+              <g style={{transformOrigin:"0px 40px",transform:"rotate(-30deg)"}}><line x1="0" y1="40" x2="0" y2="56" {...S("#d6ffe9")}/></g>
+              <g style={{transformOrigin:"0px 40px",transform:"rotate(30deg)"}}><line x1="0" y1="40" x2="0" y2="56" {...S("#d6ffe9")}/></g>
             </g>
           </g>
         )}
@@ -3977,6 +4176,34 @@ function CricketHero({hideText}){
           ))}
         </g>
 
+        {/* Wicketkeeper — NEW figure, purely additive (no existing logic touched). Crouches behind the
+            stumps throughout, matching the reference's persistent keeper presence. Clean line strokes.
+            A small continuous idle sway keeps it alive; a slight forward lean reacts on a bowled out. */}
+        <g transform="translate(302,122) scale(0.72)" style={{animation:"keeperSway 2.6s ease-in-out infinite"}}>
+          <g style={{transform:(contactOrAfter&&isBowled)?"translate(-4px,2px)":"none",transition:"transform 300ms ease-out"}}>
+            <circle cx="0" cy="-20" r="8" {...S("#d6ffe9")}/>
+            <line x1="0" y1="-13" x2="0" y2="4" {...S("#d6ffe9")}/>
+            <g style={{transformOrigin:"0px 4px",transform:"rotate(-45deg)"}}>
+              <line x1="0" y1="4" x2="0" y2="12" {...S("#d6ffe9")}/>
+              <g style={{transformOrigin:"0px 12px",transform:"rotate(50deg)"}}>
+                <line x1="0" y1="12" x2="0" y2="22" {...S("#d6ffe9")}/>
+              </g>
+            </g>
+            <g style={{transformOrigin:"0px 4px",transform:"rotate(45deg)"}}>
+              <line x1="0" y1="4" x2="0" y2="12" {...S("#d6ffe9")}/>
+              <g style={{transformOrigin:"0px 12px",transform:"rotate(-50deg)"}}>
+                <line x1="0" y1="12" x2="0" y2="22" {...S("#d6ffe9")}/>
+              </g>
+            </g>
+            <g style={{transformOrigin:"0px -10px",transform:"rotate(-25deg)"}}>
+              <line x1="0" y1="-10" x2="0" y2="0" {...S("#d6ffe9")}/>
+            </g>
+            <g style={{transformOrigin:"0px -10px",transform:"rotate(25deg)"}}>
+              <line x1="0" y1="-10" x2="0" y2="0" {...S("#d6ffe9")}/>
+            </g>
+          </g>
+        </g>
+
         {/* Glowing dotted ball trail — a red dashed streak from the start of the ball's current leg to
             the ball, fading behind it (like the reference). Sits just under the ball. */}
         {showTrail&&trailFrom&&(
@@ -3986,12 +4213,34 @@ function CricketHero({hideText}){
             style={{transition:phase==="result"?"opacity 500ms ease-out":"opacity 150ms ease-in"}}/>
         )}
 
+        {/* Particle burst — a quick radiating spark of impact for boundaries and catches, adds visual
+            drama right at the contact point without touching any of the synced ball/bat logic. */}
+        {(isSix||isFour||isCaught)&&particleAngles.map(a=>{
+          const rad=a*Math.PI/180;
+          const burst=contactOrAfter&&!celebrating;
+          const dist=burst?16:0;
+          const dx=Math.cos(rad)*dist, dy=Math.sin(rad)*dist;
+          return(
+            <circle key={"p"+a} cx={contactPt.x} cy={contactPt.y} r="1.6"
+              fill={isSix?"#fde68a":isFour?"#fbbf24":"#e2e8f0"}
+              opacity={contactOrAfter?(celebrating?0:0.9):0}
+              style={{transform:`translate(${dx}px,${dy}px)`,
+                      transition:phase==="swing"?"transform 260ms ease-out, opacity 150ms ease-in"
+                              :celebrating?"opacity 500ms ease-out"
+                              :"none"}}/>
+          );
+        })}
+
         {/* Ball — position computed directly from `phase`. Release flies hand→contact over T_RELEASE,
-            swing snaps contact (150ms, matched to bat+text), result flies to settle point. */}
+            swing snaps contact (150ms, matched to bat+text), result flies to settle point. A subtle
+            parabolic arc (CSS keyframe bump layered ON TOP of the linear cx/cy travel — the straight-line
+            cx/cy transition is untouched, so the guaranteed start/end positions never change) gives the
+            six and four a believable lofted feel with real "gravity", instead of a flat straight line. */}
         <circle cx={ballTarget.x} cy={ballTarget.y} r="6" fill="#ef4444" stroke="#fca5a5" strokeWidth="2"
           filter="url(#ballGlow)"
           opacity={(phase==="reset"||phase==="runin"||phase==="action")?0:(settled&&(isSix||isFour||isBowled||isCaught||isRunOut||isWide)?0:1)}
-          style={{transition:(phase==="reset"||phase==="runin"||phase==="action")?"none"
+          style={{animation:(phase==="result"&&isSix)?"ballArc 1.1s ease-out 1":(phase==="result"&&isFour)?"ballArcLow 1.1s ease-out 1":"none",
+                  transition:(phase==="reset"||phase==="runin"||phase==="action")?"none"
                   :phase==="release"?`cx ${T_RELEASE}ms ease-in, cy ${T_RELEASE}ms ease-in, opacity 150ms ease-in`
                   :phase==="swing"?`cx 150ms ease-out, cy 150ms ease-out`
                   :settled?`cx 1100ms ease-out, cy 1100ms ease-out, opacity 600ms ease-out`
