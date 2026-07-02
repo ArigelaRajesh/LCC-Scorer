@@ -3331,6 +3331,31 @@ function ViewerLive({onExit}){
   const[snap,setSnap]=React.useState(undefined);
   const[potm,setPotm]=React.useState(null);
   const[tab,setTab]=React.useState("live");
+  // MATCH SOUNDS for viewers — when the live score changes, play a matching sound so watching feels
+  // alive: bat-crack for 1–3 runs, crowd cheer for a FOUR, big roar for a SIX or a WICKET. Off by
+  // default with a 🔊 toggle (browsers require a user tap before audio anyway — the toggle IS that
+  // tap). soundOnRef mirrors the state so the compare-effect reads the current value without
+  // re-subscribing anything.
+  const[soundOn,setSoundOn]=React.useState(false);
+  const soundOnRef=React.useRef(false);
+  React.useEffect(()=>{ soundOnRef.current=soundOn; },[soundOn]);
+  const prevScoreRef=React.useRef(null);
+  React.useEffect(()=>{
+    const inn=snap&&snap.inn;
+    if(!inn){ prevScoreRef.current=null; return; }
+    const cur={mid:snap.match&&snap.match.matchId, innNum:inn.inningsNum||1, runs:inn.totalRuns||0, wkts:inn.wickets||0};
+    const prev=prevScoreRef.current;
+    prevScoreRef.current=cur;
+    if(!soundOnRef.current||!prev) return;
+    if(prev.mid!==cur.mid||prev.innNum!==cur.innNum) return;   // new match/innings — no sound
+    const dr=cur.runs-prev.runs, dw=cur.wkts-prev.wkts;
+    try{
+      if(dw>0) playCrowdCheer(true);                            // wicket — big roar
+      else if(dr>=6) playCrowdCheer(true);                      // six — big roar
+      else if(dr>=4) playCrowdCheer(false);                     // four — cheer
+      else if(dr>0) playBatCrack();                             // 1–3 — bat knock
+    }catch(e){}
+  },[snap]);
   React.useEffect(()=>{
     if(!FB_OK||!DB){setSnap(null);return;}
     let liveRef=null, liveCb=null, potmRef=null, potmCb=null, cancelled=false;
@@ -3422,6 +3447,11 @@ function ViewerLive({onExit}){
         <div className="tabs" style={{marginBottom:16}}>
           <button className={`tab${tab==="live"?" active":""}`} onClick={()=>setTab("live")}>📡 Live</button>
           <button className={`tab${tab==="scorecard"?" active":""}`} onClick={()=>setTab("scorecard")}>📋 Full Scorecard</button>
+          <button className="tab" title="Match sounds: bat knock on runs, crowd cheer on boundaries and wickets"
+            onClick={()=>{ setSoundOn(s=>!s); try{_getHeroCtx();}catch(e){} }}
+            style={{marginLeft:"auto",opacity:soundOn?1:0.55}}>
+            {soundOn?"🔊 Sounds on":"🔇 Sounds"}
+          </button>
         </div>
 
         {tab==="scorecard"?(
@@ -4116,10 +4146,13 @@ function CricketHero({hideText}){
   //   knee drive: in the gather the front knee lifts high (62°) then plants for the delivery stride.
   //   batsman: stands neutral, tips back a touch with the backlift (+4°), then leans INTO the shot
   //            (-10°) at contact — the weight transfer of a real drive. No lean for a wide (no shot).
-  const bowLean       = contactOrAfter ? 20 : phase==="release" ? 14 : phase==="action" ? -6 : 8;
-  const bowFrontThigh = phase==="action" ? 62 : 38;
-  const bowBackThigh  = phase==="action" ? -14 : -30;
-  const batLean       = (contactOrAfter && !isWide) ? -10 : phase==="release" ? 4 : 0;
+  const bowLean       = contactOrAfter ? 22 : phase==="release" ? 14 : phase==="action" ? -12 : 8;
+  const bowFrontThigh = phase==="action" ? 48 : 38;
+  // Follow-through: the back leg KICKS UP HIGH behind (the signature fast-bowler finish from the
+  // reference image) — thigh swings way back (-62°) with the shin flicked up further.
+  const bowBackThigh  = contactOrAfter ? -62 : phase==="action" ? -35 : -30;
+  const bowBackShin   = contactOrAfter ? -55 : -28;
+  const batLean       = (contactOrAfter && !isWide) ? -14 : phase==="release" ? 4 : 0;
 
   // viewBox is 320x170: a dedicated top band (y 0-40) for the result word,
   // and the pitch/figures live entirely below that (y 45-150) — no shared space, no overlap risk.
@@ -4201,7 +4234,7 @@ function CricketHero({hideText}){
                 </g>
                 {/* softly glowing text in the outcome colour */}
                 <text x="160" y="33" textAnchor="middle"
-                  fontFamily="'Oswald',sans-serif" fontSize="22" fontWeight="700" letterSpacing="3"
+                  fontFamily="'Oswald',sans-serif" fontSize="22" fontWeight="700" letterSpacing="3" fontStyle="italic"
                   fill={o.color} filter="url(#badgeTextGlow)">{o.label}</text>
               </>);
             })()}
@@ -4238,7 +4271,7 @@ function CricketHero({hideText}){
             transform:phase==="runin"?"rotate(34deg)":`rotate(${bowFrontThigh}deg)`,
             transition:phase==="runin"?"none":`transform ${phase==="action"?T_ACTION:300}ms ease-out`}}>
             <line x1="0" y1="41" x2="0" y2="57" {...S("#eaf0ff")}/>
-            <g style={{transformOrigin:"0px 57px",transform:phase==="action"?"rotate(-60deg)":"rotate(-22deg)",transition:"transform 300ms ease-out"}}>
+            <g style={{transformOrigin:"0px 57px",transform:phase==="action"?"rotate(-14deg)":"rotate(-22deg)",transition:"transform 300ms ease-out"}}>
               <line x1="0" y1="57" x2="0" y2="73" {...S("#eaf0ff")}/>
               <line x1="0" y1="73" x2="7" y2="73" stroke="#eaf0ff" strokeWidth="4" strokeLinecap="round"/>
             </g>
@@ -4258,7 +4291,7 @@ function CricketHero({hideText}){
               live inside so the shoulders move with the torso, like a real body. */}
           <g style={{transform:`rotate(${bowLean}deg)`,transformOrigin:"0px 41px",
             transition:`transform ${phase==="action"?T_ACTION:phase==="release"?T_RELEASE:400}ms ease-in-out`}}>
-          <circle cx="0" cy="0" r="11" fill="#eaf0ff"/>
+          <circle cx="0" cy="-1" r="9" stroke="#eaf0ff" strokeWidth="4.5" fill="none"/>
           <line x1="0" y1="11" x2="0" y2="41" stroke="#eaf0ff" strokeWidth="7" strokeLinecap="round"/>
           {/* bowling arm — the verified monotonic windmill (338→215→163→52), one continuous arc */}
           <g style={{transformOrigin:"0px 19px",transform:`rotate(${bowlArm}deg)`,
@@ -4301,7 +4334,7 @@ function CricketHero({hideText}){
             {/* front leg (toward the bowler, -x): thigh + shin hinged at knee */}
             <g style={{transformOrigin:"0px 41px",
               animation:isRunOut?"thighSwingA .55s ease-in-out infinite":"none",
-              transform:isRunOut?undefined:(contactOrAfter?"rotate(-34deg)":"rotate(-8deg)"),
+              transform:isRunOut?undefined:(contactOrAfter?"rotate(-42deg)":"rotate(-8deg)"),
               transition:isRunOut?"none":"transform 200ms ease-out"}}>
               <line x1="0" y1="41" x2="0" y2="57" {...S("#fff4dc")}/>
               <g style={{transformOrigin:"0px 57px",transform:contactOrAfter&&!isRunOut?"rotate(18deg)":"rotate(0deg)"}}>
@@ -4311,7 +4344,7 @@ function CricketHero({hideText}){
             {/* back leg (trailing, +x) */}
             <g style={{transformOrigin:"0px 41px",
               animation:isRunOut?"thighSwingB .55s ease-in-out infinite":"none",
-              transform:isRunOut?undefined:(contactOrAfter?"rotate(28deg)":"rotate(6deg)"),
+              transform:isRunOut?undefined:(contactOrAfter?"rotate(34deg)":"rotate(6deg)"),
               transition:isRunOut?"none":"transform 200ms ease-out"}}>
               <line x1="0" y1="41" x2="0" y2="57" {...S("#fff4dc")}/>
               <g style={{transformOrigin:"0px 57px",transform:contactOrAfter&&!isRunOut?"rotate(-8deg)":"rotate(0deg)"}}>
@@ -4323,7 +4356,7 @@ function CricketHero({hideText}){
                 and both arms live inside so the shoulders move with the torso. Legs stay planted. */}
             <g style={{transform:`rotate(${batLean}deg)`,transformOrigin:"0px 41px",
               transition:`transform ${phase==="release"?T_RELEASE:250}ms ease-in-out`}}>
-            <circle cx="0" cy="0" r="11" fill="#fff4dc"/>
+            <circle cx="0" cy="-1" r="9" stroke="#fff4dc" strokeWidth="4.5" fill="none"/>
             <line x1="0" y1="11" x2="0" y2="41" stroke="#fff4dc" strokeWidth="7" strokeLinecap="round"/>
             {/* Bat arm — reuses the EXISTING swingRotation value untouched (per-outcome shot type).
                 Upper arm + forearm + a flat two-tone bat (light handle, slightly thicker blade) drawn
@@ -4336,6 +4369,9 @@ function CricketHero({hideText}){
                 <line x1="0" y1="31" x2="0" y2="39" {...S("#fff4dc")}/>
                 {/* bat: handle then blade, continuing roughly in line with the forearm */}
                 <line x1="0" y1="39" x2="0" y2="47" stroke="#c9b48a" strokeWidth="4" strokeLinecap="round"/>
+                {/* gripping hands on the handle — small but makes the figure read as a person */}
+                <circle cx="0" cy="39.5" r="2.6" fill="#fff4dc"/>
+                <circle cx="0" cy="43.5" r="2.6" fill="#fff4dc"/>
                 <line x1="0" y1="47" x2="0" y2="60" stroke="#f0d9b5" strokeWidth="7" strokeLinecap="round"/>
               </g>
             </g>
@@ -4356,7 +4392,7 @@ function CricketHero({hideText}){
             transform:settled?"translate(264px,76px)":contactOrAfter?"translate(170px,76px)":"translate(56px,76px)",
             transition:`transform ${contactOrAfter?(settled?'1100ms':'900ms'):'0ms'} ease-in-out`
           }}>
-            <circle cx="0" cy="0" r="11" fill="#ffffff"/>
+            <circle cx="0" cy="-1" r="9" stroke="#ffffff" strokeWidth="4.5" fill="none"/>
             <line x1="0" y1="11" x2="0" y2="41" {...S("#ffffff")}/>
             <g style={{transformOrigin:"0px 41px",animation:"thighSwingA .55s ease-in-out infinite"}}>
               <line x1="0" y1="41" x2="0" y2="57" {...S("#ffffff")}/>
@@ -4382,7 +4418,7 @@ function CricketHero({hideText}){
               transform:celebrating?"translate(-16px,2px) rotate(-8deg)":contactOrAfter?"translate(-16px,8px) rotate(-30deg)":"translate(0,0) rotate(0deg)",
               transition:`transform ${contactOrAfter?(celebrating?'500ms':'350ms'):'0ms'} ease-out, opacity 150ms ease-out`
             }}>
-              <circle cx="0" cy="0" r="10" fill="#d6ffe9"/>
+              <circle cx="0" cy="0" r="9" stroke="#d6ffe9" strokeWidth="5" fill="none"/>
               <line x1="0" y1="10" x2="0" y2="40" {...S("#d6ffe9")}/>
               <g style={{transformOrigin:"0px 16px",transform:"rotate(-55deg)"}}><line x1="0" y1="16" x2="0" y2="30" {...S("#d6ffe9")}/></g>
               <g style={{transformOrigin:"0px 16px",transform:"rotate(55deg)"}}><line x1="0" y1="16" x2="0" y2="30" {...S("#d6ffe9")}/></g>
@@ -4409,31 +4445,31 @@ function CricketHero({hideText}){
           ))}
         </g>
 
-        {/* Wicketkeeper — NEW figure, purely additive (no existing logic touched). Crouches behind the
-            stumps throughout, matching the reference's persistent keeper presence. Clean line strokes.
-            A small continuous idle sway keeps it alive; a slight forward lean reacts on a bowled out. */}
-        <g transform="translate(302,122) scale(0.72)" style={{animation:"keeperSway 2.6s ease-in-out infinite"}}>
+        {/* Wicketkeeper — rebuilt as a proper SIDE-VIEW crouch matching the reference image (the old
+            version was drawn FRONT-view with symmetric splayed legs, which clashed with every other
+            side-view figure and read as a shapeless squat). Now: leaning forward toward the batsman,
+            legs together and bent under the body, gloves reaching down in front — the classic keeper
+            "ready" position. Position (outer) and sway (inner) stay on separate groups so the CSS
+            animation can never override the placement (the old teleport-to-the-floodlight bug). */}
+        <g transform="translate(302,122) scale(0.72)">
+          <g style={{animation:"keeperSway 2.6s ease-in-out infinite",transformOrigin:"0px 10px"}}>
           <g style={{transform:(contactOrAfter&&isBowled)?"translate(-4px,2px)":"none",transition:"transform 300ms ease-out"}}>
-            <circle cx="0" cy="-20" r="8" fill="#d6ffe9"/>
-            <line x1="0" y1="-13" x2="0" y2="4" {...S("#d6ffe9")}/>
-            <g style={{transformOrigin:"0px 4px",transform:"rotate(-45deg)"}}>
-              <line x1="0" y1="4" x2="0" y2="12" {...S("#d6ffe9")}/>
-              <g style={{transformOrigin:"0px 12px",transform:"rotate(50deg)"}}>
-                <line x1="0" y1="12" x2="0" y2="22" {...S("#d6ffe9")}/>
-              </g>
-            </g>
-            <g style={{transformOrigin:"0px 4px",transform:"rotate(45deg)"}}>
-              <line x1="0" y1="4" x2="0" y2="12" {...S("#d6ffe9")}/>
-              <g style={{transformOrigin:"0px 12px",transform:"rotate(-50deg)"}}>
-                <line x1="0" y1="12" x2="0" y2="22" {...S("#d6ffe9")}/>
-              </g>
-            </g>
-            <g style={{transformOrigin:"0px -10px",transform:"rotate(-25deg)"}}>
-              <line x1="0" y1="-10" x2="0" y2="0" {...S("#d6ffe9")}/>
-            </g>
-            <g style={{transformOrigin:"0px -10px",transform:"rotate(25deg)"}}>
-              <line x1="0" y1="-10" x2="0" y2="0" {...S("#d6ffe9")}/>
-            </g>
+            {/* head, forward of the body from the crouch lean */}
+            <circle cx="-13" cy="-9" r="7" stroke="#d6ffe9" strokeWidth="4.5" fill="none"/>
+            {/* torso leaning well forward (the rounded back of a crouching keeper) */}
+            <line x1="-9" y1="-3" x2="0" y2="10" {...S("#d6ffe9")}/>
+            {/* near leg: thigh forward-down, shin to the ground, small foot */}
+            <line x1="0" y1="10" x2="-9" y2="17" {...S("#d6ffe9")}/>
+            <line x1="-9" y1="17" x2="-7" y2="27" {...S("#d6ffe9")}/>
+            <line x1="-7" y1="27" x2="-1" y2="27" stroke="#d6ffe9" strokeWidth="4" strokeLinecap="round"/>
+            {/* far leg, slightly offset for depth */}
+            <line x1="0" y1="10" x2="-4" y2="18" {...S("#d6ffe9")}/>
+            <line x1="-4" y1="18" x2="-2" y2="27" {...S("#d6ffe9")}/>
+            {/* arms reaching down-forward, gloves together low in front */}
+            <line x1="-9" y1="-1" x2="-15" y2="8" {...S("#d6ffe9")}/>
+            <line x1="-15" y1="8" x2="-11" y2="16" {...S("#d6ffe9")}/>
+            <circle cx="-10.5" cy="17.5" r="3" fill="#d6ffe9"/>
+          </g>
           </g>
         </g>
 
