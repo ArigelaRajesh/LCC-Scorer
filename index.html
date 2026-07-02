@@ -4010,13 +4010,16 @@ function CricketHero({hideText}){
   // stride cycle, so the leg/bounce/arm run animations complete whole strides and stop right on
   // their rest frame (which matches the delivery pose) — no mid-stride snap when the run-up ends.
   // The contact "swing" beat stays SHORT (260ms): ball meets bat and flies away immediately.
-  const T_RUNIN=2750, T_ACTION=800, T_RELEASE=900, T_SWING=260, T_RESULT=2800, T_CELEBRATE=2400;
+  // T_RESULT/T_CELEBRATE trimmed from 2800/2400 — the badge was being held so long (5.6s of near-
+  // nothing after contact) that it felt like a long dead pause before the next ball. Still plenty of
+  // time to read a short word (1.8s) and let reactions play out (1.4s), just not padded.
+  const T_RUNIN=2750, T_ACTION=800, T_RELEASE=900, T_SWING=260, T_RESULT=1800, T_CELEBRATE=1400;
   const t_action  = T_RUNIN;                                   // 2750
   const t_release = t_action + T_ACTION;                       // 3550
   const t_swing   = t_release + T_RELEASE;                     // 4450 (contact)
   const t_result  = t_swing + T_SWING;                         // 4710 — ball flies off right after impact
-  const t_celeb   = t_result + T_RESULT;                       // 7510
-  const CYCLE_MS  = t_celeb + T_CELEBRATE + 400;               // ≈ 10.3s total, calm pace
+  const t_celeb   = t_result + T_RESULT;                       // 6510
+  const CYCLE_MS  = t_celeb + T_CELEBRATE + 250;               // ≈ 8.2s total, calm but not padded
 
   React.useEffect(()=>{
     let alive=true;
@@ -4210,8 +4213,16 @@ function CricketHero({hideText}){
           <g opacity={settled ? (celebrating?0.85:1) : 0}
              style={{transformOrigin:"160px 26px",
                      animation:phase==="result"?"badgePop .55s cubic-bezier(.22,1,.36,1) both":"none",
-                     transform:celebrating?"scale(0.97)":settled?"scale(1)":"scale(0.3)",
-                     transition:celebrating?"opacity .6s ease-out, transform .6s ease-out":"opacity .1s ease-out"}}>
+                     // IMPORTANT: no shrink-to-small on exit. The badgePop keyframes handle the
+                     // "grow in from small" entrance themselves; the static transform here only needs
+                     // to hold a steady scale once that animation ends. Previously this snapped to
+                     // scale(0.3) the instant celebrate ended (with only opacity given a transition),
+                     // which produced a brief visible "small, fading badge" flash right as the NEXT
+                     // ball's run-up began — exactly the "result showing before the ball happens" bug.
+                     // Now it stays at a steady size and simply fades out with opacity; invisible
+                     // (opacity 0) the whole time before the next ball's contact, no flash.
+                     transform:phase==="result"?undefined:celebrating?"scale(0.97)":"scale(1)",
+                     transition:celebrating?"opacity .6s ease-out, transform .6s ease-out":"opacity .12s ease-out"}}>
             {(()=>{
               // Clean neon frame — thin glowing outline over a dark-glass interior, glowing text,
               // with the reference image's little spark accents flanking the frame.
@@ -4451,7 +4462,7 @@ function CricketHero({hideText}){
             legs together and bent under the body, gloves reaching down in front — the classic keeper
             "ready" position. Position (outer) and sway (inner) stay on separate groups so the CSS
             animation can never override the placement (the old teleport-to-the-floodlight bug). */}
-        <g transform="translate(302,122) scale(0.72)">
+        <g transform="translate(314,122) scale(0.72)">
           <g style={{animation:"keeperSway 2.6s ease-in-out infinite",transformOrigin:"0px 10px"}}>
           <g style={{transform:(contactOrAfter&&isBowled)?"translate(-4px,2px)":"none",transition:"transform 300ms ease-out"}}>
             {/* head, forward of the body from the crouch lean */}
