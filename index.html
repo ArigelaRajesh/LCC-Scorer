@@ -1460,6 +1460,13 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     const prev=hist[hist.length-1];
     setHist(h=>h.slice(0,-1));
     setInn({...prev,pending:null});
+    // If the ball being undone is what just RE-TRIGGERED the innings/match-ending screen (very likely
+    // right after a revert — you're undoing the exact ball that ends it again), also clear mo/ib so
+    // the screen actually returns to live scoring instead of staying stuck showing "innings/match
+    // over" with stale-looking data underneath. Without this, Undo would silently fix the numbers but
+    // leave you stranded on a screen with no way back to the scoring buttons.
+    if(mo) setMO(null);
+    if(ib){ setIB(false); if(prev.inningsNum===1) setInn1(null); }
     // pending state (pw/nnb/pr) is DERIVED from inn.pending, which we just cleared above — so the
     // "who bowls/bats next?" UI disappears automatically. Just clear the name input fields.
     setNBN("");
@@ -1687,8 +1694,8 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
       onOk={()=>setSecondInningsAuthed(true)}
       onCancel={onExit}/>;
   }
-  if(ib)     return<InningsBreak inn={inn} match={match} onStart={start2} role={role} onRevert={revert} canRevert={!!preEnd||preEndInDB} onEditOvers={editOvers} onExit={onExit} rosterNames={rosterNames}/>;
-  if(mo) return<MatchOver result={mo} inn={inn} inn1={inn1} match={match} potm={potm} role={role} onRevert={revert} canRevert={!!preEnd||preEndInDB} onNew={()=>{setMatch(null);setInn(null);setMO(null);setInn1(null);setPreEnd(null);setPotm(null);if(FB_OK&&DB){DB.ref("live").remove().catch(()=>{});DB.ref("potm").remove().catch(()=>{});DB.ref("_preEnd").remove().catch(()=>{});}}}/>;
+  if(ib)     return<InningsBreak inn={inn} match={match} onStart={start2} role={role} onRevert={revert} canRevert={!!preEnd||preEndInDB} onEditOvers={editOvers} onExit={onExit} rosterNames={rosterNames} onUndoLastBall={undo} canUndoLastBall={hist.length>0}/>;
+  if(mo) return<MatchOver result={mo} inn={inn} inn1={inn1} match={match} potm={potm} role={role} onRevert={revert} canRevert={!!preEnd||preEndInDB} onUndoLastBall={undo} canUndoLastBall={hist.length>0} onNew={()=>{setMatch(null);setInn(null);setMO(null);setInn1(null);setPreEnd(null);setPotm(null);if(FB_OK&&DB){DB.ref("live").remove().catch(()=>{});DB.ref("potm").remove().catch(()=>{});DB.ref("_preEnd").remove().catch(()=>{});}}}/>;
 
   const SK=inn.batsmen[inn.strikerName];
   const NS=inn.nonStrikerName?inn.batsmen[inn.nonStrikerName]:null;
@@ -1723,7 +1730,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
             {role==="admin"&&<AdminActionsMenu
               onHistory={onHistory} onAnnounce={onAnnounce}
               inn={inn} onEditMatchSave={({overs,maxWkts})=>setInn(p=>({...p,overs,maxWkts}))}
-              match={match} role={role}
+              match={match} role={role} rosterNames={rosterNames}
               onUpdateTeams={(pubTeamA,pubTeamB)=>{
                 setMatch(m=>m?({...m,pubTeamA,pubTeamB}):m);
                 // Persist any brand-new names added via the team editor to the club roster too, so
@@ -2502,7 +2509,7 @@ function PinMgmtModal({onClose}){
 // Replaces the 6-button overflow row with a tidy dropdown. Navigation items
 // (History, Notice) close the menu and navigate. Modal items manage their own
 // open state locally so the dropdown stays out of their way.
-function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,onUpdateTeams}){
+function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,onUpdateTeams,rosterNames}){
   const[open,setOpen]=React.useState(false);
   const[editOpen,setEditOpen]=React.useState(false);
   const[pinMgmtOpen,setPinMgmtOpen]=React.useState(false);
@@ -2611,6 +2618,29 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
                 <button onClick={()=>{if(newName.trim()){setList(l=>[...l,newName.trim()]);setNewName("");}}}
                   style={{padding:"8px 12px",borderRadius:10,border:"none",background:"rgba(99,102,241,.3)",color:"#a5b4fc",cursor:"pointer",fontWeight:700,fontSize:13}}>Add</button>
               </div>
+              {/* PICK FROM CLUB ROSTER — the whole point of the fix. Rather than retyping a known
+                  member's name from memory, show every club player who ISN'T already on THIS team, as
+                  tappable chips. Tapping adds them here (and, if they were on the other team, the
+                  add-here + the ⇄ logic keep them from being duplicated across both sides). Case-
+                  insensitive filtering so "Raj" already on the team hides "raj" from the pick list. */}
+              {(()=>{
+                const onThis=new Set(list.map(n=>n.toLowerCase()));
+                const available=(rosterNames||[]).filter(n=>!onThis.has(n.toLowerCase()));
+                if(available.length===0) return <p style={{color:"#4b5563",fontSize:10,marginTop:8}}>All club players are on this team.</p>;
+                return(
+                  <div style={{marginTop:10}}>
+                    <p style={{color:"#6b7280",fontSize:10,marginBottom:6,textTransform:"uppercase",letterSpacing:".08em"}}>Or tap a club member to add:</p>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6,maxHeight:132,overflowY:"auto"}}>
+                      {available.map(n=>(
+                        <button key={n} onClick={()=>{
+                          setList(l=>l.includes(n)?l:[...l,n]);
+                          setOther(o=>o.filter(x=>x!==n));   // if they were on the other side, move them
+                        }} style={{background:"rgba(52,211,153,.12)",border:"1px solid rgba(52,211,153,.35)",borderRadius:8,padding:"4px 9px",color:"#6ee7b7",cursor:"pointer",fontSize:12}}>+ {n}</button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           ))}
           <button onClick={()=>{onUpdateTeams(editPubA,editPubB);setTeamEditOpen(false);}}
@@ -2930,7 +2960,7 @@ function OpenersForm({inn,match,onSubmit,role,onExit,rosterNames}){
   );
 }
 
-function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onEditOvers,onExit,rosterNames}){
+function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onEditOvers,onExit,rosterNames,onUndoLastBall,canUndoLastBall}){
   const rS=useRef(),rNS=useRef(),rBw=useRef();
   const single=inn.single;
   const go=()=>{
@@ -2966,6 +2996,13 @@ function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onEditOvers,onE
           {onEditOvers&&(
             <button className="btn w-full" onClick={()=>{const v=prompt(`Change match overs (currently ${inn.overs}). Enter new total overs:`,String(inn.overs));if(v!==null)onEditOvers(v);}}
               style={{marginTop:4,borderRadius:14,fontSize:13,padding:"12px",background:"transparent",border:"1.5px solid rgba(139,92,246,.4)",color:"#a78bfa"}}>⚙️ Edit Overs ({inn.overs})</button>
+          )}
+          {canUndoLastBall&&(
+            <button className="btn w-full" onClick={onUndoLastBall}
+              style={{marginTop:4,borderRadius:14,fontSize:13,padding:"12px",background:"transparent",border:"1.5px solid rgba(96,165,250,.5)",color:"#60a5fa"}}>
+              ↩ Undo Last Ball
+              <span style={{display:"block",fontSize:10,color:"#6b7280",fontWeight:400,marginTop:2}}>Just this delivery — e.g. if it wrongly ended the innings again</span>
+            </button>
           )}
           {canRevert&&(
             <button className="btn w-full" onClick={()=>{
@@ -3233,7 +3270,7 @@ function POTMVoting({inn,inn1,potm,role}){
   );
 }
 
-function MatchOver({result,inn,inn1,match,potm,role,onRevert,canRevert,onNew}){
+function MatchOver({result,inn,inn1,match,potm,role,onRevert,canRevert,onNew,onUndoLastBall,canUndoLastBall}){
   const[saving,setSaving]=React.useState(false);
 
   const[scorecardUrl,setScorecardUrl]=React.useState(null);
@@ -3347,6 +3384,11 @@ function MatchOver({result,inn,inn1,match,potm,role,onRevert,canRevert,onNew}){
           <button className="btn btn-primary" style={{padding:"13px 20px",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}} onClick={openScorecard} disabled={saving}>
             {saving?"Generating...":"📋 View Full Scorecard"}
           </button>
+          {canUndoLastBall&&(
+            <button className="btn" onClick={onUndoLastBall} style={{padding:"13px 20px",fontSize:14,background:"transparent",border:"1.5px solid rgba(96,165,250,.5)",color:"#60a5fa",borderRadius:14}}>
+              ↩ Undo Last Ball <span style={{display:"block",fontSize:10,color:"#6b7280",fontWeight:400,marginTop:2}}>Just this delivery — e.g. if it wrongly ended the match again</span>
+            </button>
+          )}
           {canRevert&&(
             <button className="btn" onClick={onRevert} style={{padding:"13px 20px",fontSize:14,background:"transparent",border:"1.5px solid rgba(52,211,153,.5)",color:"#34d399",borderRadius:14}}>↩️ Revert — bring match back to live</button>
           )}
