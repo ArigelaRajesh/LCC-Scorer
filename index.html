@@ -1677,6 +1677,15 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
   const confBowler=(directName)=>{
     const nm=(typeof directName==="string"?directName:nbwn).trim();if(!nm)return;
     if(inn&&nm===inn.bowlerName){alert("A bowler cannot bowl two overs in a row. Pick a different bowler.");return;}
+    // A batsman currently at the crease can't bowl — they're on the batting side. Blocks the same
+    // person being entered as both a batsman and the bowler.
+    if(inn){
+      const ln=nm.toLowerCase();
+      if((inn.strikerName&&ln===inn.strikerName.toLowerCase())||(inn.nonStrikerName&&ln===inn.nonStrikerName.toLowerCase())){
+        alert(`${nm} is currently batting and can't bowl this over. Pick a fielding-side player.`);
+        return;
+      }
+    }
     // Same auto-save-to-roster fix as confBatsman above — see that comment for the full reasoning.
     const alreadyKnownBowler=(rosterNames||[]).some(n=>n.toLowerCase()===nm.toLowerCase());
     if(!alreadyKnownBowler&&FB_OK&&DB){
@@ -2976,6 +2985,13 @@ function OpenersForm({inn,match,onSubmit,role,onExit,rosterNames}){
     // would corrupt the scorecard (one player credited for both ends). Case-insensitive check.
     if(!single&&s.toLowerCase()===ns.toLowerCase()){alert("Striker and non-striker must be two different players.");return;}
     if(!bw){alert("Enter the opening bowler's name.");return;}
+    // The bowler is on the FIELDING side, so they cannot also be one of the two batsmen. Same-name
+    // here means someone typed the same person in both roles (the duplicate the user hit). Block it.
+    const lb=bw.toLowerCase();
+    if(lb===s.toLowerCase()||(ns&&lb===ns.toLowerCase())){
+      alert("The bowler can't also be a batsman — they're on opposite teams. Enter a different bowler.");
+      return;
+    }
     onSubmit({striker:s,nonStriker:single?null:ns,bowler:bw});
   };
   return(
@@ -3023,6 +3039,8 @@ function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onEditOvers,onE
     if(!s||!bw){alert("Fill all required fields.");return;}
     if(!single&&!ns){alert("Enter the non-striker.");return;}
     if(!single&&s.toLowerCase()===ns.toLowerCase()){alert("Striker and non-striker must be two different players.");return;}
+    const lb=bw.toLowerCase();
+    if(lb===s.toLowerCase()||(ns&&lb===ns.toLowerCase())){alert("The bowler can't also be a batsman — they're on opposite teams. Enter a different bowler.");return;}
     onStart({striker:s,nonStriker:single?null:ns,bowler:bw});
   };
   const fields=single
@@ -3611,11 +3629,6 @@ function ViewerTeams({match,inn}){
   );
   return(
     <div>
-      {!assigned&&(
-        <p style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:14,lineHeight:1.6}}>
-          Showing players who've taken the field so far. For full squads, an admin can assign teams from the scoring screen (Admin menu → Edit Match Teams).
-        </p>
-      )}
       <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
         {col("🟡",teamA,listA,"#fbbf24")}
         {col("⚡",teamB,listB,"#6ee7b7")}
