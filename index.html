@@ -1248,11 +1248,24 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
   }
 
   // Abandon the CURRENT match and return the admin to a fresh Setup screen. Needed because once a
-  // match is live there was no way to start a different one without playing the current one to its end
-  // — a problem if a game is set up wrong, called off, or you simply need to start a different match.
-  // Clears all live state + the shared Firebase nodes so viewers also drop back to "no active match".
+  // match is live there was no way to start a different one without playing the current one to its end.
+  // CRITICAL: an in-progress match is normally only saved to History when it FINISHES — so simply
+  // clearing it would lose all its scoring (the data-loss the user hit). To prevent that, we first
+  // snapshot the current match (in whatever state it's in) into history_archive/ so it's always
+  // recoverable, THEN clear the live slot. Finished matches already in History are untouched.
   const abandonMatch=()=>{
-    if(!confirm("Discard the current match and start a new one? This clears the live match for everyone. (Finished matches already in History are NOT affected.)"))return;
+    if(!confirm("Start a new match? The current match will be saved (you can find it later) and the live screen cleared for everyone."))return;
+    if(FB_OK&&DB&&match?.matchId&&inn){
+      const archived=JSON.parse(JSON.stringify({
+        result:mo||{winner:null,abandoned:true}, inn1:inn1||null, inn2:inn,
+        teamA:match?.teamA, teamB:match?.teamB, tossSummary:match?.tossSummary||null,
+        venue:inn.venue, format:inn.format, overs:inn.overs, maxWkts:inn.maxWkts,
+        potm:potm?.winner||null, abandoned:!mo, savedAt:Date.now(), finishedAt:Date.now()
+      }));
+      // Use history_archive so an unfinished/abandoned game doesn't clutter the main History list of
+      // completed matches, but is still permanently kept and recoverable.
+      DB.ref("history_archive/"+match.matchId).set(archived).catch(()=>{});
+    }
     setMatch(null);setInn(null);setInn1(null);setMO(null);setIB(false);setPreEnd(null);setPotm(null);
     setHist([]);setSecondInningsAuthed(false);
     if(FB_OK&&DB){
@@ -1620,6 +1633,15 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     // the roster for the NEXT match. Now any genuinely new name is saved automatically, silently, in
     // the background — the explicit button still exists for when you want to fill in role/keeper/etc
     // up front, but it's no longer the ONLY way to end up in the club.
+    // CRICKET RULE: a batsman who is OUT is done for the innings — they can never bat again. A RETIRED
+    // batsman (retired hurt / retired not-out) MAY return. So before letting an existing name back in,
+    // reject them if they're marked out. (Without this guard, re-entering a dismissed batsman revived
+    // them with their old score and cleared nothing — letting one player bat twice, which is illegal.)
+    const already=inn&&inn.batsmen&&inn.batsmen[nm];
+    if(already&&already.out){
+      alert(`${nm} is already out and cannot bat again this innings. Pick a different batsman.`);
+      return;
+    }
     const alreadyKnown=(rosterNames||[]).some(n=>n.toLowerCase()===nm.toLowerCase());
     if(!alreadyKnown&&FB_OK&&DB){
       const id="p_"+Math.random().toString(36).slice(2)+Date.now().toString(36);
@@ -2950,6 +2972,9 @@ function OpenersForm({inn,match,onSubmit,role,onExit,rosterNames}){
     const[s,ns,bw]=[rS,rNS,rBw].map(r=>r.current?.value?.trim());
     if(!s){alert(single?"Enter the batsman's name.":"Enter the striker's name.");return;}
     if(!single&&!ns){alert("Enter the non-striker (or admin can set Single batsman mode at Lakes).");return;}
+    // Striker and non-striker must be two DIFFERENT people — same name on both is a data error that
+    // would corrupt the scorecard (one player credited for both ends). Case-insensitive check.
+    if(!single&&s.toLowerCase()===ns.toLowerCase()){alert("Striker and non-striker must be two different players.");return;}
     if(!bw){alert("Enter the opening bowler's name.");return;}
     onSubmit({striker:s,nonStriker:single?null:ns,bowler:bw});
   };
@@ -2973,6 +2998,7 @@ function OpenersForm({inn,match,onSubmit,role,onExit,rosterNames}){
             <span style={{color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:600}}>🏏 {inn.battingTeam} is batting first</span>
           </div>
           <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em"}}>{inn.battingTeam}'s opening {single?"batsman":"pair"}</p>
+          <p style={{color:"#6b7280",fontSize:10,marginTop:-4}}>💡 Tap a field to pick a club player from the list, or type a new name.</p>
           <div><label>🟡 {single?"Batsman":"Striker (on strike)"}</label><input ref={rS} list="rosterPlayers" placeholder={single?"Batsman name":"On-strike batsman"}/></div>
           {!single&&<div><label>⚪ Non-striker</label><input ref={rNS} list="rosterPlayers" placeholder="Other batsman"/></div>}
           <div className="divider"/>
@@ -2996,6 +3022,7 @@ function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onEditOvers,onE
     const[s,ns,bw]=[rS,rNS,rBw].map(r=>r.current?.value?.trim());
     if(!s||!bw){alert("Fill all required fields.");return;}
     if(!single&&!ns){alert("Enter the non-striker.");return;}
+    if(!single&&s.toLowerCase()===ns.toLowerCase()){alert("Striker and non-striker must be two different players.");return;}
     onStart({striker:s,nonStriker:single?null:ns,bowler:bw});
   };
   const fields=single
@@ -4325,19 +4352,16 @@ function CricketHero({hideText}){
       timers.push(setTimeout(()=>{
         if(!alive)return;
         setPhase("swing");     // contact moment
-        // Sound effects: read the CURRENT outcome via idxRef (not the closure's idx, which would be
-        // stale since this effect only runs once and recurses internally) — same fix pattern used for
-        // the backup timer bug. Bat-crack plays on every contact except a wide (no shot played).
-        const t=outcomesRef.current[idxRef.current]?.type;
-        if(t&&t!=="wide") playBatCrack();
+        // NOTE: the decorative landing-screen animation is SILENT by design. It used to play a
+        // bat-crack here and crowd cheers at the result below, but those fired on the animation's own
+        // random SIX/FOUR/WICKET loop — nothing to do with real scoring — so users heard random
+        // sounds "playing in the animation." Real match sounds come only from actual score changes
+        // (viewer score-diff effect) and milestone celebrations, never from this cosmetic loop.
       },t_swing));
       timers.push(setTimeout(()=>{
         if(!alive)return;
         setPhase("result");
         setDisplayIdx(idxRef.current);   // freeze the badge's content to THIS delivery's outcome
-        const t=outcomesRef.current[idxRef.current]?.type;
-        if(t==="six") playCrowdCheer(true);
-        else if(t==="four") playCrowdCheer(false);
       },t_result));
       timers.push(setTimeout(()=>{ if(alive) setPhase("celebrate"); },t_celeb));
       timers.push(setTimeout(()=>{
