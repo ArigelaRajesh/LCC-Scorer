@@ -1247,6 +1247,21 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     return <Centered emoji="🔄" title="Loading match…" sub="Checking for a live match"/>;
   }
 
+  // Abandon the CURRENT match and return the admin to a fresh Setup screen. Needed because once a
+  // match is live there was no way to start a different one without playing the current one to its end
+  // — a problem if a game is set up wrong, called off, or you simply need to start a different match.
+  // Clears all live state + the shared Firebase nodes so viewers also drop back to "no active match".
+  const abandonMatch=()=>{
+    if(!confirm("Discard the current match and start a new one? This clears the live match for everyone. (Finished matches already in History are NOT affected.)"))return;
+    setMatch(null);setInn(null);setInn1(null);setMO(null);setIB(false);setPreEnd(null);setPotm(null);
+    setHist([]);setSecondInningsAuthed(false);
+    if(FB_OK&&DB){
+      DB.ref("live").remove().catch(()=>{});
+      DB.ref("potm").remove().catch(()=>{});
+      DB.ref("_preEnd").remove().catch(()=>{});
+    }
+  };
+
   const startMatch=({teamA,teamB,battingFirst,bowlingFirst,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary})=>{
     setSaved(false);
     // Stable match ID created ONCE here and synced inside the match object to every device.
@@ -1499,6 +1514,10 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
         rT=ev.extraRuns||0;
       }
       bw.wickets++;i.wickets++;
+      // advance this bowler's consecutive-wicket streak (for hat-trick detection) and reset the
+      // partnership counter — a new pair is now at the crease (or the innings is ending).
+      bw.streak=(bw.streak||0)+1;
+      i.partnership=0;
     }
     else if(ev.type==="DECL"){
       // Declared runs: admin/scorer manually credits runs when the ball can't be fielded normally
@@ -1518,6 +1537,15 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     else{const r=parseInt(ev.type);rT=r;rS=r;rB=r;if(r%2===1)cross=true;}
 
     i.totalRuns+=rT;bw.runs+=rB;bw.runsThisOver+=rB;
+    // PARTNERSHIP tracking — runs added to the CURRENT partnership. Reset to 0 whenever a wicket falls
+    // (below). Every run (bat, extras, everything that adds to the team total) counts toward the stand,
+    // which matches how cricket partnerships are recorded. Used for the 50/100 partnership celebration.
+    i.partnership=(i.partnership||0)+rT;
+    // HAT-TRICK tracking — a per-bowler count of wickets on CONSECUTIVE deliveries they bowled. On a
+    // wicket we increment their streak (handled in the wicket branch below via bw.streak); on any
+    // legal delivery that ISN'T a wicket, the streak breaks. Wides/no-balls don't count as a delivery
+    // faced, so they neither advance nor break the streak (they're re-bowled).
+    if(isL&&ev.type!=="W"){ bw.streak=0; }
     if(isL){bw.ballsThisOver++;i.totalBalls++;}
     if(ev.type!=="WD"){st.runs+=rS;if(isL)st.balls++;if(ev.type==="4")st.fours++;if(ev.type==="6")st.sixes++;}
     i.batsmen[i.strikerName]=st;i.bowlers[i.bowlerName]=bw;
@@ -1730,7 +1758,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
             {role==="admin"&&<AdminActionsMenu
               onHistory={onHistory} onAnnounce={onAnnounce}
               inn={inn} onEditMatchSave={({overs,maxWkts})=>setInn(p=>({...p,overs,maxWkts}))}
-              match={match} role={role} rosterNames={rosterNames}
+              match={match} role={role} rosterNames={rosterNames} onAbandonMatch={abandonMatch}
               onUpdateTeams={(pubTeamA,pubTeamB)=>{
                 setMatch(m=>m?({...m,pubTeamA,pubTeamB}):m);
                 // Persist any brand-new names added via the team editor to the club roster too, so
@@ -2509,7 +2537,7 @@ function PinMgmtModal({onClose}){
 // Replaces the 6-button overflow row with a tidy dropdown. Navigation items
 // (History, Notice) close the menu and navigate. Modal items manage their own
 // open state locally so the dropdown stays out of their way.
-function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,onUpdateTeams,rosterNames}){
+function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,onUpdateTeams,rosterNames,onAbandonMatch}){
   const[open,setOpen]=React.useState(false);
   const[editOpen,setEditOpen]=React.useState(false);
   const[pinMgmtOpen,setPinMgmtOpen]=React.useState(false);
@@ -2574,6 +2602,7 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
           })}
           {row("🔐","Manage Admin PINs","#f87171",()=>setPinMgmtOpen(true))}
           {match?.pinA&&row("👁","View Team PINs","#6ee7b7",()=>setPinViewOpen(true))}
+          {onAbandonMatch&&row("🆕","Start New Match","#fbbf24",()=>{close();onAbandonMatch();})}
         </div>
       </>}
 
@@ -3420,23 +3449,77 @@ const MILESTONE_CONFETTI=[
   {l:46,d:.3,e:"✨"},{l:54,d:.15,e:"🎊"},{l:62,d:.45,e:"🎉"},{l:70,d:.2,e:"⭐"},{l:78,d:.35,e:"✨"},
   {l:86,d:.08,e:"🎊"},{l:94,d:.28,e:"🎉"}
 ];
-function MilestoneCelebration({runs,resetKey,playSound,teamName}){
+function MilestoneCelebration({inn,resetKey,playSound}){
+  const[queue,setQueue]=React.useState([]);   // celebrations waiting to show, shown one at a time
   const[show,setShow]=React.useState(null);
-  const lastFloor=React.useRef(null);
+  // Per-type "last celebrated level" refs so each achievement only fires once when it's first reached.
+  const seen=React.useRef({team:null,bat:{},part:null,hat:{},figs:{}});
   const keyRef=React.useRef(resetKey);
+  const baselined=React.useRef(false);
+
   React.useEffect(()=>{
-    const f=Math.floor((runs||0)/50);
-    if(keyRef.current!==resetKey){ keyRef.current=resetKey; lastFloor.current=f; return; }
-    if(lastFloor.current===null){ lastFloor.current=f; return; }   // baseline on first mount
-    if(f>lastFloor.current && (runs||0)>0){
-      lastFloor.current=f;
-      setShow(f*50);
-      if(playSound){ try{playCrowdCheer(true);}catch(e){} }
-      const t=setTimeout(()=>setShow(null),3800);
-      return ()=>clearTimeout(t);
+    if(!inn){ return; }
+    const fresh=()=>({team:null,bat:{},part:null,hat:{},figs:{}});
+    // On a new innings/match, or first mount, BASELINE silently: record current levels so we don't
+    // fire a burst of celebrations for a match opened mid-way. Only future crossings celebrate.
+    if(keyRef.current!==resetKey || !baselined.current){
+      keyRef.current=resetKey; baselined.current=true;
+      const s=fresh();
+      s.team=Math.floor((inn.totalRuns||0)/50);
+      s.part=Math.floor((inn.partnership||0)/50);
+      Object.entries(inn.batsmen||{}).forEach(([n,b])=>{ s.bat[n]=Math.floor((b.runs||0)/50); });
+      Object.entries(inn.bowlers||{}).forEach(([n,bw])=>{ s.hat[n]=bw.streak||0; s.figs[n]=bw.wickets||0; });
+      seen.current=s;
+      return;
     }
-    if(f<lastFloor.current){ lastFloor.current=f; }                // undo/revert — rebaseline silently
-  },[runs,resetKey,playSound]);
+    const found=[];
+    const S=seen.current;
+    // 1) TEAM total 50/100/150…
+    const tf=Math.floor((inn.totalRuns||0)/50);
+    if(S.team===null)S.team=tf;
+    else if(tf>S.team&&inn.totalRuns>0){found.push({kind:"team",title:`${tf*50} UP!`,sub:inn.battingTeam,color:"#fbbf24"});}
+    if(tf<S.team)S.team=tf; else S.team=Math.max(S.team,tf);
+    // 2) INDIVIDUAL batsman 50/100…
+    Object.entries(inn.batsmen||{}).forEach(([n,b])=>{
+      const f=Math.floor((b.runs||0)/50);
+      if(S.bat[n]===undefined){S.bat[n]=f;return;}
+      if(f>S.bat[n]&&b.runs>0){const label=f*50; found.push({kind:"bat",title:`${label===100?"CENTURY":label===50?"FIFTY":label}! `,sub:`${n} — ${b.runs}`,color:"#34d399",emoji:label>=100?"💯":"🏏"});}
+      S.bat[n]=f;
+    });
+    // 3) PARTNERSHIP 50/100…
+    const pf=Math.floor((inn.partnership||0)/50);
+    if(S.part===null)S.part=pf;
+    else if(pf>S.part&&inn.partnership>0){found.push({kind:"part",title:`${pf*50} PARTNERSHIP!`,sub:`${inn.strikerName} & ${inn.nonStrikerName}`,color:"#60a5fa",emoji:"🤝"});}
+    S.part=pf;
+    // 4) BOWLER hat-trick (3+ in a row) and good figures (3, 4, 5-wicket hauls)
+    Object.entries(inn.bowlers||{}).forEach(([n,bw])=>{
+      const streak=bw.streak||0, wk=bw.wickets||0;
+      if(S.hat[n]===undefined)S.hat[n]=streak; 
+      else{
+        if(streak>=3&&streak>S.hat[n]){found.push({kind:"hat",title:streak===3?"HAT-TRICK!":`${streak} IN A ROW!`,sub:`${n} 🔥`,color:"#f87171",emoji:"🎯"});}
+        S.hat[n]=streak;
+      }
+      if(S.figs[n]===undefined)S.figs[n]=wk;
+      else{
+        // celebrate crossing into 3, 4, 5+ wickets (a good spell). 5+ = "five-for".
+        [3,4,5].forEach(m=>{ if(wk>=m&&S.figs[n]<m){ found.push({kind:"figs",title:m>=5?"FIVE-FOR! 🌟":`${wk} WICKETS!`,sub:`${n} — ${wk}/${bw.runs}`,color:"#a78bfa",emoji:"⚡"}); } });
+        S.figs[n]=wk;
+      }
+    });
+    if(found.length){ setQueue(q=>[...q,...found]); }
+  },[inn,resetKey]);
+
+  // Show queued celebrations one at a time (so two at once don't overlap on screen).
+  React.useEffect(()=>{
+    if(show||queue.length===0)return;
+    const next=queue[0];
+    setQueue(q=>q.slice(1));
+    setShow(next);
+    if(playSound){ try{playCrowdCheer(true);}catch(e){} }
+    const t=setTimeout(()=>setShow(null),3600);
+    return ()=>clearTimeout(t);
+  },[queue,show,playSound]);
+
   if(!show) return null;
   return(
     <div style={{position:"fixed",inset:0,zIndex:900,pointerEvents:"none",overflow:"hidden"}}>
@@ -3444,14 +3527,14 @@ function MilestoneCelebration({runs,resetKey,playSound,teamName}){
         <span key={i} style={{position:"absolute",top:0,left:cf.l+"%",fontSize:22,
           animation:`confettiFall 2.6s ease-in ${cf.d}s both`}}>{cf.e}</span>
       ))}
-      <div style={{position:"absolute",top:"26%",left:0,right:0,display:"flex",justifyContent:"center"}}>
+      <div style={{position:"absolute",top:"24%",left:0,right:0,display:"flex",justifyContent:"center",padding:"0 16px"}}>
         <div style={{animation:"milestoneIn .5s cubic-bezier(.22,1,.36,1) both",textAlign:"center",
-          background:"rgba(8,12,32,.82)",border:"2px solid #fbbf24",borderRadius:18,padding:"14px 26px",
-          boxShadow:"0 0 34px rgba(251,191,36,.45)"}}>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:40,fontWeight:700,fontStyle:"italic",color:"#fbbf24",letterSpacing:2,lineHeight:1}}>
-            {show} UP! 🎉
+          background:"rgba(8,12,32,.85)",border:`2px solid ${show.color}`,borderRadius:18,padding:"14px 26px",
+          boxShadow:`0 0 34px ${show.color}70`,maxWidth:"90%"}}>
+          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:34,fontWeight:700,fontStyle:"italic",color:show.color,letterSpacing:1.5,lineHeight:1.05}}>
+            {show.emoji?show.emoji+" ":""}{show.title}
           </div>
-          {teamName&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#e5e7eb",marginTop:6,letterSpacing:".15em",textTransform:"uppercase"}}>{teamName}</div>}
+          {show.sub&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#e5e7eb",marginTop:7,letterSpacing:".12em",textTransform:"uppercase"}}>{show.sub}</div>}
         </div>
       </div>
     </div>
@@ -3464,9 +3547,20 @@ function MilestoneCelebration({runs,resetKey,playSound,teamName}){
 // rather than showing an empty box. Players currently at the crease / bowling are marked live.
 function ViewerTeams({match,inn}){
   const teamA=match?.teamA||"Team A", teamB=match?.teamB||"Team B";
-  const listA=match?.pubTeamA||[], listB=match?.pubTeamB||[];
+  let listA=match?.pubTeamA||[], listB=match?.pubTeamB||[];
   const striker=inn?.strikerName, nonStriker=inn?.nonStrikerName, bowler=inn?.bowlerName;
   const outNames=new Set(Object.entries(inn?.batsmen||{}).filter(([,b])=>b&&b.out).map(([n])=>n));
+  const assigned=listA.length>0||listB.length>0;
+  // FALLBACK when captains/admin never assigned public squads: rather than show empty "Not set yet"
+  // columns next to a confusing banner, build each side from who's actually appeared in the live data.
+  // The batting side = everyone who has batted (inn.battingOrder); the bowling side = everyone who has
+  // bowled (inn.bowlingOrder). This reflects the real players on the field even without a formal squad.
+  if(!assigned&&inn){
+    const battingSide=inn.battingTeam, bowlingSide=inn.bowlingTeam;
+    const batters=inn.battingOrder||[], bowlers=inn.bowlingOrder||[];
+    if(battingSide===teamA){ listA=batters; listB=bowlers; }
+    else { listA=bowlers; listB=batters; }
+  }
   const tag=(n)=>{
     if(n===striker||n===nonStriker) return {label:"batting",color:"#fbbf24"};
     if(n===bowler) return {label:"bowling",color:"#6ee7b7"};
@@ -3477,7 +3571,7 @@ function ViewerTeams({match,inn}){
     <div style={{flex:1,minWidth:0}}>
       <p style={{fontWeight:700,fontSize:13,marginBottom:8,color:accent}}>{em} {name} <span style={{color:"#6b7280",fontWeight:400}}>({list.length})</span></p>
       {list.length===0
-        ? <p style={{fontSize:12,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>Not set yet</p>
+        ? <p style={{fontSize:12,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>No players yet</p>
         : <div style={{display:"flex",flexDirection:"column",gap:5}}>
             {list.map(n=>{const t=tag(n);return(
               <div key={n} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,background:"rgba(255,255,255,.04)",borderRadius:8,padding:"6px 9px"}}>
@@ -3488,12 +3582,11 @@ function ViewerTeams({match,inn}){
           </div>}
     </div>
   );
-  const anyTeams=listA.length>0||listB.length>0;
   return(
     <div>
-      {!anyTeams&&(
-        <p style={{fontSize:12,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:14,lineHeight:1.6}}>
-          Teams haven't been assigned for this match yet. An admin can set them from the scoring screen (Admin menu → Edit Match Teams) and they'll appear here live.
+      {!assigned&&(
+        <p style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:14,lineHeight:1.6}}>
+          Showing players who've taken the field so far. For full squads, an admin can assign teams from the scoring screen (Admin menu → Edit Match Teams).
         </p>
       )}
       <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
@@ -3621,15 +3714,19 @@ function ViewerLive({onExit}){
         </div>
       </div>
       <div className="content" style={{paddingTop:16}}>
-        {/* Live / Teams / Full Scorecard tabs. Sound is now a compact icon (⌄) at the far right
-            rather than a full tab, freeing a tab slot for Teams. */}
-        <div className="tabs" style={{marginBottom:16,alignItems:"center"}}>
-          <button className={`tab${tab==="live"?" active":""}`} onClick={()=>setTab("live")}>📡 Live</button>
-          <button className={`tab${tab==="teams"?" active":""}`} onClick={()=>setTab("teams")}>👥 Teams</button>
-          <button className={`tab${tab==="scorecard"?" active":""}`} onClick={()=>setTab("scorecard")}>📋 Scorecard</button>
-          <button title={soundOn?"Match sounds on — tap to mute":"Match sounds off — tap to enable (bat knock on runs, crowd cheer on boundaries & wickets)"}
-            onClick={()=>{ setSoundOn(s=>!s); try{_getHeroCtx();}catch(e){} }}
-            style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",fontSize:18,opacity:soundOn?1:0.5,padding:"4px 6px",lineHeight:1}}>
+        {/* Tabs as a clean 3-column segmented control; the sound control sits on its own as a
+            separate labelled pill so it no longer crowds the tab row. */}
+        <div style={{display:"flex",alignItems:"center",gap:10,margin:"8px 14px 16px"}}>
+          <div className="tabs" style={{margin:0,flex:1}}>
+            <button className={`tab${tab==="live"?" active":""}`} onClick={()=>setTab("live")}>📡 Live</button>
+            <button className={`tab${tab==="teams"?" active":""}`} onClick={()=>setTab("teams")}>👥 Teams</button>
+            <button className={`tab${tab==="scorecard"?" active":""}`} onClick={()=>setTab("scorecard")}>📋 Card</button>
+          </div>
+          <button onClick={()=>{ setSoundOn(s=>!s); try{_getHeroCtx();}catch(e){} }}
+            title={soundOn?"Match sounds on — tap to mute":"Match sounds off — tap to enable"}
+            style={{display:"flex",alignItems:"center",gap:5,background:soundOn?"rgba(52,211,153,.15)":"#1e1b4b",
+              border:soundOn?"1px solid rgba(52,211,153,.5)":"1px solid transparent",borderRadius:14,
+              padding:"9px 12px",cursor:"pointer",color:soundOn?"#6ee7b7":"#6b7280",fontSize:16,lineHeight:1,flexShrink:0}}>
             {soundOn?"🔊":"🔇"}
           </button>
         </div>
