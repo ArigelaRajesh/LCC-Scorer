@@ -5744,37 +5744,6 @@ function WeatherWidget(){
 // First-open guided tour — shown ONCE ever (per browser), pointing at the exact features that turned
 // out to be "it exists but nobody found it" in real use: scoring, live team updates, and the viewer.
 // Dismiss (skip or finish) and it never appears again on this device.
-function GuidedTour({onDone}){
-  const[step,setStep]=React.useState(0);
-  const slides=[
-    {em:"🏏",title:"Score every ball",sub:"Tap runs, wickets, and extras as they happen. Dropdowns pick players — barely any typing needed."},
-    {em:"👥",title:"Teams update live",sub:"Add, swap, or remove players any time — before or during the match — from the ⚙️ menu. Everyone sees changes instantly."},
-    {em:"📡",title:"Everyone can watch",sub:"Share the link or scan the QR code (⚙️ menu) — friends and family watch the score update ball by ball, live."}
-  ];
-  const finish=()=>{ try{localStorage.setItem("lcc_tour_seen","1");}catch(e){} onDone(); };
-  const s=slides[step];
-  return(
-    <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(2,6,23,.92)",backdropFilter:"blur(6px)",
-      display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div style={{width:"100%",maxWidth:340,background:"var(--surface-2)",border:"1px solid var(--border-soft)",
-        borderRadius:22,padding:"30px 24px 22px",textAlign:"center",animation:"screenIn .3s ease-out both"}}>
-        <div style={{fontSize:52,marginBottom:16}}>{s.em}</div>
-        <p style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700,marginBottom:10}}>{s.title}</p>
-        <p style={{fontSize:13,color:"var(--text-dim)",lineHeight:1.6,marginBottom:24}}>{s.sub}</p>
-        <div style={{display:"flex",justifyContent:"center",gap:6,marginBottom:20}}>
-          {slides.map((_,i)=><span key={i} style={{width:i===step?18:6,height:6,borderRadius:3,background:i===step?"var(--primary)":"var(--border)",transition:"all .2s"}}/>)}
-        </div>
-        <div style={{display:"flex",gap:10}}>
-          <button onClick={finish} style={{flex:1,background:"none",border:"1px solid var(--border)",color:"var(--text-mute)",borderRadius:12,padding:"11px",fontSize:13,cursor:"pointer",fontWeight:600}}>Skip</button>
-          <button onClick={()=>step<slides.length-1?setStep(s=>s+1):finish()} className="btn btn-primary" style={{flex:2,padding:"11px",borderRadius:12,fontSize:13}}>
-            {step<slides.length-1?"Next →":"Get started"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // "Find yourself" — a lightweight personal stat lookup right on the landing screen. Reuses the same
 // computeCareerStats() the Stats page already relies on, so it's always consistent with it; this is
 // just a much faster path to "what are MY numbers" than digging through admin menus.
@@ -5830,7 +5799,13 @@ function RecentMatchesCarousel(){
     const ref=DB.ref("history").limitToLast(5);
     const cb=ref.on("value",s=>{
       const v=s.val()||{};
-      setList(Object.values(v).sort((a,b)=>(b.finishedAt||0)-(a.finishedAt||0)));
+      // Filter out any null/malformed entries BEFORE they ever reach render. A single bad or
+      // partially-deleted history record here was able to crash the ENTIRE app (this whole app is
+      // wrapped in one top-level ErrorBoundary, so an error rendering this small landing-page widget
+      // showed the same "Something went wrong" screen everywhere else too, including trying to start
+      // a new match afterwards — this is almost certainly why both looked broken together).
+      const arr=Object.values(v).filter(m=>m&&typeof m==="object").sort((a,b)=>(b.finishedAt||0)-(a.finishedAt||0));
+      setList(arr);
     });
     return ()=>ref.off("value",cb);
   },[]);
@@ -5840,6 +5815,7 @@ function RecentMatchesCarousel(){
       <p style={{fontSize:10,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".12em",marginBottom:6,paddingLeft:2}}>Recent matches</p>
       <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,scrollSnapType:"x mandatory"}}>
         {list.map((m,i)=>{
+          if(!m) return null;
           const r=m.result||{};
           return(
             <div key={i} style={{scrollSnapAlign:"start",flexShrink:0,width:172,background:"var(--surface)",
@@ -5859,7 +5835,6 @@ function RecentMatchesCarousel(){
 function Landing({onPick}){
   const[menuOpen,setMenuOpen]=React.useState(false);
   const[announcement,setAnnouncement]=React.useState(null);
-  const[showTour,setShowTour]=React.useState(()=>{try{return localStorage.getItem("lcc_tour_seen")!=="1";}catch(e){return false;}});
   React.useEffect(()=>{
     if(!FB_OK||!DB)return;
     const ref=DB.ref("announcement");
@@ -5922,7 +5897,6 @@ function Landing({onPick}){
       position:"relative",overflow:"hidden",minHeight:"100dvh",
       background:"linear-gradient(150deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#1c1150,#0a2540,#022c1e)",
       backgroundSize:"400% 400%",animation:"bgShift 22s ease infinite"}}>
-      {showTour&&<GuidedTour onDone={()=>setShowTour(false)}/>}
       <div style={{width:"100%",maxWidth:"min(440px, 100%)",position:"relative",zIndex:1,
         paddingTop:"max(8px, env(safe-area-inset-top))",display:"flex",flexDirection:"column",minHeight:"100dvh"}}>
 
