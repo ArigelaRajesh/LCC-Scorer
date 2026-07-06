@@ -872,20 +872,35 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
                     const isSel=selectedPub?.id===pub.id;
                     const ago=pub.publishedAt?timeAgo(pub.publishedAt):"";
                     return(
-                      <button key={pub.id} onClick={()=>importTeams(pub)} style={{
-                        display:"flex",alignItems:"center",justifyContent:"space-between",
-                        padding:"11px 14px",borderRadius:14,cursor:"pointer",textAlign:"left",
-                        border:isSel?"2px solid #6366f1":"1px solid rgba(99,102,241,.25)",
-                        background:isSel?"rgba(99,102,241,.15)":"rgba(255,255,255,.03)",color:"#fff"
-                      }}>
-                        <div>
-                          <p style={{fontWeight:700,fontSize:13}}>{pub.captainA||"Team A"} <span style={{color:"#6b7280",fontWeight:400}}>vs</span> {pub.captainB||"Team B"}</p>
-                          <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>
-                            {teamNames(pub.teamA).length}+{teamNames(pub.teamB).length} players · {ago}
-                          </p>
-                        </div>
-                        <span style={{fontSize:isSel?14:12,color:isSel?"#a5b4fc":"#4b5563"}}>{isSel?"✓ selected":"→"}</span>
-                      </button>
+                      <div key={pub.id} style={{display:"flex",alignItems:"center",gap:6}}>
+                        <button onClick={()=>importTeams(pub)} style={{
+                          flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",
+                          padding:"11px 14px",borderRadius:14,cursor:"pointer",textAlign:"left",
+                          border:isSel?"2px solid #6366f1":"1px solid rgba(99,102,241,.25)",
+                          background:isSel?"rgba(99,102,241,.15)":"rgba(255,255,255,.03)",color:"#fff"
+                        }}>
+                          <div>
+                            <p style={{fontWeight:700,fontSize:13}}>{pub.captainA||"Team A"} <span style={{color:"#6b7280",fontWeight:400}}>vs</span> {pub.captainB||"Team B"}</p>
+                            <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>
+                              {teamNames(pub.teamA).length}+{teamNames(pub.teamB).length} players · {ago}
+                            </p>
+                          </div>
+                          <span style={{fontSize:isSel?14:12,color:isSel?"#a5b4fc":"#4b5563"}}>{isSel?"✓ selected":"→"}</span>
+                        </button>
+                        {/* Delete this saved lineup — admin only. These accumulate forever otherwise
+                            (every published poll team-set gets saved and never cleaned up), which is
+                            why the list can feel cluttered with old entries. */}
+                        {role==="admin"&&(
+                          <button onClick={()=>{
+                            if(!confirm(`Delete this saved lineup (${pub.captainA||"Team A"} vs ${pub.captainB||"Team B"}, ${ago})? This can't be undone.`))return;
+                            if(isSel){setImported(false);setSelectedPub(null);}
+                            if(FB_OK&&DB) DB.ref("publishedTeams/"+pub.id).remove().catch(()=>{});
+                            globalToast("🗑 Lineup deleted");
+                          }} title="Delete this saved lineup"
+                          style={{background:"none",border:"1px solid rgba(248,113,113,.35)",color:"#f87171",
+                            borderRadius:10,padding:"0 10px",cursor:"pointer",fontSize:14,flexShrink:0,alignSelf:"stretch"}}>🗑</button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -1231,6 +1246,31 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     return()=>pRef.off("value",pCb);
   },[]);
 
+  // ── OFFLINE-TOLERANT SCORING ──────────────────────────────────────────────
+  // Ground wifi/signal is often patchy. Scoring itself (record()/undo()) only ever touches LOCAL
+  // React state, so it already keeps working perfectly while offline — nothing here changes that.
+  // What was missing: if a write to Firebase failed (or never got a chance to fire because the device
+  // was offline when the LAST ball was scored), that ball's data could sit unsynced with no visible
+  // indication and no automatic retry once the connection came back. Two additions close that gap:
+  //  1. Every attempted payload is mirrored to localStorage, so it survives even a tab reload.
+  //  2. The moment the browser reports back online, the last payload is re-sent immediately, instead
+  //     of waiting for the next ball to be scored (which might be minutes away, between overs).
+  const[isOffline,setIsOffline]=React.useState(()=>{try{return !navigator.onLine;}catch(e){return false;}});
+  const lastPayloadRef=React.useRef(null);
+  React.useEffect(()=>{
+    const goOffline=()=>setIsOffline(true);
+    const goOnline=()=>{
+      setIsOffline(false);
+      // Re-send whatever we last tried to write — don't wait for the next ball.
+      if(lastPayloadRef.current && FB_OK && DB){
+        DB.ref("live").set(lastPayloadRef.current).then(()=>{setSyncErr(null);}).catch(()=>{});
+      }
+    };
+    window.addEventListener("online",goOnline);
+    window.addEventListener("offline",goOffline);
+    return ()=>{window.removeEventListener("online",goOnline);window.removeEventListener("offline",goOffline);};
+  },[]);
+
   React.useEffect(()=>{
     if(!isScorer||!FB_OK||!DB||!loaded)return;
     // SAFETY GUARD: never write a payload that has no actual match in it. Without a match+innings,
@@ -1253,7 +1293,12 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     appliedSig.current={ matchId:match.matchId||null, inningsNum:inn.inningsNum||1,
       balls:inn.totalBalls||0, runs:inn.totalRuns||0, wkts:inn.wickets||0 };
     const payload=JSON.parse(JSON.stringify({match,inn,inn1,ib,mo,pinA:match?.pinA||null,pinB:match?.pinB||null,teamA:match?.teamA||null,teamB:match?.teamB||null,battingTeam:inn?.battingTeam||null,writer:writerId.current,role:myRole,intent:myIntent,t}));
-    DB.ref("live").set(payload).then(()=>{if(syncErr)setSyncErr(null);}).catch(e=>{console.error("sync failed",e);setSyncErr(e.message||"Write blocked — check Firebase rules");});
+    lastPayloadRef.current=payload;
+    try{localStorage.setItem("lcc_pending_write",JSON.stringify(payload));}catch(e){}
+    DB.ref("live").set(payload).then(()=>{
+      if(syncErr)setSyncErr(null);
+      try{localStorage.removeItem("lcc_pending_write");}catch(e){}
+    }).catch(e=>{console.error("sync failed",e);setSyncErr(e.message||"Write blocked — check Firebase rules");});
   },[match,inn,inn1,ib,mo,isScorer,loaded]);
 
   // ── AUTOMATIC PERIODIC BACKUP ─────────────────────────────────────────────────────────────────
@@ -1396,7 +1441,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
       batsmen:{},battingOrder:[],
       bowlers:{},bowlingOrder:[],
       strikerName:null,nonStrikerName:null,bowlerName:null,
-      totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],
+      totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],overBowlers:[],partnerships:[],
       extras:{wd:0,nb:0,b:0,lb:0},target:null});
   };
 
@@ -1622,6 +1667,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
 
   const undo=()=>{
     if(!hist.length)return;
+    setToast(null);
     buzz(22);
     writeIntent.current="undo"; // this is a deliberate backward move — let it through the regression guard
     const prev=hist[hist.length-1];
@@ -1641,8 +1687,32 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     setFlash(true);setTimeout(()=>setFlash(false),500);
   };
 
+  const[toast,setToast]=React.useState(null);
+  const toastTimerRef=React.useRef(null);
+  const showToast=(label)=>{
+    if(toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(label);
+    toastTimerRef.current=setTimeout(()=>setToast(null),4000);
+  };
+
   const record=(ev)=>{
     buzz(ev&&ev.type==="W"?35:12);   // stronger pulse for a wicket, light tick for runs/extras
+    // Toast confirmation with an inline Undo — right in the moment, instead of only a header button
+    // that requires scrolling up to find. Built from the RAW event type only, so it can't affect any
+    // of the scoring logic below regardless of how this ball gets processed.
+    {
+      const t=ev&&ev.type;
+      const label = t==="W" ? "Wicket recorded"
+        : t==="WD" ? "Wide"
+        : t==="NB" ? "No ball"
+        : t==="B" ? "Bye"
+        : t==="LB" ? "Leg bye"
+        : t==="OT" ? "Overthrow"
+        : t==="DECL" ? "Dead ball"
+        : (/^[0-6]$/.test(t||"")) ? `${t} run${t==="1"?"":"s"}`
+        : "Ball recorded";
+      showToast(label);
+    }
     if(!inn)return;
     setHist(h=>[...h,JSON.parse(JSON.stringify(inn))]);
     let i=JSON.parse(JSON.stringify(inn));
@@ -1670,6 +1740,10 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
       // advance this bowler's consecutive-wicket streak (for hat-trick detection) and reset the
       // partnership counter — a new pair is now at the crease (or the innings is ending).
       bw.streak=(bw.streak||0)+1;
+      // Record the COMPLETED partnership (final total + which pair) before resetting the running
+      // counter to 0, so the innings' full partnership history can be shown as a breakdown chart —
+      // "who actually built this innings" — not just the live current stand.
+      i.partnerships=[...(i.partnerships||[]),{runs:i.partnership||0,pair:[i.strikerName,i.nonStrikerName],endWkt:i.wickets}];
       i.partnership=0;
     }
     else if(ev.type==="DECL"){
@@ -1716,6 +1790,11 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
       bw.overs++;bw.ballsThisOver=0;bw.runsThisOver=0;
       i.bowlers[i.bowlerName]=bw;
       i.completedOvers=[...i.completedOvers,i.overEvents];i.overEvents=[];
+      // Parallel array: overBowlers[k] = who bowled completedOvers[k]. Kept SEPARATE from
+      // completedOvers (rather than reshaping it) so every existing consumer of completedOvers
+      // (run worm, previous-over preview, scorecard builder) is untouched. This is only for the new
+      // per-bowler spell breakdown (over-by-over figures like "1-0-4-1, 0-0-6-0").
+      i.overBowlers=[...(i.overBowlers||[]),i.bowlerName];
       overDone=true;if(!i.single)cross=!cross;
     }
     if(i.single)cross=false;  // single batsman always on strike
@@ -1785,6 +1864,14 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
       alert(`${nm} is already out and cannot bat again this innings. Pick a different batsman.`);
       return;
     }
+    // TEAM-SIDE LOCK: once someone has bowled in this innings, they're on the FIELDING side — they
+    // can't later be brought in as a batsman for the batting side too, even if no formal team list was
+    // ever set up (the app infers "who's on which side" from who's actually batted/bowled so far, so
+    // this protection works with or without the pre-match team picker).
+    if(!already && inn && (inn.bowlingOrder||[]).some(n=>n.toLowerCase()===nm.toLowerCase())){
+      alert(`${nm} has already bowled in this innings, for the fielding side — they can't also bat for the batting side.`);
+      return;
+    }
     const alreadyKnown=(rosterNames||[]).some(n=>n.toLowerCase()===nm.toLowerCase());
     if(!alreadyKnown&&FB_OK&&DB){
       const id="p_"+Math.random().toString(36).slice(2)+Date.now().toString(36);
@@ -1828,6 +1915,13 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
         alert(`${nm} is currently batting and can't bowl this over. Pick a fielding-side player.`);
         return;
       }
+      // TEAM-SIDE LOCK: anyone who has EVER batted in this innings (not just the current pair) is on
+      // the batting side and can't later bowl, even if they were dismissed earlier and no formal team
+      // list was set up. Inferred the same way as the batsman-side check above.
+      if((inn.battingOrder||[]).some(n=>n.toLowerCase()===ln)){
+        alert(`${nm} has already batted in this innings, for the batting side — they can't also bowl for the fielding side.`);
+        return;
+      }
     }
     // Same auto-save-to-roster fix as confBatsman above — see that comment for the full reasoning.
     const alreadyKnownBowler=(rosterNames||[]).some(n=>n.toLowerCase()===nm.toLowerCase());
@@ -1846,7 +1940,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
       battingOrder:p.single?[striker]:[striker,nonStriker],
       bowlers:{[bowler]:nw(bowler,resolvePid(bowler))},bowlingOrder:[bowler],
       strikerName:striker,nonStrikerName:p.single?null:nonStriker,bowlerName:bowler,
-      totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],
+      totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],overBowlers:[],partnerships:[],
       extras:{wd:0,nb:0,b:0,lb:0},target:p.totalRuns+1}));
     setIB(false);
   };
@@ -1917,6 +2011,12 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
       )}
 
       {/* Compact score header — single page fit */}
+      {isOffline&&(
+        <div style={{position:"sticky",top:0,zIndex:41,background:"rgba(251,191,36,.15)",borderBottom:"1px solid rgba(251,191,36,.4)",
+          padding:"6px 14px",textAlign:"center",fontSize:11,fontFamily:"'JetBrains Mono',monospace",color:"var(--amber-2)"}}>
+          📡 Offline — scoring is saved locally and will sync automatically once you're back online
+        </div>
+      )}
       <div className="score-header">
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
           <MilestoneCelebration inn={inn} resetKey={(match?.matchId||"m")+":"+(inn.inningsNum||1)} playSound={true}/>
@@ -1992,9 +2092,25 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
           onEndInnings={manualEndInnings} onRevert={revert} canRevert={!!preEnd||preEndInDB} role={role}
           onEditOvers={editOvers} onRestore={restoreFromBackup}
           onUndo={undo} canUndo={hist.length>0}/>}
-        {tab==="batting"&&<><RunWorm inn={inn} inn1={inn1}/><BattingTab inn={inn}/></>}
+        {tab==="batting"&&<><RunWorm inn={inn} inn1={inn1}/><PartnershipChart inn={inn}/><BattingTab inn={inn}/></>}
         {tab==="bowling"&&<BowlingTab inn={inn}/>}
       </div>
+      {/* Toast confirmation for the last scoring action, with Undo right there in the moment — no need
+          to scroll up to the header's Undo button. Auto-dismisses after 4s; tapping Undo dismisses it
+          immediately too. */}
+      {toast&&(
+        <div style={{position:"fixed",left:"50%",bottom:"calc(18px + env(safe-area-inset-bottom,0px))",
+          transform:"translateX(-50%)",zIndex:120,display:"flex",alignItems:"center",gap:10,
+          background:"var(--surface-2)",border:"1px solid var(--border-soft)",borderRadius:14,
+          padding:"10px 10px 10px 16px",boxShadow:"0 8px 28px rgba(0,0,0,.4)",animation:"screenIn .25s ease-out both",
+          maxWidth:"calc(100vw - 32px)"}}>
+          <span style={{fontSize:13,color:"var(--text)",whiteSpace:"nowrap"}}>{toast}</span>
+          {hist.length>0&&(
+            <button onClick={()=>{undo();}} style={{background:"rgba(34,211,238,.15)",border:"1px solid var(--primary)",
+              color:"var(--primary)",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>↩ Undo</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -2096,7 +2212,7 @@ function QuickAddPlayer({onAdded,onCancel}){
     setSaving(true);
     const id="p_"+Math.random().toString(36).slice(2)+Date.now().toString(36);
     DB.ref("roster/"+id).set({name:nm,role:"All-rounder",keeper:false,bat:"Right",bowl:null})
-      .then(()=>{ setSaving(false); onAdded(nm); })
+      .then(()=>{ setSaving(false); globalToast(`✅ ${nm} added to the club`); onAdded(nm); })
       .catch(e=>{ setSaving(false); alert("Failed: "+e.message); });
   };
   return(
@@ -2786,6 +2902,7 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
   const[editOpen,setEditOpen]=React.useState(false);
   const[pinMgmtOpen,setPinMgmtOpen]=React.useState(false);
   const[pinViewOpen,setPinViewOpen]=React.useState(false);
+  const[qrOpen,setQrOpen]=React.useState(false);
   const[teamEditOpen,setTeamEditOpen]=React.useState(false);
   const[editPubA,setEditPubA]=React.useState([]);
   const[editPubB,setEditPubB]=React.useState([]);
@@ -2829,6 +2946,9 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
     if((other||[]).some(x=>x.toLowerCase()===ln)){
       if(!confirm(`${nm} is currently on the other team. Move them to ${teamName}? (A player can only be on one team.)`)) return;
       setOther(o=>o.filter(x=>x.toLowerCase()!==ln));   // remove from the other side — a real move
+      globalToast(`✅ ${nm} moved to ${teamName}`);
+    } else {
+      globalToast(`✅ ${nm} added to ${teamName}`);
     }
     setList(l=>[...l,nm]);
     setNewName("");
@@ -2862,6 +2982,7 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
           })}
           {role==="admin"&&row("🔐","Manage Admin PINs","#f87171",()=>setPinMgmtOpen(true))}
           {role==="admin"&&match?.pinA&&row("👁","View Team PINs","#6ee7b7",()=>setPinViewOpen(true))}
+          {row("📱","Show QR for viewers","#22d3ee",()=>{setOpen(false);setQrOpen(true);})}
           {onAbandonMatch&&row("🆕","Start New Match","#fbbf24",()=>{close();onAbandonMatch();})}
         </div>
       </>}
@@ -2948,7 +3069,7 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
               })()}
             </div>
           ))}
-          <button onClick={()=>{onUpdateTeams(editPubA,editPubB);setTeamEditOpen(false);}}
+          <button onClick={()=>{onUpdateTeams(editPubA,editPubB);setTeamEditOpen(false);globalToast("✅ Teams saved");}}
             style={{width:"100%",padding:"12px",borderRadius:14,border:"none",cursor:"pointer",
               background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",fontWeight:700,fontSize:14}}>
             ✓ Save Teams
@@ -2968,6 +3089,28 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
               </div>
             ))}
           </div>
+        </Modal>
+      )}
+      {/* QR code for the live viewer — lets anyone at the ground scan straight into "📡 Live" instead
+          of typing a URL. Encodes the current site's URL + #live, which Root() reads on load to jump
+          directly to the viewer screen. Uses a public QR-image API (no library to bundle); if it can't
+          load (offline), the raw link is still shown to copy/share manually. */}
+      {qrOpen&&(
+        <Modal onClose={()=>setQrOpen(false)} title="📱 Scan to Watch Live">
+          {(()=>{
+            let liveUrl="";
+            try{ liveUrl=window.location.origin+window.location.pathname+"#live"; }catch(e){}
+            const qrImg="https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&color=0a1a3a&bgcolor=ffffff&data="+encodeURIComponent(liveUrl);
+            return(
+              <div style={{textAlign:"center"}}>
+                <div style={{background:"#fff",borderRadius:16,padding:12,display:"inline-block",marginBottom:12}}>
+                  <img src={qrImg} alt="QR code to live scorecard" width="260" height="260" style={{display:"block",borderRadius:8}}/>
+                </div>
+                <p style={{fontSize:11,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.6,wordBreak:"break-all"}}>{liveUrl}</p>
+                <p style={{fontSize:11,color:"var(--text-dim)",marginTop:8}}>Anyone can scan this with their phone camera to jump straight into the live scorecard — no app, no typing.</p>
+              </div>
+            );
+          })()}
         </Modal>
       )}
     </div>
@@ -3191,7 +3334,33 @@ function BattingTab({inn}){
 }
 
 // ── Bowling Tab ───────────────────────────────────────────────────────────────
+// Computes one bowler's over-by-over spell — e.g. "1-0-4-1, 0-0-6-0, 2-0-9-1" — by pairing
+// completedOvers with the parallel overBowlers array (which over belonged to which bowler).
+// Pure read, no state; safe to call on every render.
+function bowlerSpell(inn,name){
+  const co=inn.completedOvers||[], ob=inn.overBowlers||[];
+  const overs=[];
+  co.forEach((events,i)=>{
+    if(ob[i]!==name) return;
+    let runs=0,wkts=0;
+    (events||[]).forEach(ev=>{
+      runs+=(ev.runs||0)+(ev.batRuns||0)+(ev.extraRuns||0)+(ev.baseRuns||0)+(ev.overthrowRuns||0);
+      if(ev.type==="W") wkts++;
+    });
+    overs.push(`${runs}${wkts>0?"-"+wkts:""}`);
+  });
+  // The bowler's CURRENT in-progress over (if it's them bowling right now) isn't in completedOvers
+  // yet — show it as a live tail so the spell is never missing the most recent action.
+  if(inn.bowlerName===name&&(inn.overEvents||[]).length>0){
+    let runs=0,wkts=0;
+    inn.overEvents.forEach(ev=>{ runs+=(ev.runs||0)+(ev.batRuns||0)+(ev.extraRuns||0)+(ev.baseRuns||0)+(ev.overthrowRuns||0); if(ev.type==="W") wkts++; });
+    overs.push(`${runs}${wkts>0?"-"+wkts:""}*`);
+  }
+  return overs;
+}
+
 function BowlingTab({inn}){
+  const[expanded,setExpanded]=React.useState(null);
   return(
     <div style={{background:"#1e1b4b",border:"1px solid #3730a3",borderRadius:20,overflow:"hidden"}}>
       <table className="score-table">
@@ -3201,17 +3370,29 @@ function BowlingTab({inn}){
             const b=inn.bowlers[name];
             const balls=b.overs*6+b.ballsThisOver;
             const econ=balls>0?((b.runs/balls)*6).toFixed(2):"—";
+            const isOpen=expanded===name;
             return(
-              <tr key={name}>
-                <td style={{fontFamily:"'Inter',sans-serif",fontWeight:600}}>
-                  {name}{name===inn.bowlerName&&<span style={{color:"#fbbf24",fontSize:10,marginLeft:6}}>●</span>}
-                </td>
-                <td>{b.overs}.{b.ballsThisOver}</td>
-                <td style={{color:"#6b7280"}}>{b.maidens}</td>
-                <td style={{color:"#6b7280"}}>{b.runs}</td>
-                <td style={{color:"#f87171",fontWeight:700}}>{b.wickets}</td>
-                <td style={{color:"#6b7280"}}>{econ}</td>
-              </tr>
+              <React.Fragment key={name}>
+                <tr onClick={()=>setExpanded(isOpen?null:name)} style={{cursor:"pointer"}}>
+                  <td style={{fontFamily:"'Inter',sans-serif",fontWeight:600}}>
+                    {name}{name===inn.bowlerName&&<span style={{color:"#fbbf24",fontSize:10,marginLeft:6}}>●</span>}
+                    <span style={{color:"var(--text-mute)",fontSize:10,marginLeft:6}}>{isOpen?"▲":"▾"}</span>
+                  </td>
+                  <td>{b.overs}.{b.ballsThisOver}</td>
+                  <td style={{color:"#6b7280"}}>{b.maidens}</td>
+                  <td style={{color:"#6b7280"}}>{b.runs}</td>
+                  <td style={{color:"#f87171",fontWeight:700}}>{b.wickets}</td>
+                  <td style={{color:"#6b7280"}}>{econ}</td>
+                </tr>
+                {isOpen&&(
+                  <tr>
+                    <td colSpan={6} style={{background:"rgba(0,0,0,.15)",padding:"8px 12px"}}>
+                      <p style={{fontSize:9,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",marginBottom:5}}>Spell — runs(-wkts) per over</p>
+                      <p style={{fontSize:12,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace"}}>{bowlerSpell(inn,name).join(", ")||"—"}</p>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             );
           })}
         </tbody>
@@ -3528,6 +3709,22 @@ function POTMVoting({inn,inn1,potm,role}){
     return[...s].sort();
   },[inn,inn1]);
 
+  // Auto-suggested standout performer — a hint only, never forces anyone's vote. Simple impact score:
+  // runs plus a wicket weighting (roughly how POTM tends to get decided informally), highest wins.
+  // IMPORTANT: this hook must stay above every early return in this component (Rules of Hooks) — it
+  // was originally placed after one, which is a real bug (conditional hook calls); fixed here.
+  const suggested=React.useMemo(()=>{
+    const impact={};
+    [inn1,inn].forEach(i=>{
+      if(!i) return;
+      Object.entries(i.batsmen||{}).forEach(([n,b])=>{ impact[n]=(impact[n]||0)+(b.runs||0); });
+      Object.entries(i.bowlers||{}).forEach(([n,w])=>{ impact[n]=(impact[n]||0)+(w.wickets||0)*20; });
+    });
+    let best=null,max=-1;
+    Object.entries(impact).forEach(([n,v])=>{ if(v>max){max=v;best=n;} });
+    return max>0?best:null;
+  },[inn,inn1]);
+
   const votes=potm?.votes||{};
   const counts={};
   Object.values(votes).forEach(v=>{if(v?.votedFor)counts[v.votedFor]=(counts[v.votedFor]||0)+1;});
@@ -3605,6 +3802,9 @@ function POTMVoting({inn,inn1,potm,role}){
         <button onClick={()=>{setMyName(null);try{localStorage.removeItem("lcc_potm_voter");}catch(e){}}}
           style={{background:"none",border:"none",color:"#6b7280",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Not you?</button>
       </div>
+      {suggested&&!myVote&&(
+        <p style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginBottom:10}}>⭐ Standout performance: {suggested} — but vote for whoever you think earned it.</p>
+      )}
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
         {sorted.filter(n=>n!==myName).map(n=>{
           const c=counts[n]||0;
@@ -3620,7 +3820,7 @@ function POTMVoting({inn,inn1,potm,role}){
             }}>
               {/* vote bar */}
               <div style={{position:"absolute",left:0,top:0,bottom:0,width:pct+"%",background:"rgba(245,158,11,.08)",transition:"width .4s ease"}}/>
-              <span style={{fontWeight:isMyVote?700:500,fontSize:14,position:"relative"}}>{n}{isMyVote&&<span style={{color:"#fbbf24",marginLeft:6,fontSize:11}}>✓ your vote</span>}</span>
+              <span style={{fontWeight:isMyVote?700:500,fontSize:14,position:"relative"}}>{n}{n===suggested&&<span style={{marginLeft:6,fontSize:11}}>⭐</span>}{isMyVote&&<span style={{color:"#fbbf24",marginLeft:6,fontSize:11}}>✓ your vote</span>}</span>
               <span style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",position:"relative"}}>{c} vote{c===1?"":"s"}</span>
             </button>
           );
@@ -3634,6 +3834,25 @@ function POTMVoting({inn,inn1,potm,role}){
           color:"#111",fontWeight:700,fontSize:14,fontFamily:"'Inter',sans-serif"
         }}>🏆 Close Voting & Announce Winner</button>
       )}
+    </div>
+  );
+}
+
+// End-of-match FINALE — a bigger, one-time celebratory burst on the result screen itself (the actual
+// emotional peak of the match), on top of the milestone celebrations that already fire during play.
+// Ties (no winner) get a calmer "Match Tied" treatment, no confetti.
+function MatchFinale({winner}){
+  const[show,setShow]=React.useState(true);
+  React.useEffect(()=>{ const t=setTimeout(()=>setShow(false),3200); return ()=>clearTimeout(t); },[]);
+  if(!show||!winner) return null;
+  const bits=[6,14,22,30,38,46,54,62,70,78,86,94].map((l,i)=>({l,d:i*0.06,e:["🎉","✨","🏆","🎊","⭐"][i%5]}));
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:150,pointerEvents:"none",overflow:"hidden"}}>
+      {bits.map((b,i)=><span key={i} style={{position:"absolute",top:0,left:b.l+"%",fontSize:26,
+        animation:`confettiFall 2.4s ease-in ${b.d}s both`}}>{b.e}</span>)}
+      <div style={{position:"absolute",top:"18%",left:0,right:0,textAlign:"center",animation:"milestoneIn .55s cubic-bezier(.22,1,.36,1) both"}}>
+        <div style={{fontSize:60}}>🏆</div>
+      </div>
     </div>
   );
 }
@@ -3752,6 +3971,7 @@ function MatchOver({result,inn,inn1,match,potm,role,onRevert,canRevert,onNew,onU
 
   return(
     <>
+    <MatchFinale winner={result?.winner}/>
     {/* In-page scorecard modal */}
     {scorecardUrl&&(
       <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.97)",display:"flex",flexDirection:"column"}}>
@@ -3960,6 +4180,36 @@ function describeBall(ev,inn){
   const sk=inn&&inn.batsmen&&inn.batsmen[inn.strikerName];
   const who=sk?` · ${inn.strikerName} ${sk.runs}(${sk.balls})`:"";
   return head+who;
+}
+
+// Partnership breakdown — "who actually built this innings." A simple bar per stand, in order, sized
+// by its share of the total — distinct from the run worm (which tracks progress over TIME, not who
+// was batting). Includes the live in-progress stand as a final, still-growing bar.
+function PartnershipChart({inn}){
+  const done=inn.partnerships||[];
+  const live=(inn.strikerName&&inn.nonStrikerName&&!inn.single)
+    ? [{runs:inn.partnership||0,pair:[inn.strikerName,inn.nonStrikerName],live:true}] : [];
+  const all=[...done,...live];
+  if(all.length===0) return null;
+  const max=Math.max(1,...all.map(p=>p.runs));
+  return(
+    <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:14,padding:"10px 12px",marginBottom:14}}>
+      <p style={{fontSize:9,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".15em",marginBottom:8}}>🤝 Partnerships</p>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {all.map((p,i)=>(
+          <div key={i}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:2}}>
+              <span style={{color:"var(--text-dim)"}}>{p.pair[0]} & {p.pair[1]}{p.live&&<span style={{color:"var(--primary)",marginLeft:5}}>● current</span>}</span>
+              <span style={{color:"var(--text)",fontWeight:700}}>{p.runs}</span>
+            </div>
+            <div style={{height:6,borderRadius:3,background:"var(--surface-3)",overflow:"hidden"}}>
+              <div style={{height:"100%",width:(p.runs/max*100)+"%",background:p.live?"var(--primary)":"var(--amber)",borderRadius:3,transition:"width .3s ease"}}/>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function RunWorm({inn,inn1}){
@@ -4201,6 +4451,7 @@ function ViewerLive({onExit}){
         ):tab==="scorecard"?(
           <>
             <RunWorm inn={inn} inn1={inn1}/>
+            <PartnershipChart inn={inn}/>
             {inn.inningsNum===2&&inn1&&(<>
               <p className="section-title">1st Innings — {inn1.battingTeam}</p>
               <BattingTab inn={inn1}/>
@@ -4306,6 +4557,7 @@ function PageHeader({title,onBack,backLabel,right}){
 function HistoryPage({role,onExit}){
   const[list,setList]=React.useState(undefined);
   const[openId,setOpenId]=React.useState(null);
+  const[q,setQ]=React.useState("");
   React.useEffect(()=>{
     if(!FB_OK||!DB){setList(null);return;}
     const ref=DB.ref("history").limitToLast(50);
@@ -4316,19 +4568,30 @@ function HistoryPage({role,onExit}){
     });
     return ()=>ref.off("value",cb);
   },[]);
-  const del=(id,e)=>{ e.stopPropagation(); if(confirm("Delete this match permanently? This cannot be undone.")) DB.ref("history/"+id).remove(); };
+  const del=(id,e)=>{ e.stopPropagation(); if(confirm("Delete this match permanently? This cannot be undone.")) {DB.ref("history/"+id).remove();globalToast("🗑 Match deleted");} };
 
   if(list===undefined) return <Centered emoji="📚" title="Loading history…" onExit={onExit}/>;
-  if(!list||list.length===0) return <Centered emoji="📭" title="No matches yet" sub="Completed matches will appear here." onExit={onExit}/>;
+  if(!list||list.length===0) return <Centered emoji="📭" title="No matches yet" sub="Play your first match, then it'll show up here automatically." onExit={onExit}/>;
 
   const opened=openId?list.find(m=>m.id===openId):null;
   if(opened) return <MatchDetailView match={opened} role={role} onBack={()=>setOpenId(null)} onDelete={(id)=>{DB.ref("history/"+id).remove();setOpenId(null);}}/>;
+
+  // Search/filter by team name or venue — helps once History has grown past a quick scroll.
+  const nq=normName(q);
+  const filtered=nq?list.filter(m=>
+    normName(m.inn1?.battingTeam||"").includes(nq) || normName(m.inn2?.battingTeam||"").includes(nq) ||
+    normName(m.venue||"").includes(nq) || normName(m.result?.winner||"").includes(nq)
+  ):list;
 
   return(
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh"}}>
       <PageHeader title="📚 Match History" onBack={onExit} backLabel="home"/>
       <div className="resp-wrap" style={{padding:"16px 16px 32px"}}>
-        {list.map(m=>{
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Search by team or venue…" style={{marginBottom:14,fontSize:13}}/>
+        {filtered.length===0&&(
+          <p style={{fontSize:12,color:"var(--text-mute)",textAlign:"center",padding:"24px 0"}}>No matches match "{q}". Try a different team or venue name.</p>
+        )}
+        {filtered.map(m=>{
           const d=new Date(m.finishedAt);
           const r=m.result||{};
           return(
@@ -4689,16 +4952,23 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
   );
 }
 
-function PinGate({title,pin,altPin,verify,hint,onOk,onCancel}){
+function PinGate({title,pin,altPin,verify,hint,onOk,onCancel,rememberKey}){
   const[val,setVal]=React.useState("");
   const[err,setErr]=React.useState(false);
   const[errMsg,setErrMsg]=React.useState("");
+  const[remember,setRemember]=React.useState(false);
   const submit=()=>{
+    const finish=(r)=>{
+      // Opt-in only — never remembered unless the person explicitly ticks the box. Scoped to a
+      // caller-provided key (e.g. per matchId) so it can't leak into unlocking a DIFFERENT match later.
+      if(remember&&rememberKey){ try{localStorage.setItem(rememberKey,val);}catch(e){} }
+      onOk(r);
+    };
     if(verify){
       const r=verify(val);
-      if(r.ok){onOk(r);}else{setErr(true);setErrMsg(r.msg||"❌ Wrong PIN");setVal("");}
+      if(r.ok){finish(r);}else{setErr(true);setErrMsg(r.msg||"❌ Wrong PIN");setVal("");}
     } else {
-      if(val===pin||(altPin&&val===altPin)){onOk();}else{setErr(true);setErrMsg("❌ Wrong PIN, try again");setVal("");}
+      if(val===pin||(altPin&&val===altPin)){finish();}else{setErr(true);setErrMsg("❌ Wrong PIN, try again");setVal("");}
     }
   };
   return(
@@ -4713,6 +4983,12 @@ function PinGate({title,pin,altPin,verify,hint,onOk,onCancel}){
         placeholder="••••"
         style={{width:"100%",textAlign:"center",letterSpacing:"0.5em",fontSize:22,background:"rgba(7,5,15,.8)",border:`1.5px solid ${err?"#ef4444":"rgba(99,102,241,.4)"}`,borderRadius:14,padding:"12px",color:"#fff",fontFamily:"'JetBrains Mono',monospace",outline:"none",marginBottom:12}}/>
       {err&&<p style={{color:"#f87171",fontSize:12,marginBottom:12,fontFamily:"'Inter',sans-serif",lineHeight:1.4}}>{errMsg}</p>}
+      {rememberKey&&(
+        <label style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,cursor:"pointer",fontSize:12,color:"var(--text-dim)",textAlign:"left"}}>
+          <input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)} style={{width:"auto"}}/>
+          Remember me on this device (skip the PIN next time, this match only)
+        </label>
+      )}
       <div className="grid-2">
         <button className="btn btn-ghost w-full" onClick={onCancel}>Cancel</button>
         <button className="btn btn-primary w-full" onClick={submit}>Enter</button>
@@ -5464,9 +5740,126 @@ function WeatherWidget(){
   );
 }
 
+
+// First-open guided tour — shown ONCE ever (per browser), pointing at the exact features that turned
+// out to be "it exists but nobody found it" in real use: scoring, live team updates, and the viewer.
+// Dismiss (skip or finish) and it never appears again on this device.
+function GuidedTour({onDone}){
+  const[step,setStep]=React.useState(0);
+  const slides=[
+    {em:"🏏",title:"Score every ball",sub:"Tap runs, wickets, and extras as they happen. Dropdowns pick players — barely any typing needed."},
+    {em:"👥",title:"Teams update live",sub:"Add, swap, or remove players any time — before or during the match — from the ⚙️ menu. Everyone sees changes instantly."},
+    {em:"📡",title:"Everyone can watch",sub:"Share the link or scan the QR code (⚙️ menu) — friends and family watch the score update ball by ball, live."}
+  ];
+  const finish=()=>{ try{localStorage.setItem("lcc_tour_seen","1");}catch(e){} onDone(); };
+  const s=slides[step];
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(2,6,23,.92)",backdropFilter:"blur(6px)",
+      display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{width:"100%",maxWidth:340,background:"var(--surface-2)",border:"1px solid var(--border-soft)",
+        borderRadius:22,padding:"30px 24px 22px",textAlign:"center",animation:"screenIn .3s ease-out both"}}>
+        <div style={{fontSize:52,marginBottom:16}}>{s.em}</div>
+        <p style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700,marginBottom:10}}>{s.title}</p>
+        <p style={{fontSize:13,color:"var(--text-dim)",lineHeight:1.6,marginBottom:24}}>{s.sub}</p>
+        <div style={{display:"flex",justifyContent:"center",gap:6,marginBottom:20}}>
+          {slides.map((_,i)=><span key={i} style={{width:i===step?18:6,height:6,borderRadius:3,background:i===step?"var(--primary)":"var(--border)",transition:"all .2s"}}/>)}
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={finish} style={{flex:1,background:"none",border:"1px solid var(--border)",color:"var(--text-mute)",borderRadius:12,padding:"11px",fontSize:13,cursor:"pointer",fontWeight:600}}>Skip</button>
+          <button onClick={()=>step<slides.length-1?setStep(s=>s+1):finish()} className="btn btn-primary" style={{flex:2,padding:"11px",borderRadius:12,fontSize:13}}>
+            {step<slides.length-1?"Next →":"Get started"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// "Find yourself" — a lightweight personal stat lookup right on the landing screen. Reuses the same
+// computeCareerStats() the Stats page already relies on, so it's always consistent with it; this is
+// just a much faster path to "what are MY numbers" than digging through admin menus.
+function FindYourself(){
+  const[q,setQ]=React.useState("");
+  const[open,setOpen]=React.useState(false);
+  const[data,setData]=React.useState(null);
+  const search=()=>{
+    const nm=q.trim(); if(!nm||!FB_OK||!DB) return;
+    setOpen(true); setData("loading");
+    Promise.all([DB.ref("history").once("value"),DB.ref("roster").once("value")]).then(([hs,rs])=>{
+      const stats=computeCareerStats(hs.val()||{},rs.val()||{});
+      const hit=stats.find(s=>normName(s.name).includes(normName(nm)));
+      setData(hit||"none");
+    }).catch(()=>setData("none"));
+  };
+  return(
+    <div style={{marginBottom:"clamp(10px,2.5vw,14px)"}}>
+      <div style={{display:"flex",gap:8}}>
+        <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()}
+          placeholder="🔍 Find your stats — type your name…" style={{flex:1,fontSize:13}}/>
+        <button onClick={search} className="btn btn-primary" style={{padding:"10px 16px",whiteSpace:"nowrap"}}>Go</button>
+      </div>
+      {open&&(
+        <div style={{marginTop:8,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:14,padding:"14px 16px"}}>
+          {data==="loading"&&<p style={{fontSize:12,color:"var(--text-mute)",textAlign:"center"}}>Searching…</p>}
+          {data==="none"&&<p style={{fontSize:12,color:"var(--text-mute)",textAlign:"center"}}>No matches found for "{q}". Check the spelling, or you may not have played yet.</p>}
+          {data&&data!=="loading"&&data!=="none"&&(
+            <div>
+              <p style={{fontFamily:"'Oswald',sans-serif",fontSize:17,fontWeight:700,marginBottom:8}}>{data.name}</p>
+              <div style={{display:"flex",gap:14}}>
+                {[["M",data.matches],["Runs",data.bat.runs],["Wkts",data.bowl.wkts],["HS",data.bat.hs||0],["Best",data.bowl.wkts>0?data.bowl.best:"—"]].map(([l,v])=>(
+                  <div key={l} style={{textAlign:"center"}}>
+                    <div style={{fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:700,color:"var(--primary)"}}>{v}</div>
+                    <div style={{fontSize:9,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",marginTop:2}}>{l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Recent matches — small swipeable cards on the landing screen so it feels alive even between live
+// matches, instead of a static page. Purely a read of the last few History entries.
+function RecentMatchesCarousel(){
+  const[list,setList]=React.useState(null);
+  React.useEffect(()=>{
+    if(!FB_OK||!DB){setList([]);return;}
+    const ref=DB.ref("history").limitToLast(5);
+    const cb=ref.on("value",s=>{
+      const v=s.val()||{};
+      setList(Object.values(v).sort((a,b)=>(b.finishedAt||0)-(a.finishedAt||0)));
+    });
+    return ()=>ref.off("value",cb);
+  },[]);
+  if(!list||list.length===0) return null;
+  return(
+    <div style={{marginBottom:"clamp(10px,2.5vw,14px)"}}>
+      <p style={{fontSize:10,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".12em",marginBottom:6,paddingLeft:2}}>Recent matches</p>
+      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,scrollSnapType:"x mandatory"}}>
+        {list.map((m,i)=>{
+          const r=m.result||{};
+          return(
+            <div key={i} style={{scrollSnapAlign:"start",flexShrink:0,width:172,background:"var(--surface)",
+              border:"1px solid var(--border)",borderRadius:14,padding:"10px 12px"}}>
+              <p style={{fontSize:9,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>{m.venue||""}</p>
+              <p style={{fontSize:12,fontWeight:700,marginBottom:6,lineHeight:1.3}}>{r.winner?`🏆 ${r.winner} won`:"Tied"}{r.margin?" by "+r.margin:""}</p>
+              {m.inn1&&<p style={{fontSize:10,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn1.battingTeam}: {m.inn1.totalRuns}/{m.inn1.wickets}</p>}
+              {m.inn2&&<p style={{fontSize:10,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn2.battingTeam}: {m.inn2.totalRuns}/{m.inn2.wickets}</p>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Landing({onPick}){
   const[menuOpen,setMenuOpen]=React.useState(false);
   const[announcement,setAnnouncement]=React.useState(null);
+  const[showTour,setShowTour]=React.useState(()=>{try{return localStorage.getItem("lcc_tour_seen")!=="1";}catch(e){return false;}});
   React.useEffect(()=>{
     if(!FB_OK||!DB)return;
     const ref=DB.ref("announcement");
@@ -5529,6 +5922,7 @@ function Landing({onPick}){
       position:"relative",overflow:"hidden",minHeight:"100dvh",
       background:"linear-gradient(150deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#1c1150,#0a2540,#022c1e)",
       backgroundSize:"400% 400%",animation:"bgShift 22s ease infinite"}}>
+      {showTour&&<GuidedTour onDone={()=>setShowTour(false)}/>}
       <div style={{width:"100%",maxWidth:"min(440px, 100%)",position:"relative",zIndex:1,
         paddingTop:"max(8px, env(safe-area-inset-top))",display:"flex",flexDirection:"column",minHeight:"100dvh"}}>
 
@@ -5574,6 +5968,9 @@ function Landing({onPick}){
           <CricketHero/>
         </div>
 
+        <FindYourself/>
+        <RecentMatchesCarousel/>
+
         {announcement&&announcement.text&&(
           <div style={{
             background:"linear-gradient(90deg,rgba(245,158,11,.18),rgba(245,158,11,.08),rgba(245,158,11,.18))",
@@ -5608,6 +6005,7 @@ function Landing({onPick}){
 
 function ScorerGate({onOk,onCancel}){
   const[data,setData]=React.useState(undefined);
+  const autoTriedRef=React.useRef(null);
   React.useEffect(()=>{
     if(!FB_OK||!DB){setData(null);return;}
     let ref=null, cb=null, cancelled=false;
@@ -5619,7 +6017,7 @@ function ScorerGate({onOk,onCancel}){
       cb=ref.on("value",s=>{
         const v=s.val();
         if(!v||!v.inn||!v.pinA||!v.pinB){setData(null);return;}
-        setData({pinA:v.pinA,pinB:v.pinB,teamA:v.teamA,teamB:v.teamB,
+        setData({pinA:v.pinA,pinB:v.pinB,teamA:v.teamA,teamB:v.teamB,matchId:v.match?.matchId||null,
           battingTeam:v.battingTeam,awaitingOpeners:!!v.inn.awaitingOpeners,ib:!!v.ib,mo:!!v.mo});
       },err=>{ console.error("scorer gate read error",err); setData(null); });
     });
@@ -5641,7 +6039,21 @@ function ScorerGate({onOk,onCancel}){
     return {ok:false,msg:`🔒 ${myTeam} isn't batting yet — ${data.battingTeam} is batting now.`};
   };
 
-  return <PinGate title="Team Scorer Access" verify={verify} onOk={onOk} onCancel={onCancel}
+  // "Remember this device" — if a PIN was saved for THIS exact match earlier, try it silently before
+  // showing the gate at all. Always re-verifies against current match state (never blindly trusts
+  // storage), so a stale/wrong-team remembered PIN just falls through to the normal PIN screen instead
+  // of granting access it shouldn't.
+  const rememberKey=data.matchId?("lcc_pin_"+data.matchId):null;
+  if(rememberKey&&autoTriedRef.current!==rememberKey){
+    autoTriedRef.current=rememberKey;
+    let saved=null; try{saved=localStorage.getItem(rememberKey);}catch(e){}
+    if(saved){
+      const r=verify(saved);
+      if(r.ok){ setTimeout(()=>onOk(r),0); return <Centered emoji="🔑" title="Welcome back…" sub="Remembered this device"/>; }
+    }
+  }
+
+  return <PinGate title="Team Scorer Access" verify={verify} onOk={onOk} onCancel={onCancel} rememberKey={rememberKey}
     hint={data.awaitingOpeners?"Setting up openers":data.ib?"Innings break — new team sets up":`${data.battingTeam} batting`}/>;
 }
 
@@ -6950,8 +7362,43 @@ function BasicAdminHome({onPick,onExit}){
   return <AdminHome tier="basic" onPick={onPick} onExit={onExit}/>;
 }
 
+// ── Global toast bus ─────────────────────────────────────────────────────────
+// A tiny pub/sub so ANY component (QuickAddPlayer, team editor, PIN modal, etc.) can show a quick
+// "✅ Saved" confirmation without threading a callback through props everywhere. GlobalToastHost is
+// mounted once near the app root; globalToast(msg) is the only thing other components need to call.
+let _toastListeners=[];
+function globalToast(msg){ _toastListeners.forEach(fn=>fn(msg)); }
+function GlobalToastHost(){
+  const[items,setItems]=React.useState([]);
+  React.useEffect(()=>{
+    const fn=(msg)=>{
+      const id=Math.random().toString(36).slice(2);
+      setItems(it=>[...it,{id,msg}]);
+      setTimeout(()=>setItems(it=>it.filter(x=>x.id!==id)),2800);
+    };
+    _toastListeners.push(fn);
+    return ()=>{_toastListeners=_toastListeners.filter(x=>x!==fn);};
+  },[]);
+  if(items.length===0) return null;
+  return(
+    <div style={{position:"fixed",left:"50%",bottom:"calc(18px + env(safe-area-inset-bottom,0px))",transform:"translateX(-50%)",
+      zIndex:500,display:"flex",flexDirection:"column",gap:8,alignItems:"center",pointerEvents:"none"}}>
+      {items.map(it=>(
+        <div key={it.id} style={{background:"var(--surface-2)",border:"1px solid var(--border-soft)",borderRadius:12,
+          padding:"9px 16px",fontSize:13,color:"var(--text)",boxShadow:"0 6px 20px rgba(0,0,0,.35)",
+          animation:"screenIn .25s ease-out both",whiteSpace:"nowrap"}}>{it.msg}</div>
+      ))}
+    </div>
+  );
+}
+
 function Root(){
-  const[screen,setScreen]=React.useState("landing");
+  const[screen,setScreen]=React.useState(()=>{
+    // Deep-link: a QR code / shared link can encode "#live" so scanning it drops straight into the
+    // viewer instead of the landing page — one less tap for anyone at the ground.
+    try{ if(window.location.hash==="#live") return "viewer"; }catch(e){}
+    return "landing";
+  });
   const[gate,setGate]=React.useState(null);
   const[adminTier,setAdminTier]=React.useState(null);
   const[dynPins,setDynPins]=React.useState(null);
@@ -6960,6 +7407,7 @@ function Root(){
   // Maintain an in-app navigation stack. Every setScreen() pushes a browser
   // history entry so the back button stays inside the app instead of leaving.
   const navStack=React.useRef(["landing"]);
+  const adminAutoTriedRef=React.useRef(false);
 
   const go=(s)=>{
     navStack.current=[...navStack.current,s];
@@ -7004,14 +7452,14 @@ function Root(){
   };
 
   if(gate==="scorer") return <ScorerGate onOk={()=>{setGate(null);setScreen("scorer");}} onCancel={home}/>;
-  if(gate==="admin")  return <PinGate title="Admin Access" hint="Super or Basic admin PIN"
-    verify={(v)=>{
+  if(gate==="admin"){
+    const adminVerify=(v)=>{
       const pins=dynPins||{super:ADMIN_PIN,basic:BASIC_ADMIN_PIN};
       if(v===pins.super) return {ok:true, tier:"super"};
       if(v===pins.basic) return {ok:true, tier:"basic"};
       return {ok:false, msg:"❌ Wrong PIN, try again"};
-    }}
-    onOk={(r)=>{
+    };
+    const adminOnOk=(r)=>{
       setGate(null);
       setAdminTier(r.tier);
       const dest=r.tier==="super"?"superAdmin":"basicAdmin";
@@ -7020,8 +7468,19 @@ function Root(){
       window.history.replaceState({screen:"landing",depth:1},"");
       window.history.pushState({screen:dest,depth:2},"");
       setScreen(dest);
-    }}
-    onCancel={home}/>;
+    };
+    // "Remember this device" for admin — same opt-in pattern as the scorer gate, always re-verified
+    // against the current PINs (so a PIN change elsewhere correctly invalidates a stale remembered one).
+    if(!adminAutoTriedRef.current){
+      adminAutoTriedRef.current=true;
+      let saved=null; try{saved=localStorage.getItem("lcc_pin_admin");}catch(e){}
+      if(saved){
+        const r=adminVerify(saved);
+        if(r.ok){ setTimeout(()=>adminOnOk(r),0); return <Centered emoji="🔑" title="Welcome back…" sub="Remembered this device"/>; }
+      }
+    }
+    return <PinGate title="Admin Access" hint="Super or Basic admin PIN" verify={adminVerify} onOk={adminOnOk} onCancel={home} rememberKey="lcc_pin_admin"/>;
+  }
 
   const isAdmin=adminTier!==null;
   const isSuper=adminTier==="super";
@@ -7072,7 +7531,7 @@ class ErrorBoundary extends React.Component{
     return this.props.children;
   }
 }
-ReactDOM.render(<ErrorBoundary><Root/></ErrorBoundary>,document.getElementById("root"));
+ReactDOM.render(<ErrorBoundary><Root/><GlobalToastHost/></ErrorBoundary>,document.getElementById("root"));
 </script>
 <script>
 /* ── PWA service worker ──────────────────────────────────────────────────────────────────────
