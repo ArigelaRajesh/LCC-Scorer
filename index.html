@@ -177,7 +177,8 @@ body.hc{--bg-1:#000000;--bg-2:#01050f;--bg-3:#020a1a;--bg-4:#01050f;--bg-5:#0000
 }
 button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 input,select,textarea{touch-action:manipulation}
-body{font-family:'Inter',sans-serif;background:linear-gradient(150deg,var(--bg-1),var(--bg-2),var(--bg-3),var(--bg-2),var(--bg-1)) fixed;background-color:var(--bg-1);color:var(--text);min-height:100dvh}
+html{overflow-x:hidden;max-width:100vw}
+body{font-family:'Inter',sans-serif;background:linear-gradient(150deg,var(--bg-1),var(--bg-2),var(--bg-3),var(--bg-2),var(--bg-1)) fixed;background-color:var(--bg-1);color:var(--text);min-height:100dvh;overflow-x:hidden;max-width:100vw}
 .font-mono{font-family:'JetBrains Mono',monospace}
 .font-display{font-family:'Oswald',sans-serif}
 
@@ -2576,9 +2577,9 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
         </div>
         <div className="mini-card" style={{padding:"10px 12px"}}>
           <p className="section-title" style={{marginBottom:8}}>🎯 Bowling</p>
-          {BW&&<div className="flex items-center justify-between">
-            <span style={{fontSize:13,fontWeight:700,color:"#fff"}} className="truncate">{BW.name}</span>
-            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0,marginLeft:8}}>{BW.overs}.{BW.ballsThisOver}-{BW.runs}-{BW.wickets}</span>
+          {BW&&<div className="flex items-center justify-between" style={{gap:8}}>
+            <span style={{fontSize:13,fontWeight:700,color:"#fff",flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{BW.name}</span>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0}}>{BW.overs}.{BW.ballsThisOver}-{BW.runs}-{BW.wickets}</span>
           </div>}
         </div>
       </div>
@@ -2981,7 +2982,7 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
 
       {/* Dropdown */}
       {open&&<>
-        {ReactDOM.createPortal(<div onClick={close} style={{position:"fixed",inset:0,zIndex:40}}/>,document.body)}
+        <div onClick={close} style={{position:"fixed",inset:0,zIndex:40}}/>
         <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,minWidth:210,
           background:"rgba(12,9,38,.98)",border:"1px solid rgba(99,102,241,.4)",borderRadius:16,
           padding:"6px",boxShadow:"0 16px 48px rgba(0,0,0,.7)",backdropFilter:"blur(20px)",
@@ -4516,17 +4517,17 @@ function ViewerLive({onExit}){
           <div className="mini-card">
             <p className="section-title">🟡 {inn.single?"Batsman":"Batting"}</p>
             {(inn.single?[SK]:[SK,NS]).filter(Boolean).map((p,i)=>(
-              <div key={i} className="flex items-center justify-between" style={{padding:"3px 0"}}>
-                <span style={{fontSize:13,fontWeight:p===SK?700:400,color:p===SK?"#fff":"#9ca3af"}}>{p===SK&&<span style={{color:"#fbbf24",fontSize:10,marginRight:4}}>●</span>}{p.name}</span>
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280"}}>{p.runs} ({p.balls})</span>
+              <div key={i} className="flex items-center justify-between" style={{padding:"3px 0",gap:8}}>
+                <span style={{fontSize:13,fontWeight:p===SK?700:400,color:p===SK?"#fff":"#9ca3af",flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{p===SK&&<span style={{color:"#fbbf24",fontSize:10,marginRight:4}}>●</span>}{p.name}</span>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0}}>{p.runs} ({p.balls})</span>
               </div>
             ))}
           </div>
           <div className="mini-card">
             <p className="section-title">🎯 Bowling</p>
-            {BW&&<div className="flex items-center justify-between">
-              <span style={{fontSize:13,fontWeight:700}} className="truncate">{BW.name}</span>
-              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280"}}>{BW.overs}.{BW.ballsThisOver}-{BW.runs}-{BW.wickets}</span>
+            {BW&&<div className="flex items-center justify-between" style={{gap:8}}>
+              <span style={{fontSize:13,fontWeight:700,flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{BW.name}</span>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0}}>{BW.overs}.{BW.ballsThisOver}-{BW.runs}-{BW.wickets}</span>
             </div>}
           </div>
         </div>
