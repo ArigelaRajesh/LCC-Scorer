@@ -1382,6 +1382,9 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     }).catch(e=>console.error("hist save failed",e));
   },[mo,saved,isScorer,inn,inn1,match]);
 
+  const[toast,setToast]=React.useState(null);
+  const toastTimerRef=React.useRef(null);
+
   if(isScorer&&FB_OK&&DB&&!loaded){
     // Skeleton loading — shimmering placeholders in the shape of the scoring page feel faster and
     // less jarring than a spinner while Firebase fetches the live match.
@@ -1687,8 +1690,6 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     setFlash(true);setTimeout(()=>setFlash(false),500);
   };
 
-  const[toast,setToast]=React.useState(null);
-  const toastTimerRef=React.useRef(null);
   const showToast=(label)=>{
     if(toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(label);
@@ -5751,22 +5752,54 @@ function FindYourself(){
   const[q,setQ]=React.useState("");
   const[open,setOpen]=React.useState(false);
   const[data,setData]=React.useState(null);
-  const search=()=>{
-    const nm=q.trim(); if(!nm||!FB_OK||!DB) return;
-    setOpen(true); setData("loading");
+  const[names,setNames]=React.useState([]);
+  const[focused,setFocused]=React.useState(false);
+  const inputRef=React.useRef(null);
+  React.useEffect(()=>{
+    if(!FB_OK||!DB)return;
+    const ref=DB.ref("roster");
+    const cb=ref.on("value",s=>{
+      const v=s.val()||{};
+      setNames(Object.values(v).map(p=>p&&p.name).filter(Boolean).sort((a,b)=>a.localeCompare(b)));
+    });
+    return ()=>ref.off("value",cb);
+  },[]);
+  const runFor=(nm)=>{
+    if(!nm||!FB_OK||!DB) return;
+    setQ(nm); setFocused(false); setOpen(true); setData("loading");
     Promise.all([DB.ref("history").once("value"),DB.ref("roster").once("value")]).then(([hs,rs])=>{
       const stats=computeCareerStats(hs.val()||{},rs.val()||{});
       const hit=stats.find(s=>normName(s.name).includes(normName(nm)));
       setData(hit||"none");
     }).catch(()=>setData("none"));
   };
+  const search=()=>runFor(q.trim());
+  const nq=normName(q.trim());
+  const suggestions=focused&&nq&&!open?names.filter(n=>normName(n).includes(nq)).slice(0,5):[];
   return(
-    <div style={{marginBottom:"clamp(10px,2.5vw,14px)"}}>
+    <div style={{marginBottom:"clamp(10px,2.5vw,14px)",position:"relative"}}>
       <div style={{display:"flex",gap:8}}>
-        <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()}
+        <input ref={inputRef} value={q}
+          onChange={e=>{setQ(e.target.value);if(open){setOpen(false);setData(null);}}}
+          onFocus={()=>setFocused(true)}
+          onBlur={()=>setTimeout(()=>setFocused(false),120)}
+          onKeyDown={e=>e.key==="Enter"&&search()}
           placeholder="🔍 Find your stats — type your name…" style={{flex:1,fontSize:13}}/>
         <button onClick={search} className="btn btn-primary" style={{padding:"10px 16px",whiteSpace:"nowrap"}}>Go</button>
       </div>
+      {suggestions.length>0&&(
+        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,zIndex:15,
+          background:"rgba(20,17,55,.98)",border:"1px solid rgba(99,102,241,.45)",borderRadius:12,
+          overflow:"hidden",backdropFilter:"blur(16px)",boxShadow:"0 10px 30px rgba(0,0,0,.5)"}}>
+          {suggestions.map(n=>(
+            <button key={n} onMouseDown={()=>runFor(n)} style={{
+              display:"block",width:"100%",textAlign:"left",padding:"10px 14px",fontSize:13,
+              background:"none",border:"none",color:"#e2e5f8",cursor:"pointer",fontFamily:"'Inter',sans-serif",
+              borderBottom:"1px solid rgba(99,102,241,.15)"
+            }}>👤 {n}</button>
+          ))}
+        </div>
+      )}
       {open&&(
         <div style={{marginTop:8,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:14,padding:"14px 16px"}}>
           {data==="loading"&&<p style={{fontSize:12,color:"var(--text-mute)",textAlign:"center"}}>Searching…</p>}
@@ -5792,7 +5825,7 @@ function FindYourself(){
 
 // Recent matches — small swipeable cards on the landing screen so it feels alive even between live
 // matches, instead of a static page. Purely a read of the last few History entries.
-function RecentMatchesCarousel(){
+function RecentMatchesCarousel({onOpen}){
   const[list,setList]=React.useState(null);
   React.useEffect(()=>{
     if(!FB_OK||!DB){setList([]);return;}
@@ -5804,7 +5837,8 @@ function RecentMatchesCarousel(){
       // wrapped in one top-level ErrorBoundary, so an error rendering this small landing-page widget
       // showed the same "Something went wrong" screen everywhere else too, including trying to start
       // a new match afterwards — this is almost certainly why both looked broken together).
-      const arr=Object.values(v).filter(m=>m&&typeof m==="object").sort((a,b)=>(b.finishedAt||0)-(a.finishedAt||0));
+      const arr=Object.entries(v).map(([id,m])=>m&&typeof m==="object"?{id,...m}:null)
+        .filter(Boolean).sort((a,b)=>(b.finishedAt||0)-(a.finishedAt||0));
       setList(arr);
     });
     return ()=>ref.off("value",cb);
@@ -5818,13 +5852,19 @@ function RecentMatchesCarousel(){
           if(!m) return null;
           const r=m.result||{};
           return(
-            <div key={i} style={{scrollSnapAlign:"start",flexShrink:0,width:172,background:"var(--surface)",
-              border:"1px solid var(--border)",borderRadius:14,padding:"10px 12px"}}>
+            <button key={m.id||i} onClick={()=>onOpen&&onOpen(m)} style={{
+              scrollSnapAlign:"start",flexShrink:0,width:172,background:"var(--surface)",
+              border:"1px solid var(--border)",borderRadius:14,padding:"10px 12px",
+              textAlign:"left",cursor:"pointer",fontFamily:"'Inter',sans-serif",color:"inherit",
+              transition:"border-color .15s,transform .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor="rgba(99,102,241,.5)";e.currentTarget.style.transform="translateY(-2px)";}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor="";e.currentTarget.style.transform="";}}>
               <p style={{fontSize:9,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>{m.venue||""}</p>
               <p style={{fontSize:12,fontWeight:700,marginBottom:6,lineHeight:1.3}}>{r.winner?`🏆 ${r.winner} won`:"Tied"}{r.margin?" by "+r.margin:""}</p>
               {m.inn1&&<p style={{fontSize:10,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn1.battingTeam}: {m.inn1.totalRuns}/{m.inn1.wickets}</p>}
               {m.inn2&&<p style={{fontSize:10,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn2.battingTeam}: {m.inn2.totalRuns}/{m.inn2.wickets}</p>}
-            </div>
+              <p style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>View →</p>
+            </button>
           );
         })}
       </div>
@@ -5835,12 +5875,16 @@ function RecentMatchesCarousel(){
 function Landing({onPick}){
   const[menuOpen,setMenuOpen]=React.useState(false);
   const[announcement,setAnnouncement]=React.useState(null);
+  const[viewMatch,setViewMatch]=React.useState(null);
   React.useEffect(()=>{
     if(!FB_OK||!DB)return;
     const ref=DB.ref("announcement");
     const cb=ref.on("value",s=>setAnnouncement(s.val()||null));
     return ()=>ref.off("value",cb);
   },[]);
+  if(viewMatch){
+    return <MatchDetailView match={viewMatch} role="viewer" onBack={()=>setViewMatch(null)} onDelete={()=>{}}/>;
+  }
   const menuItem=(emoji,title,sub,color,onClick)=>(
     <button onClick={()=>{setMenuOpen(false);onClick();}} style={{
       width:"100%",display:"flex",alignItems:"center",gap:12,textAlign:"left",
@@ -5858,37 +5902,32 @@ function Landing({onPick}){
       <span style={{color:"#6b7280",fontSize:13}}>→</span>
     </button>
   );
-  // Rich horizontal card — emoji left, text middle, circular arrow right
-  const richCard=(emoji,title,sub,accent,glow,onClick,idx,badge)=>(
+  // Compact quick-action tile — 2-up grid so all four actions read as one dashboard instead of a
+  // scroll-forever list. Icon badge on top, label + one-line sub below, accent-colored top edge.
+  const tile=(emoji,title,sub,accent,glow,onClick,idx,badge)=>(
     <button onClick={onClick} style={{
-      width:"100%",borderRadius:20,cursor:"pointer",position:"relative",overflow:"hidden",
-      display:"flex",alignItems:"center",gap:"clamp(10px,3.5vw,16px)",textAlign:"left",
-      padding:"clamp(13px,3.8vw,18px) clamp(15px,4.2vw,20px)",
-      background:"linear-gradient(135deg,rgba(20,17,55,.85),rgba(15,12,41,.92))",
-      border:`1.5px solid ${accent}`,color:"#fff",fontFamily:"'Inter',sans-serif",
-      backdropFilter:"blur(12px)",animation:`slideInUp .5s ease ${0.1*idx+0.2}s both`,
-      boxShadow:`0 6px 26px ${glow}`,transition:"transform .18s,box-shadow .18s"
+      borderRadius:18,cursor:"pointer",position:"relative",overflow:"hidden",textAlign:"left",
+      display:"flex",flexDirection:"column",gap:8,
+      padding:"clamp(12px,3.4vw,16px) clamp(12px,3.4vw,14px)",
+      background:"linear-gradient(160deg,rgba(20,17,55,.88),rgba(15,12,41,.94))",
+      border:`1.5px solid ${accent}`,borderTop:`3px solid ${accent}`,color:"#fff",
+      fontFamily:"'Inter',sans-serif",backdropFilter:"blur(12px)",
+      animation:`slideInUp .5s ease ${0.08*idx+0.2}s both`,
+      boxShadow:`0 6px 22px ${glow}`,transition:"transform .18s,box-shadow .18s"
     }}
-    onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 12px 34px ${glow}`;}}
-    onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=`0 6px 26px ${glow}`;}}>
-      {/* Accent glow blob behind emoji */}
-      <span style={{position:"absolute",left:-10,top:"50%",transform:"translateY(-50%)",
-        width:90,height:90,borderRadius:"50%",background:glow,filter:"blur(26px)",pointerEvents:"none"}}/>
-      <span style={{fontSize:"clamp(30px,8vw,40px)",lineHeight:1,position:"relative",
-        filter:"drop-shadow(0 3px 8px rgba(0,0,0,.55))",flexShrink:0}}>{emoji}</span>
-      <span style={{flex:1,position:"relative",minWidth:0}}>
-        <span style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
-          <span style={{fontWeight:800,fontSize:"clamp(17px,5vw,22px)",lineHeight:1.05,letterSpacing:"-.01em"}}>{title}</span>
-          {badge&&<span style={{fontSize:9,fontWeight:700,color:"#111",background:"linear-gradient(135deg,#34d399,#10b981)",borderRadius:6,padding:"2px 7px",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".05em"}}>{badge}</span>}
-        </span>
-        <span style={{display:"block",fontSize:"clamp(10px,2.9vw,12px)",color:"#94a3d4",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sub}</span>
+    onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 12px 30px ${glow}`;}}
+    onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=`0 6px 22px ${glow}`;}}>
+      <span style={{position:"absolute",right:-16,top:-16,width:64,height:64,borderRadius:"50%",
+        background:glow,filter:"blur(20px)",pointerEvents:"none"}}/>
+      <span style={{display:"flex",alignItems:"center",justifyContent:"space-between",position:"relative"}}>
+        <span style={{fontSize:"clamp(24px,7vw,30px)",lineHeight:1,
+          filter:"drop-shadow(0 3px 8px rgba(0,0,0,.5))"}}>{emoji}</span>
+        {badge&&<span style={{fontSize:8,fontWeight:700,color:"#111",background:"linear-gradient(135deg,#34d399,#10b981)",borderRadius:6,padding:"2px 6px",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".04em"}}>{badge}</span>}
       </span>
-      {/* Circular arrow button */}
-      <span style={{flexShrink:0,position:"relative",
-        width:"clamp(38px,10vw,48px)",height:"clamp(38px,10vw,48px)",borderRadius:"50%",
-        border:`1.5px solid ${accent}`,display:"flex",alignItems:"center",justifyContent:"center",
-        color:accent.replace(/,[\d.]+\)/,",1)"),fontSize:"clamp(16px,4.5vw,20px)",fontWeight:700,
-        background:"rgba(0,0,0,.2)"}}>›</span>
+      <span style={{position:"relative"}}>
+        <span style={{display:"block",fontWeight:800,fontSize:"clamp(14px,4vw,16px)",lineHeight:1.15,letterSpacing:"-.01em",marginBottom:2}}>{title}</span>
+        <span style={{display:"block",fontSize:"clamp(9px,2.6vw,10.5px)",color:"#94a3d4",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.3}}>{sub}</span>
+      </span>
     </button>
   );
   return(
@@ -5943,7 +5982,7 @@ function Landing({onPick}){
         </div>
 
         <FindYourself/>
-        <RecentMatchesCarousel/>
+        <RecentMatchesCarousel onOpen={setViewMatch}/>
 
         {announcement&&announcement.text&&(
           <div style={{
@@ -5963,12 +6002,12 @@ function Landing({onPick}){
           </div>
         )}
 
-        {/* ── Rich action cards — all stacked, fit one screen ── */}
-        <div style={{display:"flex",flexDirection:"column",gap:"clamp(9px,2.4vw,13px)",flex:1}}>
-          {richCard("👁️","Watch Live","Live scoreboard · no PIN","rgba(16,185,129,.45)","rgba(16,185,129,.18)",()=>onPick("viewer"),0)}
-          {richCard("🏏","Score","Team scorers · PIN","rgba(245,158,11,.45)","rgba(245,158,11,.18)",()=>onPick("scorer"),1)}
-          {richCard("📋","Weekend Poll","Vote Yes / No for this week","rgba(167,139,250,.45)","rgba(167,139,250,.18)",()=>onPick("poll"),2)}
-          {richCard("🙌","Join the Club","Add your name & playing style","rgba(52,211,153,.45)","rgba(52,211,153,.18)",()=>onPick("roster"),3,"NEW HERE?")}
+        {/* ── Quick-action grid — 2×2 so everything fits one screen without scrolling ── */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"clamp(9px,2.4vw,12px)",flex:1}}>
+          {tile("👁️","Watch Live","Live scoreboard · no PIN","rgba(16,185,129,.45)","rgba(16,185,129,.18)",()=>onPick("viewer"),0)}
+          {tile("🏏","Score","Team scorers · PIN","rgba(245,158,11,.45)","rgba(245,158,11,.18)",()=>onPick("scorer"),1)}
+          {tile("📋","Weekend Poll","Vote for this week","rgba(167,139,250,.45)","rgba(167,139,250,.18)",()=>onPick("poll"),2)}
+          {tile("🙌","Join the Club","Add your name","rgba(52,211,153,.45)","rgba(52,211,153,.18)",()=>onPick("roster"),3,"NEW")}
         </div>
 
         <p style={{textAlign:"center",marginTop:"clamp(10px,2.5vw,16px)",marginBottom:0,color:"rgba(129,140,248,.4)",fontSize:11,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".05em"}}>Created by Rajesh Arigela</p>
