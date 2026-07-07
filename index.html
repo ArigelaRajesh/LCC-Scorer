@@ -301,7 +301,7 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 /* Modal */
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center;z-index:100;padding:16px}
 @media(min-width:640px){.modal-bg{align-items:center}}
-.modal{background:var(--surface-2);border:1px solid var(--border);border-radius:24px;padding:20px;width:100%;max-width:360px}
+.modal{background:var(--surface-2);border:1px solid var(--border);border-radius:24px;padding:20px;width:100%;max-width:360px;max-height:min(85dvh,640px);overflow-y:auto;}
 
 /* Misc */
 .divider{height:1px;background:var(--border);margin:8px 0}
@@ -1641,6 +1641,14 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     const n=parseInt(newOvers,10);
     if(!n||n<1||n>50){ alert("Enter a valid number of overs (1–50)."); return; }
     if(!inn){ return; }
+    // Can never drop the over limit below what's ALREADY been legitimately bowled this innings —
+    // otherwise the innings could be retroactively "completed" mid-over, or worse, mid-chase with
+    // balls bowled exceeding the new overs*6 limit. This applies to BOTH innings, not just the 2nd.
+    const bowledSoFar = Math.ceil((inn.totalBalls||0)/6);
+    if(n<bowledSoFar){
+      alert(`Overs can't be less than ${bowledSoFar} — that's how many have already been bowled this innings.`);
+      return;
+    }
     // In the 2nd innings the over limit is LOCKED to the 1st innings limit — both teams must get the
     // same number of overs. You may only REDUCE it (e.g. rain/time), never raise it above what the
     // 1st innings was played to. This prevents the bug where the chase could be given more overs than
@@ -3734,6 +3742,13 @@ function POTMVoting({inn,inn1,potm,role}){
 
   const castVote=(name)=>{
     if(!myName||!FB_OK||!DB)return;
+    if(myVote===name){
+      // Tapping your current pick again retracts it — lets you undo without being forced to pick
+      // someone else first.
+      DB.ref("potm/votes/"+deviceId).remove().catch(()=>{});
+      if(potm?.matchId) DB.ref("history/"+potm.matchId+"/potmVoting/votes/"+deviceId).remove().catch(()=>{});
+      return;
+    }
     const voteData={voter:myName,votedFor:name,at:Date.now()};
     // Write to live potm node (for real-time display on this screen)
     DB.ref("potm/votes/"+deviceId).set(voteData).catch(()=>{});
@@ -3806,6 +3821,7 @@ function POTMVoting({inn,inn1,potm,role}){
       {suggested&&!myVote&&(
         <p style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginBottom:10}}>⭐ Standout performance: {suggested} — but vote for whoever you think earned it.</p>
       )}
+      <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:10}}>{myVote?"Tap a different name to change your vote, or tap your pick again to remove it.":"Tap a name to vote — you can change your mind anytime before voting closes."}</p>
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
         {sorted.filter(n=>n!==myName).map(n=>{
           const c=counts[n]||0;
@@ -4112,16 +4128,27 @@ function MilestoneCelebration({inn,resetKey,playSound}){
     if(found.length){ setQueue(q=>[...q,...found]); }
   },[inn,resetKey]);
 
-  // Show queued celebrations one at a time (so two at once don't overlap on screen).
+  // Show queued celebrations one at a time (so two at once don't overlap on screen). This effect
+  // ONLY pops the queue and sets `show` — the dismiss timer lives in its own effect below. Keeping
+  // them separate matters: if the timeout were set here, changing `show` (a dependency) would make
+  // React tear down and re-run this effect on the very next render, clearing the timeout it had just
+  // scheduled before it ever had a chance to fire — which is exactly why celebrations were getting
+  // stuck on screen instead of disappearing after a few seconds.
   React.useEffect(()=>{
     if(show||queue.length===0)return;
     const next=queue[0];
     setQueue(q=>q.slice(1));
     setShow(next);
     if(playSound){ try{playCrowdCheer(true);}catch(e){} }
+  },[queue,show,playSound]);
+
+  // Auto-dismiss whatever's currently showing. Depends only on `show`, so this timer is scheduled
+  // exactly once per celebration and fires cleanly.
+  React.useEffect(()=>{
+    if(!show)return;
     const t=setTimeout(()=>setShow(null),3600);
     return ()=>clearTimeout(t);
-  },[queue,show,playSound]);
+  },[show]);
 
   if(!show) return null;
   return(
@@ -4733,6 +4760,10 @@ function MatchHistoryPOTM({m,role}){
 
   const castVote=(name)=>{
     if(!myName||!FB_OK||!DB)return;
+    if(myVote===name){
+      DB.ref("history/"+m.id+"/potmVoting/votes/"+deviceId).remove().catch(()=>{});
+      return;
+    }
     DB.ref("history/"+m.id+"/potmVoting/votes/"+deviceId).set({voter:myName,votedFor:name,at:Date.now()}).catch(()=>{});
   };
 
@@ -4790,6 +4821,7 @@ function MatchHistoryPOTM({m,role}){
         <button onClick={()=>{setMyName(null);try{localStorage.removeItem("lcc_potm_voter_"+m.id);}catch(e){}}}
           style={{background:"none",border:"none",color:"#6b7280",fontSize:10,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Not you?</button>
       </div>
+      <p style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:8}}>{myVote?"Tap a different name to change your vote, or tap your pick again to remove it.":"Tap a name to vote — you can change your mind anytime before voting closes."}</p>
       <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>
         {sorted.filter(n=>n!==myName).map(n=>{
           const c=counts[n]||0;
@@ -5774,17 +5806,28 @@ function FindYourself(){
     }).catch(()=>setData("none"));
   };
   const search=()=>runFor(q.trim());
+  const clearSearch=()=>{ setQ(""); setOpen(false); setData(null); setFocused(false); try{inputRef.current&&inputRef.current.focus();}catch(e){} };
   const nq=normName(q.trim());
   const suggestions=focused&&nq&&!open?names.filter(n=>normName(n).includes(nq)).slice(0,5):[];
   return(
     <div style={{marginBottom:"clamp(10px,2.5vw,14px)",position:"relative"}}>
       <div style={{display:"flex",gap:8}}>
-        <input ref={inputRef} value={q}
-          onChange={e=>{setQ(e.target.value);if(open){setOpen(false);setData(null);}}}
-          onFocus={()=>setFocused(true)}
-          onBlur={()=>setTimeout(()=>setFocused(false),120)}
-          onKeyDown={e=>e.key==="Enter"&&search()}
-          placeholder="🔍 Find your stats — type your name…" style={{flex:1,fontSize:13}}/>
+        <div style={{flex:1,position:"relative"}}>
+          <input ref={inputRef} value={q}
+            onChange={e=>{setQ(e.target.value);if(open){setOpen(false);setData(null);}}}
+            onFocus={()=>setFocused(true)}
+            onBlur={()=>setTimeout(()=>setFocused(false),120)}
+            onKeyDown={e=>e.key==="Enter"&&search()}
+            placeholder="🔍 Find your stats — type your name…" style={{width:"100%",fontSize:13,paddingRight:q?32:undefined}}/>
+          {q&&(
+            <button onClick={clearSearch} aria-label="Clear search" style={{
+              position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",
+              width:22,height:22,borderRadius:"50%",border:"none",cursor:"pointer",
+              background:"rgba(255,255,255,.12)",color:"#cbd5e1",fontSize:13,lineHeight:1,
+              display:"flex",alignItems:"center",justifyContent:"center"
+            }}>✕</button>
+          )}
+        </div>
         <button onClick={search} className="btn btn-primary" style={{padding:"10px 16px",whiteSpace:"nowrap"}}>Go</button>
       </div>
       {suggestions.length>0&&(
@@ -5801,12 +5844,17 @@ function FindYourself(){
         </div>
       )}
       {open&&(
-        <div style={{marginTop:8,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:14,padding:"14px 16px"}}>
+        <div style={{marginTop:8,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:14,padding:"14px 16px",position:"relative"}}>
+          <button onClick={clearSearch} aria-label="Close results" style={{
+            position:"absolute",top:10,right:10,width:24,height:24,borderRadius:"50%",border:"none",cursor:"pointer",
+            background:"rgba(255,255,255,.08)",color:"#9ca3af",fontSize:13,lineHeight:1,
+            display:"flex",alignItems:"center",justifyContent:"center"
+          }}>✕</button>
           {data==="loading"&&<p style={{fontSize:12,color:"var(--text-mute)",textAlign:"center"}}>Searching…</p>}
           {data==="none"&&<p style={{fontSize:12,color:"var(--text-mute)",textAlign:"center"}}>No matches found for "{q}". Check the spelling, or you may not have played yet.</p>}
           {data&&data!=="loading"&&data!=="none"&&(
             <div>
-              <p style={{fontFamily:"'Oswald',sans-serif",fontSize:17,fontWeight:700,marginBottom:8}}>{data.name}</p>
+              <p style={{fontFamily:"'Oswald',sans-serif",fontSize:17,fontWeight:700,marginBottom:8,paddingRight:20}}>{data.name}</p>
               <div style={{display:"flex",gap:14}}>
                 {[["M",data.matches],["Runs",data.bat.runs],["Wkts",data.bowl.wkts],["HS",data.bat.hs||0],["Best",data.bowl.wkts>0?data.bowl.best:"—"]].map(([l,v])=>(
                   <div key={l} style={{textAlign:"center"}}>
