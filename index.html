@@ -351,6 +351,14 @@ const T=20;
 // Scorecards store players by typed name; profiles use ids. We bridge them by
 // matching on a normalized full name (trim + lowercase + collapse spaces).
 function normName(n){return (n||"").trim().toLowerCase().replace(/\s+/g," ");}
+// "Avinash Thammineni" -> "Avinash T." — used in compact live cards (batsman/bowler) where a full
+// name would get cut off. Keeps the first name in full (that's what people actually go by) and
+// reduces the rest to initials, so it's still unambiguous between two players sharing a first name.
+function shortName(n){
+  const parts=(n||"").trim().split(/\s+/).filter(Boolean);
+  if(parts.length<=1) return parts[0]||"";
+  return parts[0]+" "+parts.slice(1).map(p=>p[0].toUpperCase()+".").join("");
+}
 function timeAgo(ts){
   const s=Math.floor((Date.now()-ts)/1000);
   if(s<60)return"just now";
@@ -370,7 +378,15 @@ function canonVenue(v){
 }
 function buildPidResolver(roster){
   const map={};
-  Object.entries(roster||{}).forEach(([id,p])=>{ if(p&&p.name) map[normName(p.name)]=id; });
+  Object.entries(roster||{}).forEach(([id,p])=>{
+    if(!p) return;
+    if(p.name) map[normName(p.name)]=id;
+    // Aliases — set when two profiles are merged (see PlayerToolsInline's MergeTab). The duplicate
+    // profile's name is preserved here so historical matches recorded under that exact name string
+    // still resolve to the surviving profile's id instead of silently splitting into a separate,
+    // orphaned "name-only" stat line.
+    (p.aliases||[]).forEach(a=>{ if(a) map[normName(a)]=id; });
+  });
   return (name)=> map[normName(name)] || null;
 }
 
@@ -452,6 +468,24 @@ function chipLbl(ev){
   if(ev.type==="DECL") return `${ev.runs||0}D`;
   if(ev.type==="OT")   return `OT${(ev.baseRuns||0)+(ev.overthrowRuns||0)}`;
   return ev.type;
+}
+// Total TEAM runs contributed by a single ball event. Mirrors the `rT` branching inside record()
+// exactly — that's the only source of truth for how a ball actually adds to the score. Earlier code
+// at a couple of call sites summed events with `(ev.runs||0)+(ev.batRuns||0)+(ev.extraRuns||0)+...`,
+// which only ever covers extras/DECL/OT/run-outs. Plain bat-off runs (tapping 0–6) are stored as just
+// `{type:"6"}` with NO separate runs field — record() derives the value via parseInt(ev.type) itself
+// — so that formula silently summed to 0 for every ordinary scoring shot, undercounting overs that
+// were mostly boundaries (an over of six sixes showed "0 runs").
+function evRuns(ev){
+  if(!ev) return 0;
+  if(ev.type==="WD") return ev.extraRuns||0;
+  if(ev.type==="NB") return (ev.extraRuns||0)+(ev.batRuns||0);
+  if(ev.type==="B"||ev.type==="LB") return ev.extraRuns||0;
+  if(ev.type==="W") return ev.dismissalType==="Run Out" ? (parseInt(ev.runOutRuns)||0) : (ev.extraRuns||0);
+  if(ev.type==="DECL") return parseInt(ev.runs)||0;
+  if(ev.type==="OT") return (ev.baseRuns||0)+(ev.overthrowRuns||0);
+  const r=parseInt(ev.type);
+  return isNaN(r)?0:r;
 }
 
 // ── Setup (Admin only: teams, venue, toss — NO players) ──────────────────────
@@ -1523,7 +1557,6 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
         const beforeWinning = JSON.parse(JSON.stringify(hist[hist.length-1]));
         if(beforeWinning && beforeWinning.inningsNum===revertedInn.inningsNum && (beforeWinning.totalRuns||0) < revertedInn.target){
           revertedInn = beforeWinning;
-          setHist(h=>h.slice(0,-1));
         } else {
           // No usable pre-winning ball in history — keep the target and score intact but mark this
           // innings so the auto-complete check skips ONCE. The scorer can then correct/rescore, and the
@@ -1534,6 +1567,14 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
         revertedInn = {...revertedInn, suppressAutoEnd:true};
       }
     }
+    // Always start Undo fresh after a revert. `hist` is a LOCAL stack of pre-ball snapshots pushed by
+    // record() during live scoring — once we've jumped the innings back to an earlier point, any
+    // entries still in `hist` describe states from the discarded future and no longer line up with
+    // `revertedInn`. Leaving them in place either disabled Undo outright (if a later render found the
+    // stack already inconsistent) or, worse, could undo to the WRONG prior state. Clearing it means
+    // Undo simply isn't available for the very next ball post-revert, then works normally again from
+    // the ball after that — a clean, predictable boundary instead of silently-stale history.
+    setHist([]);
     // Set state ONLY and let the normal sync effect do the actual `live` write — same proven fix as
     // restoreFromBackup above. This function PREVIOUSLY also did its own direct DB.ref("live").set()
     // write here, in addition to the state change triggering the sync effect's write — two competing
@@ -2567,7 +2608,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
             <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"3px 0"}}>
               <span style={{fontSize:13,fontWeight:a?700:400,color:a?"#fff":"#9ca3af",display:"flex",alignItems:"center",gap:5,overflow:"hidden"}}>
                 {a&&<span style={{color:"#fbbf24",fontSize:10}}>●</span>}
-                <span className="truncate">{p.name}</span>
+                <span className="truncate">{shortName(p.name)}</span>
                 {a&&<span style={{fontSize:9,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",background:"rgba(245,158,11,.15)",borderRadius:4,padding:"1px 4px",flexShrink:0}}>STRIKE</span>}
               </span>
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0,marginLeft:8}}>{p.runs} ({p.balls})</span>
@@ -2578,7 +2619,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
         <div className="mini-card" style={{padding:"10px 12px"}}>
           <p className="section-title" style={{marginBottom:8}}>🎯 Bowling</p>
           {BW&&<div className="flex items-center justify-between" style={{gap:8}}>
-            <span style={{fontSize:13,fontWeight:700,color:"#fff",flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{BW.name}</span>
+            <span style={{fontSize:13,fontWeight:700,color:"#fff",flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{shortName(BW.name)}</span>
             <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0}}>{BW.overs}.{BW.ballsThisOver}-{BW.runs}-{BW.wickets}</span>
           </div>}
         </div>
@@ -2588,7 +2629,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
       <div>
         <div className="flex items-center justify-between mb-2">
           <p className="section-title" style={{marginBottom:0}}>Over {Math.floor(inn.totalBalls/6)+1}/{inn.overs} · <span style={{color:"#fbbf24"}}>{inn.totalBalls%6} of 6 balls</span>{(inn.overEvents||[]).filter(e=>e.type==="WD"||e.type==="NB").length>0&&<span style={{color:"#fb923c"}}> +{(inn.overEvents||[]).filter(e=>e.type==="WD"||e.type==="NB").length} extra</span>}</p>
-          <button className="btn-undo" onClick={onUndo} disabled={!canUndo}>↩ Undo</button>
+          <button className="btn-undo" onClick={onUndo} disabled={!canUndo} title={canUndo?"Undo the last ball":"Nothing to undo yet — after a revert, Undo becomes available again once the next ball is scored"}>↩ Undo</button>
         </div>
         <div style={{background:"#130f3a",border:"1px solid #1e1b4b",borderRadius:16,padding:"12px 14px",display:"flex",flexWrap:"wrap",gap:8,minHeight:60}}>
           {(inn.overEvents||[]).length===0
@@ -2602,10 +2643,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           const co=inn.completedOvers||[];
           if(co.length===0) return null;
           const last=co[co.length-1]||[];
-          const runsInOver=last.reduce((s,ev)=>{
-            const r=(ev.runs||0)+(ev.batRuns||0)+(ev.extraRuns||0)+(ev.baseRuns||0)+(ev.overthrowRuns||0);
-            return s+(isNaN(r)?0:r);
-          },0);
+          const runsInOver=last.reduce((s,ev)=>s+evRuns(ev),0);
           const wktsInOver=last.filter(ev=>ev.type==="W").length;
           return(
             <div style={{marginTop:8,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
@@ -3361,7 +3399,7 @@ function bowlerSpell(inn,name){
     if(ob[i]!==name) return;
     let runs=0,wkts=0;
     (events||[]).forEach(ev=>{
-      runs+=(ev.runs||0)+(ev.batRuns||0)+(ev.extraRuns||0)+(ev.baseRuns||0)+(ev.overthrowRuns||0);
+      runs+=evRuns(ev);
       if(ev.type==="W") wkts++;
     });
     overs.push(`${runs}${wkts>0?"-"+wkts:""}`);
@@ -3370,7 +3408,7 @@ function bowlerSpell(inn,name){
   // yet — show it as a live tail so the spell is never missing the most recent action.
   if(inn.bowlerName===name&&(inn.overEvents||[]).length>0){
     let runs=0,wkts=0;
-    inn.overEvents.forEach(ev=>{ runs+=(ev.runs||0)+(ev.batRuns||0)+(ev.extraRuns||0)+(ev.baseRuns||0)+(ev.overthrowRuns||0); if(ev.type==="W") wkts++; });
+    inn.overEvents.forEach(ev=>{ runs+=evRuns(ev); if(ev.type==="W") wkts++; });
     overs.push(`${runs}${wkts>0?"-"+wkts:""}*`);
   }
   return overs;
@@ -4258,9 +4296,9 @@ function RunWorm({inn,inn1}){
   const seriesOf=(i)=>{
     if(!i) return null;
     const co=i.completedOvers||[]; let run=0; const pts=[{o:0,r:0,w:false}];
-    co.forEach((ov,ix)=>{ let r=0,w=false; (ov||[]).forEach(ev=>{ r+=(ev.runs||0)+(ev.batRuns||0)+(ev.extraRuns||0)+(ev.baseRuns||0)+(ev.overthrowRuns||0); if(ev.type==="W")w=true; }); run+=r; pts.push({o:ix+1,r:run,w}); });
+    co.forEach((ov,ix)=>{ let r=0,w=false; (ov||[]).forEach(ev=>{ r+=evRuns(ev); if(ev.type==="W")w=true; }); run+=r; pts.push({o:ix+1,r:run,w}); });
     // include the in-progress over as a live tail
-    if((i.overEvents||[]).length>0){ let r=0; i.overEvents.forEach(ev=>{ r+=(ev.runs||0)+(ev.batRuns||0)+(ev.extraRuns||0)+(ev.baseRuns||0)+(ev.overthrowRuns||0); }); pts.push({o:co.length+((i.totalBalls%6)/6),r:run+r,w:false}); }
+    if((i.overEvents||[]).length>0){ let r=0; i.overEvents.forEach(ev=>{ r+=evRuns(ev); }); pts.push({o:co.length+((i.totalBalls%6)/6),r:run+r,w:false}); }
     return pts;
   };
   const cur=seriesOf(inn); if(!cur||cur.length<2) return null;
@@ -4453,6 +4491,27 @@ function ViewerLive({onExit}){
             </div>
           );
         })()}
+        {/* BALL TICKER — a scrolling strip of the most recent deliveries (current over plus a bit of
+            the previous one), so viewers watching remotely get the same at-a-glance rhythm of play a
+            scorer sees, not just a single latest-ball line. Oldest on the left, most recent on the
+            right (auto-scrolled into view), same chip styling used in the scorer's own over history. */}
+        {(()=>{
+          const co=inn.completedOvers||[];
+          const prevOver=co.length>0?co[co.length-1]:[];
+          const curOver=inn.overEvents||[];
+          // Only pull in the tail of the previous over if the current one hasn't built up much yet,
+          // so the strip always shows a decent number of recent balls without getting cluttered.
+          const need=Math.max(0,10-curOver.length);
+          const combined=[...prevOver.slice(Math.max(0,prevOver.length-need)),...curOver];
+          if(combined.length===0) return null;
+          return(
+            <div style={{display:"flex",gap:5,overflowX:"auto",marginTop:8,paddingBottom:2}}>
+              {combined.map((ev,i)=>(
+                <div key={i} className={chipClass(ev)} style={{flexShrink:0,transform:"scale(.88)"}}>{chipLbl(ev)}</div>
+              ))}
+            </div>
+          );
+        })()}
         {/* CHASE BANNER — the match equation front and centre during the 2nd innings, updating every
             ball. Cyan glow normally; warms to amber/red as the required rate climbs. */}
         {inn.target!=null&&bLeft>0&&req>0&&(
@@ -4518,7 +4577,7 @@ function ViewerLive({onExit}){
             <p className="section-title">🟡 {inn.single?"Batsman":"Batting"}</p>
             {(inn.single?[SK]:[SK,NS]).filter(Boolean).map((p,i)=>(
               <div key={i} className="flex items-center justify-between" style={{padding:"3px 0",gap:8}}>
-                <span style={{fontSize:13,fontWeight:p===SK?700:400,color:p===SK?"#fff":"#9ca3af",flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{p===SK&&<span style={{color:"#fbbf24",fontSize:10,marginRight:4}}>●</span>}{p.name}</span>
+                <span style={{fontSize:13,fontWeight:p===SK?700:400,color:p===SK?"#fff":"#9ca3af",flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{p===SK&&<span style={{color:"#fbbf24",fontSize:10,marginRight:4}}>●</span>}{shortName(p.name)}</span>
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0}}>{p.runs} ({p.balls})</span>
               </div>
             ))}
@@ -4526,7 +4585,7 @@ function ViewerLive({onExit}){
           <div className="mini-card">
             <p className="section-title">🎯 Bowling</p>
             {BW&&<div className="flex items-center justify-between" style={{gap:8}}>
-              <span style={{fontSize:13,fontWeight:700,flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{BW.name}</span>
+              <span style={{fontSize:13,fontWeight:700,flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{shortName(BW.name)}</span>
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0}}>{BW.overs}.{BW.ballsThisOver}-{BW.runs}-{BW.wickets}</span>
             </div>}
           </div>
@@ -6235,8 +6294,21 @@ function PlayerToolsInline({roster,history}){
       if(primary===dup){alert("Can't merge a profile with itself.");return;}
       if(!confirm(`Merge "${roster[dup]?.name}" INTO "${roster[primary]?.name}"?\nThe duplicate profile will be removed.`))return;
       setSaving(true);
-      DB.ref("roster/"+dup).remove()
-        .then(()=>{setSaving(false);setPrimary("");setDup("");alert("Merged! Duplicate removed.");})
+      // Preserve the duplicate's identity as an ALIAS on the surviving profile before removing it.
+      // Historical matches store player names as plain strings (not roster ids), so simply deleting
+      // the duplicate profile — without this — would leave every past match still recorded under
+      // "Raj" resolving to nothing, splitting off into its own orphaned name-only stat line instead
+      // of actually combining with "Rajesh Arigela" as the merge implies.
+      const dupProfile=roster[dup]||{};
+      const primaryProfile=roster[primary]||{};
+      const mergedAliases=Array.from(new Set([
+        ...(primaryProfile.aliases||[]),
+        dupProfile.name,
+        ...(dupProfile.aliases||[]),
+      ].filter(Boolean).filter(n=>normName(n)!==normName(primaryProfile.name||""))));
+      DB.ref("roster/"+primary+"/aliases").set(mergedAliases)
+        .then(()=>DB.ref("roster/"+dup).remove())
+        .then(()=>{setSaving(false);setPrimary("");setDup("");alert("Merged! Duplicate removed — its stats now combine under the kept profile.");})
         .catch(e=>{setSaving(false);alert("Failed: "+e.message);});
     };
     return(<div>
@@ -6476,6 +6548,8 @@ function PollRosterTab({roster,canDelete}){
               <div style={{fontSize:11,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>
                 {p.role==="Batsman"?"🏏":p.role==="Bowler"?"🎯":"⭐"} {p.role} · {p.bat==="Left"?"LH":"RH"}{p.bowl?` · ${p.bowl}`:""}
               </div>
+              {p.aliases&&p.aliases.length>0&&
+                <div style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:2}} title="Past matches recorded under these names are counted as this profile">also: {p.aliases.join(", ")}</div>}
             </div>
           </div>
           <div style={{display:"flex",gap:6,flexShrink:0}}>
