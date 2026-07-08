@@ -2176,7 +2176,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
           onEndInnings={manualEndInnings} onRevert={revert} canRevert={!!preEnd||preEndInDB} role={role}
           onEditOvers={editOvers} onRestore={restoreFromBackup}
           onUndo={undo} canUndo={hist.length>0}/>}
-        {tab==="batting"&&<><RunWorm inn={inn} inn1={inn1}/><PartnershipChart inn={inn}/><BattingTab inn={inn}/></>}
+        {tab==="batting"&&<><PartnershipChart inn={inn}/><BattingTab inn={inn}/></>}
         {tab==="bowling"&&<BowlingTab inn={inn}/>}
       </div>
       {/* Toast confirmation for the last scoring action, with Undo right there in the moment — no need
@@ -3103,6 +3103,9 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
           {role==="admin"&&match?.pinA&&row("👁","View Team PINs","#6ee7b7",()=>setPinViewOpen(true))}
           {row("📱","Show QR for viewers","#22d3ee",()=>{setOpen(false);setQrOpen(true);})}
           {onAbandonMatch&&row("🆕","Start New Match","#fbbf24",()=>{close();onAbandonMatch();})}
+          <div style={{borderTop:"1px solid #1e1b4b",margin:"4px 0",paddingTop:6,textAlign:"center"}}>
+            <span style={{fontSize:9,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace"}}>build 2026-07-07</span>
+          </div>
         </div>
       </>}
 
@@ -3489,13 +3492,15 @@ function BowlingTab({inn}){
             const b=inn.bowlers[name];
             const balls=b.overs*6+b.ballsThisOver;
             const econ=balls>0?((b.runs/balls)*6).toFixed(2):"—";
-            const isOpen=expanded===name;
+            const spell=bowlerSpell(inn,name);
+            const hasMultiOverSpell=spell.length>1; // a single-over spell just repeats the R column above
+            const isOpen=expanded===name&&hasMultiOverSpell;
             return(
               <React.Fragment key={name}>
-                <tr onClick={()=>setExpanded(isOpen?null:name)} style={{cursor:"pointer"}}>
+                <tr onClick={()=>hasMultiOverSpell&&setExpanded(isOpen?null:name)} style={{cursor:hasMultiOverSpell?"pointer":"default"}}>
                   <td style={{fontFamily:"'Inter',sans-serif",fontWeight:600}}>
                     {name}{name===inn.bowlerName&&<span style={{color:"#fbbf24",fontSize:10,marginLeft:6}}>●</span>}
-                    <span style={{color:"var(--text-mute)",fontSize:10,marginLeft:6}}>{isOpen?"▲":"▾"}</span>
+                    {hasMultiOverSpell&&<span style={{color:"var(--text-mute)",fontSize:10,marginLeft:6}}>{isOpen?"▲":"▾"}</span>}
                   </td>
                   <td>{b.overs}.{b.ballsThisOver}</td>
                   <td style={{color:"#6b7280"}}>{b.maidens}</td>
@@ -3506,8 +3511,8 @@ function BowlingTab({inn}){
                 {isOpen&&(
                   <tr>
                     <td colSpan={6} style={{background:"rgba(0,0,0,.15)",padding:"8px 12px"}}>
-                      <p style={{fontSize:9,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",marginBottom:5}}>Spell — runs(-wkts) per over</p>
-                      <p style={{fontSize:12,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace"}}>{bowlerSpell(inn,name).join(", ")||"—"}</p>
+                      <p style={{fontSize:9,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",marginBottom:5}}>Runs conceded per over bowled</p>
+                      <p style={{fontSize:12,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace"}}>{spell.join(", ")}</p>
                     </td>
                   </tr>
                 )}
@@ -4356,35 +4361,6 @@ function PartnershipChart({inn}){
   );
 }
 
-function RunWorm({inn,inn1}){
-  const seriesOf=(i)=>{
-    if(!i) return null;
-    const co=i.completedOvers||[]; let run=0; const pts=[{o:0,r:0,w:false}];
-    co.forEach((ov,ix)=>{ let r=0,w=false; (ov||[]).forEach(ev=>{ r+=evRuns(ev); if(ev.type==="W")w=true; }); run+=r; pts.push({o:ix+1,r:run,w}); });
-    // include the in-progress over as a live tail
-    if((i.overEvents||[]).length>0){ let r=0; i.overEvents.forEach(ev=>{ r+=evRuns(ev); }); pts.push({o:co.length+((i.totalBalls%6)/6),r:run+r,w:false}); }
-    return pts;
-  };
-  const cur=seriesOf(inn); if(!cur||cur.length<2) return null;
-  const prev=inn.inningsNum===2?seriesOf(inn1):null;
-  const W=300,H=90,P=10;
-  const maxO=Math.max(inn.overs||1,cur[cur.length-1].o,prev?prev[prev.length-1].o:0);
-  const maxR=Math.max(10,cur[cur.length-1].r,prev?prev[prev.length-1].r:0,inn.target||0);
-  const X=(o)=>P+(o/maxO)*(W-2*P), Y=(r)=>H-P-(r/maxR)*(H-2*P);
-  const path=(pts)=>pts.map((p,i)=>(i===0?"M":"L")+X(p.o).toFixed(1)+" "+Y(p.r).toFixed(1)).join(" ");
-  return(
-    <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:14,padding:"10px 12px",marginBottom:14}}>
-      <p style={{fontSize:9,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".15em",marginBottom:4}}>📈 Run worm{prev?" — vs 1st innings":""}</p>
-      <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:"auto",display:"block"}}>
-        {inn.target!=null&&<line x1={P} y1={Y(inn.target)} x2={W-P} y2={Y(inn.target)} stroke="var(--amber)" strokeWidth="1" strokeDasharray="4 3" opacity=".7"/>}
-        {prev&&<path d={path(prev)} fill="none" stroke="var(--text-mute)" strokeWidth="2" opacity=".5"/>}
-        <path d={path(cur)} fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round"/>
-        {cur.filter(p=>p.w).map((p,i)=><circle key={i} cx={X(p.o)} cy={Y(p.r)} r="3" fill="var(--red)"/>)}
-      </svg>
-    </div>
-  );
-}
-
 function ViewerTeams({match,inn}){
   const teamA=match?.teamA||"Team A", teamB=match?.teamB||"Team B";
   let listA=match?.pubTeamA||[], listB=match?.pubTeamB||[];
@@ -4615,7 +4591,6 @@ function ViewerLive({onExit}){
           <ViewerTeams match={match} inn={inn}/>
         ):tab==="scorecard"?(
           <>
-            <RunWorm inn={inn} inn1={inn1}/>
             <PartnershipChart inn={inn}/>
             {inn.inningsNum===2&&inn1&&(<>
               <p className="section-title">1st Innings — {inn1.battingTeam}</p>
