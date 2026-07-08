@@ -2145,26 +2145,31 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
             {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
           </div>
         </div>
-        {/* Score + stats all in one compact row */}
-        <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
-          <span key={inn.totalRuns+"-"+inn.wickets} className={`score-big score-pulse${flash?" flash":""}`}>{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
-          <span style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>({ovStr(inn.totalBalls)} ov)</span>
-          <span style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginLeft:4}}>CRR <span style={{color:"#fbbf24",fontWeight:600}}>{crr}</span></span>
-          {inn.target&&<>
-            <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>T:<span style={{color:"#fff",fontWeight:600}}>{inn.target}</span></span>
-            <span style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>Need <span style={{color:"#fff",fontWeight:600}}>{Math.max(req,0)}</span>/<span style={{color:"#fff",fontWeight:600}}>{bLeft}b</span></span>
-            {rrr&&<span style={{color:parseFloat(rrr)>12?"#f87171":"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>RRR <span style={{fontWeight:600,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span></span>}
-          </>}
+        {/* Score on the left, chase stats + progress bar on the right — using the space that used to
+            sit empty next to "Fix Players / home" instead of wrapping everything onto extra rows
+            below, which was adding height and pushing the scoring buttons further down the page. */}
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap",minWidth:0}}>
+            <span key={inn.totalRuns+"-"+inn.wickets} className={`score-big score-pulse${flash?" flash":""}`}>{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
+            <span style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>({ovStr(inn.totalBalls)} ov)</span>
+          </div>
+          <div style={{textAlign:"right",flexShrink:0}}>
+            <div style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap"}}>CRR <span style={{color:"#fbbf24",fontWeight:600}}>{crr}</span></div>
+            {inn.target&&<>
+              <div style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap"}}>T:<span style={{color:"#fff",fontWeight:600}}>{inn.target}</span> Need <span style={{color:"#fff",fontWeight:600}}>{Math.max(req,0)}</span>/<span style={{color:"#fff",fontWeight:600}}>{bLeft}b</span></div>
+              {rrr&&<div style={{color:parseFloat(rrr)>12?"#f87171":"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap"}}>RRR <span style={{fontWeight:600,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span></div>}
+            </>}
+          </div>
         </div>
-        {/* Chase progress bar — fills what used to be dead space in the header during a run chase, and
-            gives an at-a-glance read on how the chase is tracking (green = ahead of RRR, red = behind)
-            without having to do the CRR-vs-RRR math in your head every over. */}
+        {/* Chase progress bar — a compact single line, replacing what used to be a whole extra row of
+            dead space during a chase. Gives an at-a-glance read on how the chase is tracking (green =
+            ahead of RRR, red = behind) without doing the CRR-vs-RRR math in your head every over. */}
         {inn.target!=null&&(()=>{
           const pct=Math.min(100,Math.max(0,(inn.totalRuns/inn.target)*100));
           const ahead=parseFloat(crr)>=parseFloat(rrr||crr);
           return(
-            <div style={{marginTop:6,display:"flex",alignItems:"center",gap:8}}>
-              <div style={{flex:1,height:6,borderRadius:3,background:"rgba(255,255,255,.08)",overflow:"hidden"}}>
+            <div style={{marginTop:5,display:"flex",alignItems:"center",gap:8}}>
+              <div style={{flex:1,height:5,borderRadius:3,background:"rgba(255,255,255,.08)",overflow:"hidden"}}>
                 <div style={{height:"100%",width:pct+"%",borderRadius:3,transition:"width .4s ease",
                   background:ahead?"linear-gradient(90deg,#34d399,#10b981)":"linear-gradient(90deg,#f87171,#ef4444)"}}/>
               </div>
@@ -2192,26 +2197,11 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
           onFixPlayers={fixPlayers}
           onEndInnings={manualEndInnings} onRevert={revert} canRevert={!!preEnd||preEndInDB} role={role}
           onEditOvers={editOvers} onRestore={restoreFromBackup}
-          onUndo={undo} canUndo={hist.length>0}/>}
+          onUndo={undo} canUndo={hist.length>0}
+          setIsFreeHit={(v)=>setInn(p=>p?({...p,isFreeHit:v}):p)}/>}
         {tab==="batting"&&<><PartnershipChart inn={inn}/><BattingTab inn={inn}/></>}
         {tab==="bowling"&&<BowlingTab inn={inn}/>}
       </div>
-      {/* Toast confirmation for the last scoring action, with Undo right there in the moment — no need
-          to scroll up to the header's Undo button. Auto-dismisses after 4s; tapping Undo dismisses it
-          immediately too. */}
-      {toast&&(
-        <div style={{position:"fixed",left:"50%",bottom:"calc(18px + env(safe-area-inset-bottom,0px))",
-          transform:"translateX(-50%)",zIndex:120,display:"flex",alignItems:"center",gap:10,
-          background:"var(--surface-2)",border:"1px solid var(--border-soft)",borderRadius:14,
-          padding:"10px 10px 10px 16px",boxShadow:"0 8px 28px rgba(0,0,0,.4)",animation:"screenIn .25s ease-out both",
-          maxWidth:"calc(100vw - 32px)"}}>
-          <span style={{fontSize:13,color:"var(--text)",whiteSpace:"nowrap"}}>{toast}</span>
-          {hist.length>0&&(
-            <button onClick={()=>{undo();}} style={{background:"rgba(34,211,238,.15)",border:"1px solid var(--primary)",
-              color:"var(--primary)",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>↩ Undo</button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -2335,7 +2325,7 @@ function QuickAddPlayer({onAdded,onCancel}){
   );
 }
 
-function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onSwapStrike,onFixPlayers,onEndInnings,onRevert,canRevert,role,onEditOvers,onRestore,onUndo,canUndo}){
+function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onSwapStrike,onFixPlayers,onEndInnings,onRevert,canRevert,role,onEditOvers,onRestore,onUndo,canUndo,setIsFreeHit}){
   const[wt,setWT]=useState("Bowled");
   const[fielder,setFielder]=useState("");
   const[roRuns,setRoRuns]=useState(0);      // runs completed before the run-out happened
@@ -2353,7 +2343,10 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
   // reload and stays in sync across devices — same class of bug as the old local-only `hist`: a local
   // useState here meant a reload right after a No Ball silently lost free-hit protection, and a
   // second device scoring the same match never even knew the next ball was a free hit.
-  const setIsFreeHit=(v)=>setInn(p=>p?({...p,isFreeHit:v}):p);
+  // NOTE: setIsFreeHit is a PROP (defined in App, where setInn actually lives) — ScoreTab only
+  // receives `inn` read-only plus the `record` callback, so a local setIsFreeHit here would need
+  // setInn, which doesn't exist in this component's scope. That mismatch was silently crashing every
+  // plain run button (0/1/2/3/4/6) with "setInn is not a function" until this was caught.
   const[quickAdd,setQuickAdd]=useState(null); // "bat" | "bowl" | null
   const[showMore,setShowMore]=useState(false); // collapses less-frequent actions (1D/2D, Overthrow,
   // Retire, End Innings, Edit Overs, Restore) so the core per-ball buttons fit on one screen without
@@ -2743,6 +2736,24 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           background:"rgba(234,179,8,.13)",border:"1.5px solid rgba(234,179,8,.45)"}}>
           <span style={{fontSize:16}}>🟡</span>
           <span style={{color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,letterSpacing:".05em"}}>FREE HIT — only Run Out can dismiss</span>
+        </div>
+      )}
+
+      {/* Last-action toast — rendered INLINE right above the buttons (not as a fixed viewport overlay
+          anymore). It used to be pinned to the bottom of the screen, which meant it covered whatever
+          buttons happened to be on-screen at that moment — almost always the exact 1D/2D/More Actions
+          row the user might want to tap next, since a toast appears right after they've just used
+          this same button area. Inline means it can never block a tap; it just briefly pushes the
+          buttons down a few pixels while visible. */}
+      {toast&&(
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,
+          background:"var(--surface-2)",border:"1px solid var(--border-soft)",borderRadius:14,
+          padding:"9px 10px 9px 14px",marginBottom:8,animation:"screenIn .25s ease-out both"}}>
+          <span style={{fontSize:13,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{toast}</span>
+          {hist.length>0&&(
+            <button onClick={()=>{undo();}} style={{background:"rgba(34,211,238,.15)",border:"1px solid var(--primary)",
+              color:"var(--primary)",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>↩ Undo</button>
+          )}
         </div>
       )}
 
