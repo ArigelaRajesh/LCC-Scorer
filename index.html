@@ -248,7 +248,7 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .btn-outline-amber:hover{background:rgba(217,119,6,.15)}
 .btn-outline-gray{background:transparent;border:1.5px solid #374151;color:#6b7280;padding:13px 14px}
 .btn-outline-gray:hover{border-color:#6366f1;color:#818cf8}
-.btn-run{background:var(--surface-2);border:1.5px solid var(--border);color:#fff;padding:18px 8px;font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;border-radius:16px;width:100%;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .08s ease,box-shadow .08s ease,background .08s ease;cursor:pointer;user-select:none}
+.btn-run{background:var(--surface-2);border:1.5px solid var(--border);color:#fff;padding:12px 8px;font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;border-radius:14px;width:100%;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .08s ease,box-shadow .08s ease,background .08s ease;cursor:pointer;user-select:none}
 .btn-run:active{transform:scale(.9);background:rgba(99,102,241,.45);border-color:#818cf8;box-shadow:0 0 20px rgba(99,102,241,.5)}
 .btn-run:hover{border-color:#818cf8;background:rgba(99,102,241,.2)}
 .btn-run.amber{background:linear-gradient(135deg,var(--amber),#d97706);color:#111;border:none;box-shadow:0 0 24px rgba(245,158,11,.45);text-shadow:0 1px 0 rgba(0,0,0,.15)}
@@ -270,7 +270,7 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .tab.active{background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#04121a}
 
 /* Over ticker */
-.chip{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;border:2px solid;flex-shrink:0;transition:transform .15s;cursor:default}
+.chip{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;border:2px solid;flex-shrink:0;transition:transform .15s;cursor:default}
 .chip-W{background:#ef4444;color:#fff;border-color:#f87171;box-shadow:0 0 12px rgba(239,68,68,.4)}
 .chip-4{background:#f59e0b;color:#111;border-color:#fbbf24;box-shadow:0 0 12px rgba(245,158,11,.4)}
 .chip-6{background:#10b981;color:#111;border-color:#34d399;box-shadow:0 0 12px rgba(16,185,129,.35)}
@@ -319,7 +319,7 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .mt-3{margin-top:12px}
 .mt-4{margin-top:16px}
 .flex{display:flex}.items-center{align-items:center}.justify-between{justify-content:space-between}
-.space-y-3>*+*{margin-top:12px}
+.space-y-3>*+*{margin-top:8px}
 .space-y-4>*+*{margin-top:16px}
 .text-right{text-align:right}
 .text-center{text-align:center}
@@ -1557,6 +1557,13 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
         const beforeWinning = JSON.parse(JSON.stringify(hist[hist.length-1]));
         if(beforeWinning && beforeWinning.inningsNum===revertedInn.inningsNum && (beforeWinning.totalRuns||0) < revertedInn.target){
           revertedInn = beforeWinning;
+          // We've just "consumed" this entry — the reverted innings state now IS what this entry
+          // described, so pop it off. Everything still under it in the stack remains valid (it
+          // describes real prior balls of this same innings) and Undo keeps working normally from
+          // here — it was a mistake to wipe the whole stack (see history of this function): hist
+          // isn't invalidated by a normal revert, since nothing new gets scored between ending an
+          // innings/match and reverting it back to live. Clearing it just broke Undo for no reason.
+          setHist(h=>h.slice(0,-1));
         } else {
           // No usable pre-winning ball in history — keep the target and score intact but mark this
           // innings so the auto-complete check skips ONCE. The scorer can then correct/rescore, and the
@@ -1567,14 +1574,6 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
         revertedInn = {...revertedInn, suppressAutoEnd:true};
       }
     }
-    // Always start Undo fresh after a revert. `hist` is a LOCAL stack of pre-ball snapshots pushed by
-    // record() during live scoring — once we've jumped the innings back to an earlier point, any
-    // entries still in `hist` describe states from the discarded future and no longer line up with
-    // `revertedInn`. Leaving them in place either disabled Undo outright (if a later render found the
-    // stack already inconsistent) or, worse, could undo to the WRONG prior state. Clearing it means
-    // Undo simply isn't available for the very next ball post-revert, then works normally again from
-    // the ball after that — a clean, predictable boundary instead of silently-stale history.
-    setHist([]);
     // Set state ONLY and let the normal sync effect do the actual `live` write — same proven fix as
     // restoreFromBackup above. This function PREVIOUSLY also did its own direct DB.ref("live").set()
     // write here, in addition to the state change triggering the sync effect's write — two competing
@@ -1773,7 +1772,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     let rT=0,rS=0,rB=0,cross=false;
 
     if(ev.type==="WD"){rT=ev.extraRuns;rB=ev.extraRuns;i.extras.wd+=ev.extraRuns;if((ev.extraRuns-1)>0&&(ev.extraRuns-1)%2===1)cross=true;}
-    else if(ev.type==="NB"){rT=ev.extraRuns+ev.batRuns;rB=rT;rS=ev.batRuns;i.extras.nb+=ev.extraRuns;if(ev.batRuns%2===1)cross=true;}
+    else if(ev.type==="NB"){rT=ev.extraRuns+ev.batRuns;rB=rT;rS=ev.batRuns;i.extras.nb+=ev.extraRuns;if(ev.isDeclNB)cross=false;else if(ev.batRuns%2===1)cross=true;}
     else if(ev.type==="B"||ev.type==="LB"){rT=ev.extraRuns;i.extras[ev.type==="B"?"b":"lb"]+=ev.extraRuns;if(ev.extraRuns%2===1)cross=true;}
     else if(ev.type==="W"){
       // Run-outs are special: runs may have been completed BEFORE the dismissal.
@@ -2294,12 +2293,16 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
   const[showW,setSW]=useState(false);
   const[em,setEM]=useState(null);
   const[er,setER]=useState(0);
+  const[nbDecl,setNbDecl]=useState(false); // declared bat-runs on a No Ball — credited but strike never rotates
   const[showOT,setShowOT]=useState(false);
   const[otBase,setOTBase]=useState(0);
   const[otThrow,setOTThrow]=useState(1);
   const[showFH,setShowFH]=useState(false);
   const[isFreeHit,setIsFreeHit]=useState(false); // true on the delivery AFTER a No Ball
   const[quickAdd,setQuickAdd]=useState(null); // "bat" | "bowl" | null
+  const[showMore,setShowMore]=useState(false); // collapses less-frequent actions (1D/2D, Overthrow,
+  // Retire, End Innings, Edit Overs, Restore) so the core per-ball buttons fit on one screen without
+  // scrolling — that's the whole reason a scorer has to keep swiping up and down mid-over.
   const dis=pw||nnb||pr;
   const retiredList=(inn.battingOrder||[]).filter(n=>inn.batsmen&&inn.batsmen[n]&&inn.batsmen[n].retired);
 
@@ -2349,7 +2352,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
   const doEx=()=>{
     if(em==="WD"){record({type:"WD",extraRuns:1+er});/* wide on free hit: free hit carries, don't clear */}
     else if(em==="NB"){
-      record({type:"NB",extraRuns:1,batRuns:er});
+      record({type:"NB",extraRuns:1,batRuns:er,isDeclNB:nbDecl});
       // Next delivery is a FREE HIT — play sound and show banner
       playFreeHitSound();
       setShowFH(true);
@@ -2358,7 +2361,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
     }
     else if(em==="DECL"){record({type:"DECL",runs:er||1});setIsFreeHit(false);}
     else{record({type:em,extraRuns:er||1});setIsFreeHit(false);}
-    setEM(null);setER(0);
+    setEM(null);setER(0);setNbDecl(false);
   };
   const doOT=()=>{
     const isDeclOT=typeof otThrow==="string";
@@ -2605,10 +2608,10 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
             )}
           </div>
           {(inn.single?[{p:SK,a:true}]:[{p:SK,a:true},{p:NS,a:false}]).map(({p,a},i)=>p?(
-            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"3px 0"}}>
-              <span style={{fontSize:13,fontWeight:a?700:400,color:a?"#fff":"#9ca3af",display:"flex",alignItems:"center",gap:5,overflow:"hidden"}}>
-                {a&&<span style={{color:"#fbbf24",fontSize:10}}>●</span>}
-                <span className="truncate">{shortName(p.name)}</span>
+            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"3px 0",gap:6}}>
+              <span style={{fontSize:13,fontWeight:a?700:400,color:a?"#fff":"#9ca3af",display:"flex",alignItems:"center",gap:5,overflow:"hidden",flex:1,minWidth:0}}>
+                {a&&<span style={{color:"#fbbf24",fontSize:10,flexShrink:0}}>●</span>}
+                <span className="truncate" style={{flex:1,minWidth:0}}>{shortName(p.name)}</span>
                 {a&&<span style={{fontSize:9,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",background:"rgba(245,158,11,.15)",borderRadius:4,padding:"1px 4px",flexShrink:0}}>STRIKE</span>}
               </span>
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0,marginLeft:8}}>{p.runs} ({p.balls})</span>
@@ -2627,18 +2630,20 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
 
       {/* Over ticker */}
       <div>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between" style={{marginBottom:6}}>
           <p className="section-title" style={{marginBottom:0}}>Over {Math.floor(inn.totalBalls/6)+1}/{inn.overs} · <span style={{color:"#fbbf24"}}>{inn.totalBalls%6} of 6 balls</span>{(inn.overEvents||[]).filter(e=>e.type==="WD"||e.type==="NB").length>0&&<span style={{color:"#fb923c"}}> +{(inn.overEvents||[]).filter(e=>e.type==="WD"||e.type==="NB").length} extra</span>}</p>
-          <button className="btn-undo" onClick={onUndo} disabled={!canUndo} title={canUndo?"Undo the last ball":"Nothing to undo yet — after a revert, Undo becomes available again once the next ball is scored"}>↩ Undo</button>
+          <button className="btn-undo" onClick={onUndo} disabled={!canUndo} title={canUndo?"Undo the last ball":"Nothing to undo yet this innings"}>↩ Undo</button>
         </div>
-        <div style={{background:"#130f3a",border:"1px solid #1e1b4b",borderRadius:16,padding:"12px 14px",display:"flex",flexWrap:"wrap",gap:8,minHeight:60}}>
+        <div style={{background:"#130f3a",border:"1px solid #1e1b4b",borderRadius:12,padding:"7px 10px",display:"flex",gap:6,minHeight:44,overflowX:"auto",alignItems:"center"}}>
           {(inn.overEvents||[]).length===0
-            ?<span style={{color:"#2d2a6a",fontFamily:"'JetBrains Mono',monospace",fontSize:12,alignSelf:"center"}}>— new over —</span>
+            ?<span style={{color:"#2d2a6a",fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>— new over —</span>
             :(inn.overEvents||[]).map((ev,i)=><div key={i} className={chipClass(ev)}>{chipLbl(ev)}</div>)
           }
         </div>
-        {/* Previous over preview — a quick read-only glance at the last completed over and its runs, so
-            the scorer/viewers can see what just happened without opening the full scorecard. */}
+        {/* Previous over — one compact, non-wrapping line: label, chips (scrollable), runs total inline.
+            Previously this row had flexWrap on, so on narrow phones the "36 runs" total wrapped onto its
+            OWN line, adding a whole extra row of height for no reason — part of why the scoring buttons
+            kept getting pushed below the fold. */}
         {(()=>{
           const co=inn.completedOvers||[];
           if(co.length===0) return null;
@@ -2646,13 +2651,13 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           const runsInOver=last.reduce((s,ev)=>s+evRuns(ev),0);
           const wktsInOver=last.filter(ev=>ev.type==="W").length;
           return(
-            <div style={{marginTop:8,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-              <span style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em"}}>Over {co.length} →</span>
-              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                {last.map((ev,i)=><div key={i} className={chipClass(ev)} style={{transform:"scale(.82)",transformOrigin:"left center",opacity:.85}}>{chipLbl(ev)}</div>)}
+            <div style={{marginTop:5,display:"flex",alignItems:"center",gap:6,flexWrap:"nowrap",overflow:"hidden"}}>
+              <span style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".08em",flexShrink:0}}>Ov {co.length} →</span>
+              <div style={{display:"flex",gap:4,overflowX:"auto",flex:1,minWidth:0}}>
+                {last.map((ev,i)=><div key={i} className={chipClass(ev)} style={{transform:"scale(.8)",transformOrigin:"left center",opacity:.85}}>{chipLbl(ev)}</div>)}
               </div>
-              <span style={{fontSize:11,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginLeft:"auto"}}>
-                {runsInOver} run{runsInOver===1?"":"s"}{wktsInOver>0?` · ${wktsInOver}w`:""}
+              <span style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",flexShrink:0}}>
+                {runsInOver}r{wktsInOver>0?` ${wktsInOver}w`:""}
               </span>
             </div>
           );
@@ -2703,15 +2708,21 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           <button className="btn btn-outline-amber" onClick={()=>setEM("WD")} style={{borderRadius:14,fontSize:13}}>Wide</button>
           <button className="btn btn-outline-amber" onClick={()=>setEM("NB")} style={{borderRadius:14,fontSize:13,borderColor:"#ca8a04",color:"#facc15"}}>No Ball</button>
         </div>
-        <div style={{display:"flex",gap:8}}>
-          <button className="btn" onClick={()=>record({type:"DECL",runs:1})} style={{flex:1,borderRadius:14,fontSize:15,padding:"10px 4px",background:"transparent",border:"1.5px solid rgba(167,139,250,.5)",color:"#c4b5fd",fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>1D</button>
-          <button className="btn" onClick={()=>record({type:"DECL",runs:2})} style={{flex:1,borderRadius:14,fontSize:15,padding:"10px 4px",background:"transparent",border:"1.5px solid rgba(167,139,250,.5)",color:"#c4b5fd",fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>2D</button>
-          <button className="btn" onClick={()=>setShowOT(true)} style={{flex:2,borderRadius:14,fontSize:12,padding:"10px 6px",background:"transparent",border:"1.5px solid rgba(251,146,60,.55)",color:"#fb923c",fontWeight:600}}>🔄 Overthrow</button>
-        </div>
-        <button className="btn w-full" onClick={onRetire} style={{borderRadius:14,fontSize:13,padding:"12px",background:"transparent",border:"1.5px solid rgba(139,92,246,.5)",color:"#c4b5fd",marginTop:8}}>🔁 Retire {inn.single?"Batsman":"Striker"}</button>
+        <button className="btn w-full" onClick={()=>setShowMore(s=>!s)} style={{borderRadius:14,fontSize:12,padding:"9px",background:"transparent",border:"1px solid rgba(99,102,241,.3)",color:"#818cf8",marginTop:6}}>
+          {showMore?"▲ Fewer actions":"▼ More actions (declare, retire, end innings…)"}
+        </button>
+        {showMore&&(<>
+          <div style={{display:"flex",gap:8,marginTop:8}}>
+            <button className="btn" onClick={()=>record({type:"DECL",runs:1})} style={{flex:1,borderRadius:14,fontSize:15,padding:"10px 4px",background:"transparent",border:"1.5px solid rgba(167,139,250,.5)",color:"#c4b5fd",fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>1D</button>
+            <button className="btn" onClick={()=>record({type:"DECL",runs:2})} style={{flex:1,borderRadius:14,fontSize:15,padding:"10px 4px",background:"transparent",border:"1.5px solid rgba(167,139,250,.5)",color:"#c4b5fd",fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>2D</button>
+            <button className="btn" onClick={()=>setShowOT(true)} style={{flex:2,borderRadius:14,fontSize:12,padding:"10px 6px",background:"transparent",border:"1.5px solid rgba(251,146,60,.55)",color:"#fb923c",fontWeight:600}}>🔄 Overthrow</button>
+          </div>
+          <button className="btn w-full" onClick={onRetire} style={{borderRadius:14,fontSize:13,padding:"12px",background:"transparent",border:"1.5px solid rgba(139,92,246,.5)",color:"#c4b5fd",marginTop:8}}>🔁 Retire {inn.single?"Batsman":"Striker"}</button>
+        </>)}
       </div>
 
       {/* End Innings / Revert — always clickable, even mid-wicket or mid-bowler-change, so admin/scorer can always end or recover */}
+      {showMore&&(<>
       <div className="grid-2" style={{marginTop:8}}>
         <button className="btn w-full" onClick={onEndInnings} style={{borderRadius:14,fontSize:12,padding:"11px",background:"transparent",border:"1.5px solid rgba(239,68,68,.4)",color:"#f87171"}}>⏹ End {inn.inningsNum===1?"Innings":"Match"}</button>
         {onRevert&&<button className="btn w-full" onClick={onRevert} disabled={!canRevert} style={{borderRadius:14,fontSize:12,padding:"11px",background:"transparent",border:`1.5px solid ${canRevert?"rgba(52,211,153,.5)":"rgba(55,65,129,.3)"}`,color:canRevert?"#34d399":"#374151",cursor:canRevert?"pointer":"not-allowed"}}>↩️ Revert to Live</button>}
@@ -2725,6 +2736,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           style={{marginTop:8,borderRadius:14,fontSize:11,padding:"10px",background:"transparent",border:"1px solid rgba(99,102,241,.3)",color:"#6b7280"}}
           title="Disaster recovery: restore the match from the latest automatic backup">🛟 Restore from backup</button>
       )}
+      </>)}
 
       {/* Wicket modal */}
       {showW&&<Modal onClose={()=>{setSW(false);setFielder("");setRoRuns(0);setRoEnd(null);setRoOut(null);}} title="🏏 How Out?">
@@ -2784,14 +2796,28 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
       </Modal>}
 
       {/* Extra modal */}
-      {em&&<Modal onClose={()=>{setEM(null);setER(0);}} title={em==="WD"?"Wide":em==="NB"?"No Ball":em==="B"?"Byes":em==="DECL"?"📍 Declare Runs":"Leg Byes"}>
+      {em&&<Modal onClose={()=>{setEM(null);setER(0);setNbDecl(false);}} title={em==="WD"?"Wide":em==="NB"?"No Ball":em==="B"?"Byes":em==="DECL"?"📍 Declare Runs":"Leg Byes"}>
         <p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:12}}>{em==="NB"?"Runs off the bat:":em==="DECL"?"Runs to credit the striker (strike will NOT rotate):":"Additional runs:"}</p>
         <div className="grid-4 mb-4" style={{gridTemplateColumns:"repeat(3,1fr)"}}>
           {[0,1,2,3,4,6].map(r=>(
-            <button key={r} onClick={()=>setER(r)} style={{padding:"10px",borderRadius:12,border:`1.5px solid ${er===r?"transparent":"#374151"}`,background:er===r?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:er===r?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:14,marginBottom:6}}>{r}</button>
+            <button key={r} onClick={()=>{setER(r);setNbDecl(false);}} style={{padding:"10px",borderRadius:12,border:`1.5px solid ${er===r&&!nbDecl?"transparent":"#374151"}`,background:er===r&&!nbDecl?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:er===r&&!nbDecl?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:14,marginBottom:6}}>{r}</button>
           ))}
         </div>
-        <button className="btn btn-primary w-full" style={{borderRadius:14}} onClick={doEx}>Confirm</button>
+        {em==="NB"&&(<>
+          <p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:4}}>
+            Ball stuck? Declared <span style={{color:"#a78bfa"}}>(1D/2D — credited, strike won't rotate):</span>
+          </p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
+            {[1,2].map(r=>(
+              <button key={r} onClick={()=>{setER(r);setNbDecl(true);}} style={{padding:"10px",borderRadius:12,
+                border:`1.5px solid ${er===r&&nbDecl?"transparent":"rgba(167,139,250,.4)"}`,
+                background:er===r&&nbDecl?"linear-gradient(135deg,#7c3aed,#6d28d9)":"rgba(167,139,250,.08)",
+                color:er===r&&nbDecl?"#fff":"#a78bfa",cursor:"pointer",fontWeight:700,
+                fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>{r}D</button>
+            ))}
+          </div>
+        </>)}
+        <button className="btn btn-primary w-full" style={{borderRadius:14,marginTop:em==="NB"?10:0}} onClick={doEx}>Confirm</button>
       </Modal>}
 
       {/* Overthrow modal */}
