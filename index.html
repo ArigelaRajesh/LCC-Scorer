@@ -418,11 +418,20 @@ function buildPidResolver(roster){
 function computeCareerStats(history, roster){
   const resolve=buildPidResolver(roster);
   const players={};
-  const keyFor=(p)=>{const pid=p.pid||resolve(p.name);return pid?("id:"+pid):("nm:"+normName(p.name));};
+  // A batsman/bowler object gets `pid` STAMPED onto it permanently at the moment it's first scored
+  // (see nb()/nw()) — it isn't re-checked against the roster on every render. If that roster profile
+  // is later deleted, old match records still carry the now-invalid pid. Trusting it blindly (as this
+  // used to) created a "ghost" entry: pid is technically truthy so it never showed the "unlinked" tag,
+  // but the roster lookup for its name/avatar silently failed too — an entry stuck displaying the raw
+  // recorded name, un-mergeable because the merge tool only looks for entries with pid:null. Validating
+  // the pid against the CURRENT roster here means a stale one is treated as absent and correctly falls
+  // back to name-based resolution (or genuinely shows as unlinked, so it's discoverable again).
+  const validPid=(pid)=>(pid&&roster&&roster[pid])?pid:null;
+  const keyFor=(p)=>{const pid=validPid(p.pid)||resolve(p.name);return pid?("id:"+pid):("nm:"+normName(p.name));};
   const ensure=(p)=>{
     const k=keyFor(p);
     if(!players[k]){
-      const pid=p.pid||resolve(p.name);
+      const pid=validPid(p.pid)||resolve(p.name);
       players[k]={key:k,pid:pid||null,
         name:(pid&&roster&&roster[pid]&&roster[pid].name)||p.name,
         avatar:(pid&&roster&&roster[pid]&&roster[pid].avatar)||null,
