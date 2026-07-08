@@ -3075,19 +3075,43 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
     setNewName("");
   };
 
+  const[menuPos,setMenuPos]=React.useState(null); // {top,left} in viewport coords, computed on open
+  const triggerRef=React.useRef(null);
+  const openMenu=()=>{
+    const btn=triggerRef.current;
+    if(btn){
+      const r=btn.getBoundingClientRect();
+      const menuW=Math.min(300,window.innerWidth-24);
+      // Anchor to the button's right edge, then clamp so the menu can never run off either side of
+      // the viewport — this is what broke when the dropdown got wider: right:0 was relative to this
+      // small button's own wrapper, which isn't always near the screen's actual right edge (e.g. once
+      // "Fix Players" pushes things around), so a wider panel could extend straight off the left edge.
+      let left=r.right-menuW;
+      left=Math.max(12,Math.min(left,window.innerWidth-menuW-12));
+      setMenuPos({top:r.bottom+6,left,width:menuW});
+    }
+    setOpen(o=>!o);
+  };
+
   return(
     <div style={{position:"relative"}}>
       {/* Trigger */}
-      <button onClick={()=>setOpen(o=>!o)} style={{
+      <button ref={triggerRef} onClick={openMenu} style={{
         background:"rgba(99,102,241,.15)",border:"1.5px solid rgba(99,102,241,.4)",
         color:"#a5b4fc",fontSize:15,cursor:"pointer",borderRadius:9,
         padding:"4px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace"
       }} title="Match tools">⚙️</button>
 
-      {/* Dropdown */}
-      {open&&<>
-        <div onClick={close} style={{position:"fixed",inset:0,zIndex:40}}/>
-        <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:"min(300px,calc(100vw - 32px))",
+      {/* Dropdown — portaled to <body> and positioned in fixed VIEWPORT coordinates (computed above),
+          not relative to this button's own small wrapper. This is the same containing-block fix already
+          applied to Modal/MilestoneCelebration (this button sits inside .score-header, which has
+          backdrop-filter and so becomes the containing block for any non-portaled fixed/absolute
+          descendant) — PLUS it fixes the anchoring bug, since fixed viewport coordinates can't drift
+          off-screen the way `right:0` relative to a moving wrapper could. */}
+      {open&&menuPos&&ReactDOM.createPortal(<>
+        <div onClick={close} style={{position:"fixed",inset:0,zIndex:200}}/>
+        <div style={{position:"fixed",top:menuPos.top,left:menuPos.left,zIndex:201,width:menuPos.width,
+          maxHeight:"calc(100dvh - "+(menuPos.top+16)+"px)",overflowY:"auto",
           background:"rgba(12,9,38,.98)",border:"1px solid rgba(99,102,241,.4)",borderRadius:16,
           padding:"10px",boxShadow:"0 16px 48px rgba(0,0,0,.7)",backdropFilter:"blur(20px)",
           animation:"fadeUp .15s ease both"}}>
@@ -3112,7 +3136,7 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
             <span style={{fontSize:9,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace"}}>build 2026-07-07</span>
           </div>
         </div>
-      </>}
+      </>,document.body)}
 
       {/* Edit Match modal */}
       {editOpen&&<Modal onClose={()=>setEditOpen(false)} title="✏️ Edit Match Settings">
@@ -4225,10 +4249,11 @@ function MilestoneCelebration({inn,resetKey,playSound}){
       if(f>S.bat[n]&&b.runs>0){const label=f*50; found.push({kind:"bat",title:`${label===100?"CENTURY":label===50?"FIFTY":label}! `,sub:`${n} — ${b.runs}`,color:"#34d399",emoji:label>=100?"💯":"🏏"});}
       S.bat[n]=f;
     });
-    // 3) PARTNERSHIP 50/100…
+    // 3) PARTNERSHIP 50/100… — meaningless in single-batsman format (no second batsman to partner
+    // with), which is exactly what was producing "RAJESH ARIGELA & undefined".
     const pf=Math.floor((inn.partnership||0)/50);
     if(S.part===null)S.part=pf;
-    else if(pf>S.part&&inn.partnership>0){found.push({kind:"part",title:`${pf*50} PARTNERSHIP!`,sub:`${inn.strikerName} & ${inn.nonStrikerName}`,color:"#60a5fa",emoji:"🤝"});}
+    else if(!inn.single&&pf>S.part&&inn.partnership>0&&inn.nonStrikerName){found.push({kind:"part",title:`${pf*50} PARTNERSHIP!`,sub:`${inn.strikerName} & ${inn.nonStrikerName}`,color:"#60a5fa",emoji:"🤝"});}
     S.part=pf;
     // 4) BOWLER hat-trick (3+ in a row) and good figures (3, 4, 5-wicket hauls)
     Object.entries(inn.bowlers||{}).forEach(([n,bw])=>{
@@ -4340,7 +4365,7 @@ function describeBall(ev,inn){
 // by its share of the total — distinct from the run worm (which tracks progress over TIME, not who
 // was batting). Includes the live in-progress stand as a final, still-growing bar.
 function PartnershipChart({inn}){
-  const done=inn.partnerships||[];
+  const done=(inn.partnerships||[]).filter(p=>p&&p.pair&&p.pair[0]&&p.pair[1]);
   const live=(inn.strikerName&&inn.nonStrikerName&&!inn.single)
     ? [{runs:inn.partnership||0,pair:[inn.strikerName,inn.nonStrikerName],live:true}] : [];
   const all=[...done,...live];
