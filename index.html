@@ -2111,20 +2111,13 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
             <span style={{fontWeight:700,fontSize:13}}>{inn.battingTeam}</span>
             <span style={{color:"#4b5563",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap",justifyContent:"flex-end",rowGap:6}}>
-            <button onClick={()=>setHiCon(h=>{const n=!h;try{localStorage.setItem("lcc_hc",n?"1":"0")}catch(e){}return n;})}
-              title={hiCon?"Normal contrast":"High contrast (sunlight)"}
-              style={{background:hiCon?"rgba(34,211,238,.18)":"none",border:"1px solid "+(hiCon?"var(--primary)":"var(--border)"),
-                color:hiCon?"var(--primary)":"var(--text-mute)",borderRadius:8,padding:"3px 7px",fontSize:11,fontWeight:700,lineHeight:1}}>◐</button>
-            <button onClick={()=>setBigText(b=>{const n=!b;try{localStorage.setItem("lcc_bigtext",n?"1":"0")}catch(e){}return n;})}
-              title={bigText?"Normal text size":"Larger text (easier in sunlight)"}
-              style={{background:bigText?"rgba(34,211,238,.18)":"none",border:"1px solid "+(bigText?"var(--primary)":"var(--border)"),
-                color:bigText?"var(--primary)":"var(--text-mute)",borderRadius:8,padding:"3px 7px",fontSize:11,fontWeight:700,lineHeight:1}}>A+</button>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",justifyContent:"flex-end",rowGap:6}}>
             <ManualFixButton inn={inn} rosterNames={rosterNames} onSave={({striker,nonStriker,bowler})=>fixPlayers({striker,nonStriker,bowler})}/>
             {(role==="admin"||role==="scorer")&&<AdminActionsMenu
               onHistory={role==="admin"?onHistory:null} onAnnounce={role==="admin"?onAnnounce:null}
               inn={inn} onEditMatchSave={role==="admin"?(({overs,maxWkts})=>setInn(p=>({...p,overs,maxWkts}))):null}
               match={match} role={role} rosterNames={rosterNames} onAbandonMatch={role==="admin"?abandonMatch:null}
+              hiCon={hiCon} setHiCon={setHiCon} bigText={bigText} setBigText={setBigText}
               onUpdateTeams={(pubTeamA,pubTeamB)=>{
                 setMatch(m=>m?({...m,pubTeamA,pubTeamB}):m);
                 // Persist any brand-new names added via the team editor to the club roster too, so
@@ -2736,27 +2729,30 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
         <div className="grid-4">
           {[0,1,2,3].map(r=><button key={r} className="btn-run" onClick={()=>{record({type:String(r)});setIsFreeHit(false);}}>{r}</button>)}
         </div>
-        <div className="grid-3">
+        <div className="grid-2">
           <button className="btn-run amber" onClick={()=>{record({type:"4"});setIsFreeHit(false);}}>4</button>
           <button className="btn-run green" onClick={()=>{record({type:"6"});setIsFreeHit(false);}}>6</button>
-          <button className="btn-run" onClick={()=>{record({type:"5"});setIsFreeHit(false);}}>5</button>
         </div>
         <div className="grid-4" style={{gridTemplateColumns:"1fr 1fr 1fr"}}>
           <button className="btn btn-danger" onClick={()=>setSW(true)} style={{borderRadius:14,padding:"13px 8px",fontSize:13}}>Wicket</button>
           <button className="btn btn-outline-amber" onClick={()=>setEM("WD")} style={{borderRadius:14,fontSize:13}}>Wide</button>
           <button className="btn btn-outline-amber" onClick={()=>setEM("NB")} style={{borderRadius:14,fontSize:13,borderColor:"#ca8a04",color:"#facc15"}}>No Ball</button>
         </div>
+        {/* 1D/2D/Overthrow stay visible always — they come up often enough (stuck balls, boundary
+            overthrows) that hiding them behind a toggle just meant people couldn't find them. Only the
+            genuinely rare, once-or-twice-a-match actions (retire, end innings, edit overs, restore) are
+            behind "More actions" below. */}
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn" onClick={()=>record({type:"DECL",runs:1})} style={{flex:1,borderRadius:14,fontSize:15,padding:"10px 4px",background:"transparent",border:"1.5px solid rgba(167,139,250,.5)",color:"#c4b5fd",fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>1D</button>
+          <button className="btn" onClick={()=>record({type:"DECL",runs:2})} style={{flex:1,borderRadius:14,fontSize:15,padding:"10px 4px",background:"transparent",border:"1.5px solid rgba(167,139,250,.5)",color:"#c4b5fd",fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>2D</button>
+          <button className="btn" onClick={()=>setShowOT(true)} style={{flex:2,borderRadius:14,fontSize:12,padding:"10px 6px",background:"transparent",border:"1.5px solid rgba(251,146,60,.55)",color:"#fb923c",fontWeight:600}}>🔄 Overthrow</button>
+        </div>
         <button className="btn w-full" onClick={()=>setShowMore(s=>!s)} style={{borderRadius:14,fontSize:12,padding:"9px",background:"transparent",border:"1px solid rgba(99,102,241,.3)",color:"#818cf8",marginTop:6}}>
-          {showMore?"▲ Fewer actions":"▼ More actions (declare, retire, end innings…)"}
+          {showMore?"▲ Fewer actions":"▼ More actions (retire, end innings, edit overs…)"}
         </button>
-        {showMore&&(<>
-          <div style={{display:"flex",gap:8,marginTop:8}}>
-            <button className="btn" onClick={()=>record({type:"DECL",runs:1})} style={{flex:1,borderRadius:14,fontSize:15,padding:"10px 4px",background:"transparent",border:"1.5px solid rgba(167,139,250,.5)",color:"#c4b5fd",fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>1D</button>
-            <button className="btn" onClick={()=>record({type:"DECL",runs:2})} style={{flex:1,borderRadius:14,fontSize:15,padding:"10px 4px",background:"transparent",border:"1.5px solid rgba(167,139,250,.5)",color:"#c4b5fd",fontWeight:700,fontFamily:"'JetBrains Mono',monospace"}}>2D</button>
-            <button className="btn" onClick={()=>setShowOT(true)} style={{flex:2,borderRadius:14,fontSize:12,padding:"10px 6px",background:"transparent",border:"1.5px solid rgba(251,146,60,.55)",color:"#fb923c",fontWeight:600}}>🔄 Overthrow</button>
-          </div>
+        {showMore&&(
           <button className="btn w-full" onClick={onRetire} style={{borderRadius:14,fontSize:13,padding:"12px",background:"transparent",border:"1.5px solid rgba(139,92,246,.5)",color:"#c4b5fd",marginTop:8}}>🔁 Retire {inn.single?"Batsman":"Striker"}</button>
-        </>)}
+        )}
       </div>
 
       {/* End Innings / Revert — always clickable, even mid-wicket or mid-bowler-change, so admin/scorer can always end or recover */}
@@ -3016,7 +3012,7 @@ function PinMgmtModal({onClose}){
 // Replaces the 6-button overflow row with a tidy dropdown. Navigation items
 // (History, Notice) close the menu and navigate. Modal items manage their own
 // open state locally so the dropdown stays out of their way.
-function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,onUpdateTeams,rosterNames,onAbandonMatch}){
+function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,onUpdateTeams,rosterNames,onAbandonMatch,hiCon,setHiCon,bigText,setBigText}){
   const[open,setOpen]=React.useState(false);
   const[editOpen,setEditOpen]=React.useState(false);
   const[pinMgmtOpen,setPinMgmtOpen]=React.useState(false);
@@ -3030,15 +3026,21 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
   const isSuper=role==="admin"; // only admin role (super admin) can edit teams
   const close=()=>setOpen(false);
 
-  const row=(icon,label,color,onClick)=>(
-    <button key={label} onClick={()=>{close();onClick();}} style={{width:"100%",display:"flex",alignItems:"center",gap:10,
-      padding:"10px 12px",background:"transparent",border:"none",cursor:"pointer",borderRadius:10,
-      fontFamily:"'Inter',sans-serif",transition:"background .12s"
+  // Grid-cell button: icon above label, centered, in a bordered tile — two per row instead of one
+  // long single-column list. The old list left a whole strip of empty space to its right on wider
+  // phones since it was never wider than ~210px; this actually uses that space instead of wasting it,
+  // and roughly halves how far you have to scroll to reach the bottom of the menu.
+  const cell=(icon,label,color,onClick,active)=>(
+    <button key={label} onClick={()=>{close();onClick();}} style={{
+      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,
+      padding:"12px 6px",background:active?"rgba(99,102,241,.16)":"transparent",
+      border:`1px solid ${active?"rgba(99,102,241,.5)":"rgba(99,102,241,.15)"}`,cursor:"pointer",borderRadius:12,
+      fontFamily:"'Inter',sans-serif",transition:"background .12s",minHeight:64
     }}
     onMouseEnter={e=>e.currentTarget.style.background="rgba(99,102,241,.12)"}
-    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-      <span style={{fontSize:16,flexShrink:0}}>{icon}</span>
-      <span style={{fontSize:13,fontWeight:600,color}}>{label}</span>
+    onMouseLeave={e=>e.currentTarget.style.background=active?"rgba(99,102,241,.16)":"transparent"}>
+      <span style={{fontSize:18}}>{icon}</span>
+      <span style={{fontSize:10.5,fontWeight:600,color,textAlign:"center",lineHeight:1.2}}>{label}</span>
     </button>
   );
 
@@ -3085,25 +3087,28 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
       {/* Dropdown */}
       {open&&<>
         <div onClick={close} style={{position:"fixed",inset:0,zIndex:40}}/>
-        <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,minWidth:210,
+        <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:41,width:"min(300px,calc(100vw - 32px))",
           background:"rgba(12,9,38,.98)",border:"1px solid rgba(99,102,241,.4)",borderRadius:16,
-          padding:"6px",boxShadow:"0 16px 48px rgba(0,0,0,.7)",backdropFilter:"blur(20px)",
+          padding:"10px",boxShadow:"0 16px 48px rgba(0,0,0,.7)",backdropFilter:"blur(20px)",
           animation:"fadeUp .15s ease both"}}>
-          {onHistory&&row("📚","Match History","#a5b4fc",onHistory||close)}
-          {onAnnounce&&row("📢","Post Notice","#fbbf24",onAnnounce||close)}
-          {role==="admin"&&<div style={{borderTop:"1px solid #1e1b4b",margin:"4px 0"}}/>}
-          {role==="admin"&&onEditMatchSave&&row("✏️","Edit Match (overs/wkts)","#c4b5fd",()=>{setOv(inn?.overs||0);setWk(inn?.maxWkts||0);setEditOpen(true);})}
-          {onUpdateTeams&&row("👥","Edit Match Teams","#34d399",()=>{
-            setEditPubA(match?.pubTeamA||[]);
-            setEditPubB(match?.pubTeamB||[]);
-            setNewNameA("");setNewNameB("");
-            setTeamEditOpen(true);
-          })}
-          {role==="admin"&&row("🔐","Manage Admin PINs","#f87171",()=>setPinMgmtOpen(true))}
-          {role==="admin"&&match?.pinA&&row("👁","View Team PINs","#6ee7b7",()=>setPinViewOpen(true))}
-          {row("📱","Show QR for viewers","#22d3ee",()=>{setOpen(false);setQrOpen(true);})}
-          {onAbandonMatch&&row("🆕","Start New Match","#fbbf24",()=>{close();onAbandonMatch();})}
-          <div style={{borderTop:"1px solid #1e1b4b",margin:"4px 0",paddingTop:6,textAlign:"center"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+            {setHiCon&&cell("◐","High Contrast","#67e8f9",()=>setHiCon(h=>{const n=!h;try{localStorage.setItem("lcc_hc",n?"1":"0")}catch(e){}return n;}),hiCon)}
+            {setBigText&&cell("A+","Larger Text","#67e8f9",()=>setBigText(b=>{const n=!b;try{localStorage.setItem("lcc_bigtext",n?"1":"0")}catch(e){}return n;}),bigText)}
+            {onHistory&&cell("📚","Match History","#a5b4fc",onHistory||close)}
+            {onAnnounce&&cell("📢","Post Notice","#fbbf24",onAnnounce||close)}
+            {role==="admin"&&onEditMatchSave&&cell("✏️","Edit Match","#c4b5fd",()=>{setOv(inn?.overs||0);setWk(inn?.maxWkts||0);setEditOpen(true);})}
+            {onUpdateTeams&&cell("👥","Edit Teams","#34d399",()=>{
+              setEditPubA(match?.pubTeamA||[]);
+              setEditPubB(match?.pubTeamB||[]);
+              setNewNameA("");setNewNameB("");
+              setTeamEditOpen(true);
+            })}
+            {role==="admin"&&cell("🔐","Admin PINs","#f87171",()=>setPinMgmtOpen(true))}
+            {role==="admin"&&match?.pinA&&cell("👁","Team PINs","#6ee7b7",()=>setPinViewOpen(true))}
+            {cell("📱","Show QR","#22d3ee",()=>{setOpen(false);setQrOpen(true);})}
+            {onAbandonMatch&&cell("🆕","New Match","#fbbf24",()=>{close();onAbandonMatch();})}
+          </div>
+          <div style={{borderTop:"1px solid #1e1b4b",marginTop:8,paddingTop:6,textAlign:"center"}}>
             <span style={{fontSize:9,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace"}}>build 2026-07-07</span>
           </div>
         </div>
