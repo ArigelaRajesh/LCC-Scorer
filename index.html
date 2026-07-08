@@ -280,6 +280,8 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 
 /* Mini cards */
 .mini-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:12px}
+.score-summary-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 2px;border-bottom:1px solid var(--border)}
+.score-summary-row:last-child{border-bottom:none}
 
 /* Table */
 .score-table{width:100%;border-collapse:collapse;font-size:13px}
@@ -365,6 +367,19 @@ function shortName(n){
 function firstName(n){
   const parts=(n||"").trim().split(/\s+/).filter(Boolean);
   return parts[0]||"";
+}
+// "Raj" -> "Raj's Team". Scorers often just type a person's name (whoever's captaining/organizing)
+// rather than an actual team name, and typing "'s Team" by hand every single match was the ask here.
+// Only appends when the name doesn't already read like a team name — already containing "team", or
+// ending in a common team-name suffix (XI, CC, FC, club) — so real team names ("Warriors", "Lakers CC")
+// pass through unchanged instead of becoming "Warriors's Team".
+function formatTeamName(n){
+  const t=(n||"").trim();
+  if(!t) return t;
+  if(/\b(team|xi|cc|fc|club|xi's?)\b/i.test(t)) return t;
+  const last=t[t.length-1].toLowerCase();
+  const possessive=(last==="s")?"'":"'s";
+  return t+possessive+" Team";
 }
 function timeAgo(ts){
   const s=Math.floor((Date.now()-ts)/1000);
@@ -684,8 +699,9 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
     },FLIP_DURATION);
   };
   const go=()=>{
-    const[a,b]=[rA,rB].map(r=>r.current?.value?.trim());
-    if(!a||!b){alert("Please enter both team names.");return;}
+    const raw=[rA,rB].map(r=>r.current?.value?.trim());
+    if(!raw[0]||!raw[1]){alert("Please enter both team names.");return;}
+    const[a,b]=raw.map(formatTeamName);
     if(!tossWinner||!tossChoice){alert("Select who won the toss and their decision.");return;}
     if(venue==="lakes"){
       if(!overs||overs<1||overs>50){alert("Enter valid overs (1-50).");return;}
@@ -2198,7 +2214,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
           onEndInnings={manualEndInnings} onRevert={revert} canRevert={!!preEnd||preEndInDB} role={role}
           onEditOvers={editOvers} onRestore={restoreFromBackup}
           onUndo={undo} canUndo={hist.length>0}
-          setIsFreeHit={(v)=>setInn(p=>p?({...p,isFreeHit:v}):p)}/>}
+          setIsFreeHit={(v)=>setInn(p=>p?({...p,isFreeHit:v}):p)} toast={toast}/>}
         {tab==="batting"&&<><PartnershipChart inn={inn}/><BattingTab inn={inn}/></>}
         {tab==="bowling"&&<BowlingTab inn={inn}/>}
       </div>
@@ -2325,7 +2341,7 @@ function QuickAddPlayer({onAdded,onCancel}){
   );
 }
 
-function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onSwapStrike,onFixPlayers,onEndInnings,onRevert,canRevert,role,onEditOvers,onRestore,onUndo,canUndo,setIsFreeHit}){
+function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onSwapStrike,onFixPlayers,onEndInnings,onRevert,canRevert,role,onEditOvers,onRestore,onUndo,canUndo,setIsFreeHit,toast}){
   const[wt,setWT]=useState("Bowled");
   const[fielder,setFielder]=useState("");
   const[roRuns,setRoRuns]=useState(0);      // runs completed before the run-out happened
@@ -2750,8 +2766,8 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           background:"var(--surface-2)",border:"1px solid var(--border-soft)",borderRadius:14,
           padding:"9px 10px 9px 14px",marginBottom:8,animation:"screenIn .25s ease-out both"}}>
           <span style={{fontSize:13,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{toast}</span>
-          {hist.length>0&&(
-            <button onClick={()=>{undo();}} style={{background:"rgba(34,211,238,.15)",border:"1px solid var(--primary)",
+          {canUndo&&(
+            <button onClick={()=>{onUndo();}} style={{background:"rgba(34,211,238,.15)",border:"1px solid var(--primary)",
               color:"var(--primary)",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>↩ Undo</button>
           )}
         </div>
@@ -6391,6 +6407,32 @@ function PlayerToolsInline({roster,history}){
     const[primary,setPrimary]=React.useState("");
     const[dup,setDup]=React.useState("");
     const[saving,setSaving]=React.useState(false);
+    // Names that show up in match history but never resolved to any roster profile — these are what
+    // show as "unlinked" on the Stats > Players tab. They can't be picked in the dropdowns above
+    // (those only list real roster profiles), so this is a separate, second flow: pick one of these
+    // orphaned names, pick the roster profile it's actually the same person as, and link it as an
+    // alias — same underlying mechanism as merging two profiles, just starting from a bare name
+    // instead of a second profile.
+    const orphanedNames=React.useMemo(()=>{
+      const stats=computeCareerStats(history||{},roster||{});
+      return stats.filter(s=>!s.pid).map(s=>s.name).sort((a,b)=>a.localeCompare(b));
+    },[history,roster]);
+    const[orphanName,setOrphanName]=React.useState("");
+    const[linkTarget,setLinkTarget]=React.useState("");
+    const[linking,setLinking]=React.useState(false);
+    const doLink=()=>{
+      if(!orphanName||!linkTarget){alert("Select both an unlinked name and a profile to link it to.");return;}
+      if(!confirm(`Link "${orphanName}" to "${roster[linkTarget]?.name}"?\nPast matches recorded under "${orphanName}" will count toward this profile from now on.`))return;
+      setLinking(true);
+      const targetProfile=roster[linkTarget]||{};
+      const mergedAliases=Array.from(new Set([
+        ...(targetProfile.aliases||[]),
+        orphanName,
+      ].filter(Boolean).filter(n=>normName(n)!==normName(targetProfile.name||""))));
+      DB.ref("roster/"+linkTarget+"/aliases").set(mergedAliases)
+        .then(()=>{setLinking(false);setOrphanName("");setLinkTarget("");alert("Linked! Past matches under that name now count toward the chosen profile.");})
+        .catch(e=>{setLinking(false);alert("Failed: "+e.message);});
+    };
     const doMerge=()=>{
       if(!primary||!dup){alert("Select both profiles.");return;}
       if(primary===dup){alert("Can't merge a profile with itself.");return;}
@@ -6433,6 +6475,27 @@ function PlayerToolsInline({roster,history}){
       <button className="btn btn-danger w-full" onClick={doMerge} disabled={saving||!primary||!dup||primary===dup}>
         {saving?"Merging…":"🔀 Merge Profiles"}
       </button>
+
+      {orphanedNames.length>0&&(<>
+        <div style={{borderTop:"1px solid #1e1b4b",margin:"22px 0 16px"}}/>
+        <p style={{fontWeight:700,fontSize:14,marginBottom:6}}>🔗 Link an Unlinked Name</p>
+        <p style={{color:"#9ca3af",fontSize:12,marginBottom:14,lineHeight:1.5}}>
+          These names appeared in a match but were never added to the roster — they show as "unlinked" on the Stats page. Pick one and link it to the real profile it belongs to.
+        </p>
+        <label>Unlinked name</label>
+        <select value={orphanName} onChange={e=>setOrphanName(e.target.value)} style={{width:"100%",background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,marginBottom:12,outline:"none"}}>
+          <option value="">Select an unlinked name…</option>
+          {orphanedNames.map(n=><option key={n} value={n}>{n}</option>)}
+        </select>
+        <label>Link to profile</label>
+        <select value={linkTarget} onChange={e=>setLinkTarget(e.target.value)} style={{width:"100%",background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,marginBottom:16,outline:"none"}}>
+          <option value="">Select the real profile…</option>
+          {entries.map(([id,p])=><option key={id} value={id}>{p.name}</option>)}
+        </select>
+        <button className="btn btn-primary w-full" onClick={doLink} disabled={linking||!orphanName||!linkTarget}>
+          {linking?"Linking…":"🔗 Link Name to Profile"}
+        </button>
+      </>)}
     </div>);
   }
 
