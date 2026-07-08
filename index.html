@@ -359,6 +359,13 @@ function shortName(n){
   if(parts.length<=1) return parts[0]||"";
   return parts[0]+" "+parts.slice(1).map(p=>p[0].toUpperCase()+".").join("");
 }
+// First name only — for the tightest spaces (live batsman cards), where even "First L." was still
+// getting ellipsis-truncated once a strike indicator sat alongside it. First names are consistently
+// short enough to fit without truncation in practice.
+function firstName(n){
+  const parts=(n||"").trim().split(/\s+/).filter(Boolean);
+  return parts[0]||"";
+}
 function timeAgo(ts){
   const s=Math.floor((Date.now()-ts)/1000);
   if(s<60)return"just now";
@@ -2149,6 +2156,23 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
             {rrr&&<span style={{color:parseFloat(rrr)>12?"#f87171":"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>RRR <span style={{fontWeight:600,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span></span>}
           </>}
         </div>
+        {/* Chase progress bar — fills what used to be dead space in the header during a run chase, and
+            gives an at-a-glance read on how the chase is tracking (green = ahead of RRR, red = behind)
+            without having to do the CRR-vs-RRR math in your head every over. */}
+        {inn.target!=null&&(()=>{
+          const pct=Math.min(100,Math.max(0,(inn.totalRuns/inn.target)*100));
+          const ahead=parseFloat(crr)>=parseFloat(rrr||crr);
+          return(
+            <div style={{marginTop:6,display:"flex",alignItems:"center",gap:8}}>
+              <div style={{flex:1,height:6,borderRadius:3,background:"rgba(255,255,255,.08)",overflow:"hidden"}}>
+                <div style={{height:"100%",width:pct+"%",borderRadius:3,transition:"width .4s ease",
+                  background:ahead?"linear-gradient(90deg,#34d399,#10b981)":"linear-gradient(90deg,#f87171,#ef4444)"}}/>
+              </div>
+              <span style={{fontSize:9,fontFamily:"'JetBrains Mono',monospace",fontWeight:700,flexShrink:0,
+                color:ahead?"#34d399":"#f87171"}}>{ahead?"▲ ON TRACK":"▼ BEHIND"}</span>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Tabs */}
@@ -2640,10 +2664,8 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           </div>
           {(inn.single?[{p:SK,a:true}]:[{p:SK,a:true},{p:NS,a:false}]).map(({p,a},i)=>p?(
             <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"3px 0",gap:6}}>
-              <span style={{fontSize:13,fontWeight:a?700:400,color:a?"#fff":"#9ca3af",display:"flex",alignItems:"center",gap:5,overflow:"hidden",flex:1,minWidth:0}}>
-                {a&&<span style={{color:"#fbbf24",fontSize:10,flexShrink:0}}>●</span>}
-                <span className="truncate" style={{flex:1,minWidth:0}}>{shortName(p.name)}</span>
-                {a&&<span style={{fontSize:9,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",background:"rgba(245,158,11,.15)",borderRadius:4,padding:"1px 4px",flexShrink:0}}>STRIKE</span>}
+              <span style={{fontSize:13,fontWeight:a?700:400,color:a?"#fff":"#9ca3af",overflow:"hidden",flex:1,minWidth:0}} className="truncate">
+                {firstName(p.name)}{a&&<span style={{color:"#fbbf24",fontWeight:700}}> *</span>}
               </span>
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0,marginLeft:8}}>{p.runs} ({p.balls})</span>
             </div>
@@ -4646,7 +4668,7 @@ function ViewerLive({onExit}){
             <p className="section-title">🟡 {inn.single?"Batsman":"Batting"}</p>
             {(inn.single?[SK]:[SK,NS]).filter(Boolean).map((p,i)=>(
               <div key={i} className="flex items-center justify-between" style={{padding:"3px 0",gap:8}}>
-                <span style={{fontSize:13,fontWeight:p===SK?700:400,color:p===SK?"#fff":"#9ca3af",flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{p===SK&&<span style={{color:"#fbbf24",fontSize:10,marginRight:4}}>●</span>}{shortName(p.name)}</span>
+                <span style={{fontSize:13,fontWeight:p===SK?700:400,color:p===SK?"#fff":"#9ca3af",flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{firstName(p.name)}{p===SK&&<span style={{color:"#fbbf24",fontWeight:700}}> *</span>}</span>
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0}}>{p.runs} ({p.balls})</span>
               </div>
             ))}
