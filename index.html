@@ -1089,6 +1089,39 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
   const[tab,setTab]=useState("score");
   const[inn,setInn]=useState(null);
   const[hist,setHist]=useState([]);
+  // ── Undo history persistence ────────────────────────────────────────────────────────────────
+  // `hist` (the local pre-ball snapshot stack that powers Undo) used to live ONLY in memory, which
+  // meant it was silently wiped by anything that remounts the component: a fresh deployment/reload,
+  // a backup restore, or a revert-to-live that happens to follow a reload on any device. Undo would
+  // just go quietly dead with no explanation. Persisting it to localStorage (keyed to the specific
+  // match+innings, so switching matches/innings never cross-contaminates) means it survives all of
+  // that and gets rehydrated automatically. Capped at the last 40 balls — undoing further back than
+  // that is never a realistic scenario, and it keeps storage/memory bounded over a long innings.
+  const histKeyFor=(m,i)=>"lcc_hist_"+((m&&m.matchId)||"x")+"_"+((i&&i.inningsNum)||1);
+  const updateHist=(updater)=>{
+    setHist(h=>{
+      const nh=(typeof updater==="function"?updater(h):updater).slice(-40);
+      try{if(match&&inn)localStorage.setItem(histKeyFor(match,inn),JSON.stringify(nh));}catch(e){}
+      return nh;
+    });
+  };
+  const pushHist=(snap)=>updateHist(h=>[...h,snap]);
+  const clearHist=()=>{
+    setHist([]);
+    try{if(match&&inn)localStorage.removeItem(histKeyFor(match,inn));}catch(e){}
+  };
+  // Rehydrate on mount / whenever we land on a match+innings with nothing in memory yet — covers a
+  // fresh page load or a reconnect after the tab was closed and reopened mid-match.
+  React.useEffect(()=>{
+    if(!match||!inn||hist.length>0)return;
+    try{
+      const raw=localStorage.getItem(histKeyFor(match,inn));
+      if(raw){
+        const parsed=JSON.parse(raw);
+        if(Array.isArray(parsed)&&parsed.length>0) setHist(parsed);
+      }
+    }catch(e){}
+  },[match?.matchId,inn?.inningsNum]);
   // Larger-text mode for scoring outdoors in sunlight — zooms the whole scorer page ~15%. Persisted.
   const[bigText,setBigText]=useState(()=>{try{return localStorage.getItem("lcc_bigtext")==="1"}catch(e){return false}});
   const[hiCon,setHiCon]=useState(()=>{try{return localStorage.getItem("lcc_hc")==="1"}catch(e){return false}});
@@ -1563,7 +1596,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
           // here — it was a mistake to wipe the whole stack (see history of this function): hist
           // isn't invalidated by a normal revert, since nothing new gets scored between ending an
           // innings/match and reverting it back to live. Clearing it just broke Undo for no reason.
-          setHist(h=>h.slice(0,-1));
+          updateHist(h=>h.slice(0,-1));
         } else {
           // No usable pre-winning ball in history — keep the target and score intact but mark this
           // innings so the auto-complete check skips ONCE. The scorer can then correct/rescore, and the
@@ -1642,6 +1675,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
       // here — doing both caused two racing writes and left the scoring engine unable to add a bowler
       // or score, because the device's own progress tracker (appliedSig) got out of step with Firebase.
       writeIntent.current="revert";
+      clearHist(); // stale relative to the backup snapshot — Undo starts fresh from here
       setMatch(snap.match);
       setInn(snap.inn);
       setInn1(snap.inn1||null);
@@ -1723,7 +1757,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     buzz(22);
     writeIntent.current="undo"; // this is a deliberate backward move — let it through the regression guard
     const prev=hist[hist.length-1];
-    setHist(h=>h.slice(0,-1));
+    updateHist(h=>h.slice(0,-1));
     setInn({...prev,pending:null});
     // If the ball being undone is what just RE-TRIGGERED the innings/match-ending screen (very likely
     // right after a revert — you're undoing the exact ball that ends it again), also clear mo/ib so
@@ -1764,7 +1798,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
       showToast(label);
     }
     if(!inn)return;
-    setHist(h=>[...h,JSON.parse(JSON.stringify(inn))]);
+    pushHist(JSON.parse(JSON.stringify(inn)));
     let i=JSON.parse(JSON.stringify(inn));
     let bw=i.bowlers[i.bowlerName];
     let st=i.batsmen[i.strikerName];
@@ -1951,7 +1985,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
   };
   const retire=()=>{
     // mark current striker as retired, prompt for next batsman
-    setHist(h=>[...h,JSON.parse(JSON.stringify(inn))]);
+    pushHist(JSON.parse(JSON.stringify(inn)));
     setInn(p=>{const b={...p.batsmen};b[p.strikerName]={...b[p.strikerName],retired:true,onStrike:false};return{...p,batsmen:b,pending:"retire"};});
   };
   const confBowler=(directName)=>{
@@ -2298,7 +2332,11 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
   const[otBase,setOTBase]=useState(0);
   const[otThrow,setOTThrow]=useState(1);
   const[showFH,setShowFH]=useState(false);
-  const[isFreeHit,setIsFreeHit]=useState(false); // true on the delivery AFTER a No Ball
+  const isFreeHit=!!(inn&&inn.isFreeHit); // lives on `inn` itself (not local state) so it survives a
+  // reload and stays in sync across devices — same class of bug as the old local-only `hist`: a local
+  // useState here meant a reload right after a No Ball silently lost free-hit protection, and a
+  // second device scoring the same match never even knew the next ball was a free hit.
+  const setIsFreeHit=(v)=>setInn(p=>p?({...p,isFreeHit:v}):p);
   const[quickAdd,setQuickAdd]=useState(null); // "bat" | "bowl" | null
   const[showMore,setShowMore]=useState(false); // collapses less-frequent actions (1D/2D, Overthrow,
   // Retire, End Innings, Edit Overs, Restore) so the core per-ball buttons fit on one screen without
