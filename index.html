@@ -435,8 +435,9 @@ function computeCareerStats(history, roster){
       players[k]={key:k,pid:pid||null,
         name:(pid&&roster&&roster[pid]&&roster[pid].name)||p.name,
         avatar:(pid&&roster&&roster[pid]&&roster[pid].avatar)||null,
-        bat:{inns:0,runs:0,balls:0,fours:0,sixes:0,outs:0,hs:0,hsNotOut:false},
-        bowl:{inns:0,balls:0,runs:0,wkts:0,maidens:0,bestW:-1,bestR:0},
+        bat:{inns:0,runs:0,balls:0,fours:0,sixes:0,outs:0,hs:0,hsNotOut:false,fifties:0,hundreds:0,ducks:0},
+        bowl:{inns:0,balls:0,runs:0,wkts:0,maidens:0,bestW:-1,bestR:0,dotBalls:0,ballsBowled:0},
+        field:{catches:0,runOuts:0,stumpings:0},
         matchesSet:{}};
     }
     return players[k];
@@ -449,11 +450,17 @@ function computeCareerStats(history, roster){
         const pl=ensure(b); pl.matchesSet[mi]=true;
         const batted=(b.balls||0)>0||b.out||(b.runs||0)>0;
         if(batted){
-          pl.bat.inns++; pl.bat.runs+=b.runs||0; pl.bat.balls+=b.balls||0;
+          const runs=b.runs||0;
+          pl.bat.inns++; pl.bat.runs+=runs; pl.bat.balls+=b.balls||0;
           pl.bat.fours+=b.fours||0; pl.bat.sixes+=b.sixes||0;
           if(b.out) pl.bat.outs++;
-          const notOut=!b.out, runs=b.runs||0;
+          const notOut=!b.out;
           if(runs>pl.bat.hs||(runs===pl.bat.hs&&notOut&&!pl.bat.hsNotOut)){ pl.bat.hs=runs; pl.bat.hsNotOut=notOut; }
+          // Milestones are per-INNINGS (b.runs already IS this innings' score, since inn.batsmen
+          // resets fresh every match), not a running career total, so these count correctly here.
+          if(runs>=100) pl.bat.hundreds++;
+          else if(runs>=50) pl.bat.fifties++;
+          if(runs===0&&b.out&&(b.balls||0)>0) pl.bat.ducks++;
         }
       });
       (inn.bowlingOrder||[]).forEach(name=>{
@@ -467,20 +474,88 @@ function computeCareerStats(history, roster){
           if(wk>pl.bowl.bestW||(wk===pl.bowl.bestW&&rn<pl.bowl.bestR)){ pl.bowl.bestW=wk; pl.bowl.bestR=rn; }
         }
       });
+      // Ball-level pass — dot balls (bowling) and fielding credit (catches/run outs/stumpings) both
+      // need the actual delivery-by-delivery events, not the pre-aggregated batsmen/bowlers summary
+      // objects above, so they get their own loop over every recorded ball this innings.
+      const allEvents=[...(inn.completedOvers||[]).flat(),...(inn.overEvents||[])];
+      allEvents.forEach(ev=>{
+        if(!ev) return;
+        if(ev.type!=="WD"&&ev.type!=="NB"&&inn.bowlerName){
+          // A dot ball is a LEGAL delivery (not a wide/no-ball, which don't count as a "ball" bowled
+          // in the traditional sense here) that conceded zero total runs.
+          if(evRuns(ev)===0){
+            const pl=ensure({name:inn.bowlerName});
+            pl.bowl.dotBalls++;
+          }
+        }
+        if(ev.type==="W"&&ev.fielder&&(ev.dismissalType==="Caught"||ev.dismissalType==="Run Out"||ev.dismissalType==="Stumped")){
+          const pl=ensure({name:ev.fielder});
+          pl.matchesSet[mi]=true;
+          if(ev.dismissalType==="Caught") pl.field.catches++;
+          else if(ev.dismissalType==="Run Out") pl.field.runOuts++;
+          else if(ev.dismissalType==="Stumped") pl.field.stumpings++;
+        }
+      });
     });
   });
   return Object.values(players).map(pl=>{
-    const b=pl.bat, w=pl.bowl;
+    const b=pl.bat, w=pl.bowl, f=pl.field;
+    const ballsForDot=w.balls; // dot% is measured against legal balls bowled, same denominator as economy
     return {
       key:pl.key, pid:pl.pid, name:pl.name, matches:Object.keys(pl.matchesSet).length,
-      bat:{...b, avg:b.outs>0?(b.runs/b.outs):null, sr:b.balls>0?(b.runs/b.balls*100):null},
-      bowl:{...w, econ:w.balls>0?(w.runs/w.balls*6):null,
+      bat:{...b, avg:b.outs>0?(b.runs/b.outs):null, sr:b.balls>0?(b.runs/b.balls*100):null, boundaries:b.fours+b.sixes},
+      bowl:{...w, econ:w.balls>0?(w.runs/w.balls*6):null, avg:w.wkts>0?(w.runs/w.wkts):null,
+        dotPct:ballsForDot>0?(w.dotBalls/ballsForDot*100):null,
         oversStr:Math.floor(w.balls/6)+(w.balls%6?"."+(w.balls%6):""),
-        best:w.bestW>=0?(w.bestW+"/"+w.bestR):"—"}
+        best:w.bestW>=0?(w.bestW+"/"+w.bestR):"—"},
+      field:{...f, dismissals:f.catches+f.runOuts+f.stumpings}
     };
   });
 }
 
+// Season/tournament awards, computed from the same stats every player already sees. Criteria are
+// necessarily a judgment call for the more informal ones (Finisher, Wall, Fire Bowler) — documented
+// here so they're easy to adjust if the club wants a different definition. Minimum-qualification
+// thresholds exist so a single lucky ball/over doesn't win an award (e.g. one over for 0 runs
+// shouldn't beat someone who bowled economically across a whole tournament).
+function computeBadges(stats){
+  const withBat=stats.filter(s=>s.bat.inns>0);
+  const withBowl=stats.filter(s=>s.bowl.inns>0);
+  const withField=stats.filter(s=>s.field.dismissals>0);
+  const top=(arr,keyFn)=>arr.length?arr.reduce((a,b)=>keyFn(b)>keyFn(a)?b:a):null;
+  const bottom=(arr,keyFn)=>arr.length?arr.reduce((a,b)=>keyFn(b)<keyFn(a)?b:a):null;
+
+  const orangeCap=top(withBat,s=>s.bat.runs);
+  const purpleCap=top(withBowl,s=>s.bowl.wkts);
+  const sixMachine=top(withBat,s=>s.bat.sixes);
+  // Finisher: most not-out innings (closes out the game rather than getting dismissed), min 2 innings
+  // played so a single not-out debut doesn't win outright.
+  const finisherPool=withBat.filter(s=>s.bat.inns>=2);
+  const finisher=top(finisherPool,s=>s.bat.inns-s.bat.outs);
+  // Wall: highest batting average, min 2 innings (an average needs more than one knock to mean much).
+  const wallPool=withBat.filter(s=>s.bat.inns>=2&&s.bat.avg!=null);
+  const wall=top(wallPool,s=>s.bat.avg);
+  // Fire Bowler: best (lowest) economy, min 12 balls (2 overs) bowled so one tidy over doesn't win it.
+  const firePool=withBowl.filter(s=>s.bowl.balls>=12&&s.bowl.econ!=null);
+  const fireBowler=bottom(firePool,s=>s.bowl.econ);
+  const safeHands=top(withField,s=>s.field.catches);
+  // MVP: a simple, transparent composite — runs + 20/wicket + 10/dismissal (fantasy-cricket-style
+  // weighting). Not trying to be a perfect formula, just a fair single number across all three
+  // disciplines so an all-round contribution can win over a pure specialist.
+  const mvpScore=s=>s.bat.runs+s.bowl.wkts*20+s.field.dismissals*10;
+  const mvp=top(stats.filter(s=>s.bat.inns>0||s.bowl.inns>0||s.field.dismissals>0),mvpScore);
+
+  return [
+    {key:"orangeCap",emoji:"🏅",label:"Orange Cap",winner:orangeCap,stat:orangeCap?`${orangeCap.bat.runs} runs`:null},
+    {key:"purpleCap",emoji:"🟣",label:"Purple Cap",winner:purpleCap,stat:purpleCap?`${purpleCap.bowl.wkts} wkts`:null},
+    {key:"sixMachine",emoji:"💥",label:"Six Machine",winner:sixMachine&&sixMachine.bat.sixes>0?sixMachine:null,stat:sixMachine&&sixMachine.bat.sixes>0?`${sixMachine.bat.sixes} sixes`:null},
+    {key:"finisher",emoji:"🚀",label:"Finisher",winner:finisher&&(finisher.bat.inns-finisher.bat.outs)>0?finisher:null,stat:finisher?`${finisher.bat.inns-finisher.bat.outs} not outs`:null},
+    {key:"wall",emoji:"🧱",label:"Wall",winner:wall,stat:wall?`avg ${wall.bat.avg.toFixed(1)}`:null},
+    {key:"fireBowler",emoji:"🔥",label:"Fire Bowler",winner:fireBowler,stat:fireBowler?`econ ${fireBowler.bowl.econ.toFixed(2)}`:null},
+    {key:"safeHands",emoji:"🦅",label:"Safe Hands",winner:safeHands&&safeHands.field.catches>0?safeHands:null,stat:safeHands&&safeHands.field.catches>0?`${safeHands.field.catches} catches`:null},
+    {key:"mvp",emoji:"👑",label:"MVP",winner:mvp,stat:mvp?`${mvpScore(mvp)} pts`:null},
+  ];
+}
 function chipClass(ev){
   if(ev.type==="W")  return "chip chip-W";
   if(ev.type==="4")  return "chip chip-4";
@@ -2419,7 +2494,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
       // physical end after cross: starter-striker ends at "striker" unless crossed
       effectiveEnd = (outIsStarterStriker !== runsCross) ? "striker" : "nonStriker";
     }
-    record({type:"W",extraRuns:0,dismissal:wlbl(wt,fielder,roRuns,effectiveEnd),dismissalType:wt,runOutRuns:roRuns,runOutEnd:effectiveEnd,runOutName:roOut||null});
+    record({type:"W",extraRuns:0,dismissal:wlbl(wt,fielder,roRuns,effectiveEnd),dismissalType:wt,runOutRuns:roRuns,runOutEnd:effectiveEnd,runOutName:roOut||null,fielder:fielder.trim()||null});
     setSW(false);setFielder("");setRoRuns(0);setRoEnd(null);setRoOut(null);
   };
   const doEx=()=>{
@@ -7109,6 +7184,7 @@ function PollTeamsTab({roster,poll,votes,teams,role}){
 function fmtAvg(v){return v===null?"—":v.toFixed(1);}
 function fmtSR(v){return v===null?"—":v.toFixed(1);}
 function fmtEcon(v){return v===null?"—":v.toFixed(2);}
+function fmtPct(v){return v===null?"—":v.toFixed(0)+"%";}
 
 // ── Character avatars — players pick one when joining ───────────────────────
 // ── PlayerAvatar — colour-gradient circle with the player's initials ──────────
@@ -7156,6 +7232,7 @@ function StatsPage({onExit}){
   const filteredHistory={};
   Object.entries(history||{}).forEach(([k,m])=>{if(venueF==="All"||canonVenue(m&&m.venue)===venueF)filteredHistory[k]=m;});
   const stats=computeCareerStats(filteredHistory,roster);
+  const badges=computeBadges(stats);
   const topRuns=[...stats].filter(s=>s.bat.runs>0).sort((a,b)=>b.bat.runs-a.bat.runs).slice(0,10);
   const topWkts=[...stats].filter(s=>s.bowl.wkts>0).sort((a,b)=>b.bowl.wkts-a.bowl.wkts||a.bowl.runs-b.bowl.runs).slice(0,10);
   const players=[...stats].sort((a,b)=>a.name.localeCompare(b.name))
@@ -7171,7 +7248,7 @@ function StatsPage({onExit}){
 
   // Full player stat card (expanded)
   const FullCard=({s})=>{
-    const b=s.bat,w=s.bowl;
+    const b=s.bat,w=s.bowl,f=s.field;
     const cell=(label,val,accent)=>(
       <div style={{flex:1,textAlign:"center"}}>
         <div style={{fontFamily:"'Oswald',sans-serif",fontSize:19,fontWeight:700,color:accent||"#fff",lineHeight:1}}>{val}</div>
@@ -7186,18 +7263,33 @@ function StatsPage({onExit}){
           <span style={{fontSize:10,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".15em"}}>BATTING</span>
           <span style={{marginLeft:"auto",fontSize:10,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace"}}>{s.matches} match{s.matches===1?"":"es"}</span>
         </div>
-        <div style={{display:"flex",gap:4,marginBottom:14}}>
+        <div style={{display:"flex",gap:4,marginBottom:6,flexWrap:"wrap"}}>
           {cell("Runs",b.runs,"#fbbf24")}{cell("Inns",b.inns)}{cell("HS",b.hs+(b.hsNotOut&&b.hs>0?"*":""))}{cell("Avg",fmtAvg(b.avg))}
           {cell("SR",fmtSR(b.sr))}{cell("4s",b.fours,"#fbbf24")}{cell("6s",b.sixes,"#34d399")}
+        </div>
+        <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap"}}>
+          {cell("50s",b.fifties,"#a5b4fc")}{cell("100s",b.hundreds,"#f472b6")}{cell("Ducks",b.ducks,"#9ca3af")}{cell("Boundaries",b.boundaries,"#fbbf24")}
         </div>
         {/* Bowling */}
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
           <div style={{width:3,height:14,borderRadius:2,background:"#f87171"}}/>
           <span style={{fontSize:10,color:"#f87171",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".15em"}}>BOWLING</span>
         </div>
-        <div style={{display:"flex",gap:4}}>
-          {cell("Wkts",w.wkts,"#f87171")}{cell("Overs",w.oversStr)}{cell("Econ",fmtEcon(w.econ))}{cell("Best",w.best,"#f87171")}
+        <div style={{display:"flex",gap:4,marginBottom:w.inns>0?14:0,flexWrap:"wrap"}}>
+          {cell("Wkts",w.wkts,"#f87171")}{cell("Overs",w.oversStr)}{cell("Econ",fmtEcon(w.econ))}{cell("Avg",fmtAvg(w.avg))}
+          {cell("Best",w.best,"#f87171")}{cell("Maidens",w.maidens)}{cell("Dot%",fmtPct(w.dotPct))}
         </div>
+        {/* Fielding — only shown once a player has at least one dismissal credited, so this section
+            doesn't clutter every card with a row of zeros for players who've never fielded a catch. */}
+        {f.dismissals>0&&(<>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+            <div style={{width:3,height:14,borderRadius:2,background:"#34d399"}}/>
+            <span style={{fontSize:10,color:"#34d399",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".15em"}}>FIELDING</span>
+          </div>
+          <div style={{display:"flex",gap:4}}>
+            {cell("Catches",f.catches,"#34d399")}{cell("Run Outs",f.runOuts,"#34d399")}{cell("Stumpings",f.stumpings,"#34d399")}
+          </div>
+        </>)}
         {(b.inns===0&&w.inns===0)&&<p style={{color:"#6b7280",fontSize:12,textAlign:"center",marginTop:10}}>No scored appearances yet.</p>}
       </div>
     );
@@ -7295,18 +7387,39 @@ function StatsPage({onExit}){
           </div>
         ):(<>
           {/* Tabs */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,marginBottom:18,
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:4,marginBottom:18,
             background:"rgba(255,255,255,.04)",borderRadius:14,padding:4}}>
-            {[["leaders","🏆 Leaders"],["players","👤 Players"],["records","🌟 Records"]].map(([id,lbl])=>(
+            {[["leaders","🏆 Leaders"],["awards","👑 Awards"],["players","👤 Players"],["records","🌟 Records"]].map(([id,lbl])=>(
               <button key={id} onClick={()=>setView(id)} style={{
-                padding:"9px 4px",borderRadius:10,border:"none",cursor:"pointer",
-                fontSize:12,fontWeight:600,fontFamily:"'Inter',sans-serif",transition:"all .15s",
+                padding:"9px 2px",borderRadius:10,border:"none",cursor:"pointer",
+                fontSize:11,fontWeight:600,fontFamily:"'Inter',sans-serif",transition:"all .15s",
                 background:view===id?"linear-gradient(135deg,rgba(99,102,241,.6),rgba(139,92,246,.6))":"transparent",
                 color:view===id?"#fff":"#6b7280",
                 boxShadow:view===id?"0 2px 8px rgba(99,102,241,.3)":""
               }}>{lbl}</button>
             ))}
           </div>
+
+          {/* ── AWARDS ── */}
+          {view==="awards"&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              {badges.map(bdg=>(
+                <div key={bdg.key} style={{
+                  background:bdg.winner?"rgba(255,255,255,.05)":"rgba(255,255,255,.02)",
+                  border:`1px solid ${bdg.winner?"rgba(251,191,36,.3)":"rgba(255,255,255,.06)"}`,
+                  borderRadius:16,padding:"14px 10px",textAlign:"center"}}>
+                  <div style={{fontSize:28,marginBottom:6,opacity:bdg.winner?1:.35}}>{bdg.emoji}</div>
+                  <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",marginBottom:6}}>{bdg.label}</p>
+                  {bdg.winner?(<>
+                    <p style={{fontWeight:700,fontSize:14,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bdg.winner.name}</p>
+                    <p style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{bdg.stat}</p>
+                  </>):(
+                    <p style={{fontSize:11,color:"#4b5563"}}>Not yet decided</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* ── LEADERS ── */}
           {view==="leaders"&&(
