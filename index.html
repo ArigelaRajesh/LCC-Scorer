@@ -6740,9 +6740,18 @@ function PlayerToolsInline({roster,history}){
       <p style={{color:"#9ca3af",fontSize:12,marginBottom:14,lineHeight:1.5}}>
         Save each team's registered players once (~15-16 per team), then pick who's actually playing from that list every match — no retyping the same names each time.
       </p>
-      <div style={{display:"flex",gap:8,marginBottom:16}}>
-        <input value={newTeamName} onChange={e=>setNewTeamName(e.target.value)} placeholder="New team/captain name…" style={{flex:1,fontSize:13}}/>
-        <button className="btn btn-primary" onClick={createSquad} style={{padding:"10px 16px",whiteSpace:"nowrap"}}>+ Add Team</button>
+      <div style={{marginBottom:16}}>
+        <select value={newTeamName&&!rosterNames.includes(newTeamName)?"__new__":newTeamName}
+          onChange={e=>{const v=e.target.value; setNewTeamName(v==="__new__"?"":v);}}
+          style={{width:"100%",fontSize:13,padding:"11px 10px",borderRadius:12,marginBottom:8}}>
+          <option value="">— Select captain from roster —</option>
+          {rosterNames.map(n=><option key={n} value={n}>{n}</option>)}
+          <option value="__new__">＋ Type a new name…</option>
+        </select>
+        {(newTeamName===""||!rosterNames.includes(newTeamName))&&(
+          <input value={newTeamName} onChange={e=>setNewTeamName(e.target.value)} placeholder="Type new captain/team name…" style={{width:"100%",fontSize:13,marginBottom:8}}/>
+        )}
+        <button className="btn btn-primary w-full" onClick={createSquad} style={{padding:"10px 16px"}}>+ Add Team</button>
       </div>
       {teamKeys.length===0?(
         <p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No team squads saved yet.</p>
@@ -6762,11 +6771,21 @@ function PlayerToolsInline({roster,history}){
               <p style={{fontWeight:700,fontSize:14}}>{squads[selectedTeam].name}</p>
               <button onClick={deleteSquad} style={{background:"none",border:"none",color:"#f87171",fontSize:11,cursor:"pointer"}}>🗑️ Delete squad</button>
             </div>
-            <div style={{display:"flex",gap:8,marginBottom:12}}>
-              <input value={addPlayerName} onChange={e=>setAddPlayerName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addPlayer()}
-                list={"roster-names-"+selectedTeam} placeholder="Add a player…" style={{flex:1,fontSize:13}}/>
-              <datalist id={"roster-names-"+selectedTeam}>{rosterNames.map(n=><option key={n} value={n}/>)}</datalist>
-              <button className="btn" onClick={addPlayer} style={{padding:"10px 14px"}}>+</button>
+            <div style={{marginBottom:12}}>
+              <div style={{display:"flex",gap:8,marginBottom:(addPlayerName==="__new__"||(addPlayerName&&!rosterNames.includes(addPlayerName)))?6:0}}>
+                <select value={addPlayerName&&!rosterNames.includes(addPlayerName)?"__new__":addPlayerName}
+                  onChange={e=>{const v=e.target.value; setAddPlayerName(v==="__new__"?"":v);}}
+                  style={{flex:1,fontSize:13,background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:12,padding:"10px 8px",color:addPlayerName?"#fff":"#818cf8"}}>
+                  <option value="">— Select from roster —</option>
+                  {rosterNames.filter(n=>!(squads[selectedTeam].players||[]).some(p=>normName(p)===normName(n))).map(n=><option key={n} value={n}>{n}</option>)}
+                  <option value="__new__">＋ Type a new name…</option>
+                </select>
+                <button className="btn" onClick={addPlayer} style={{padding:"10px 14px"}}>+</button>
+              </div>
+              {(addPlayerName===""||!rosterNames.includes(addPlayerName))&&(
+                <input value={addPlayerName} onChange={e=>setAddPlayerName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addPlayer()}
+                  placeholder="Type new player's name…" style={{width:"100%",fontSize:13}}/>
+              )}
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
               {(squads[selectedTeam].players||[]).length===0&&<p style={{color:"#6b7280",fontSize:12}}>No players added yet.</p>}
@@ -7753,10 +7772,13 @@ function StatsPage({onExit}){
 function TournamentsPage({role,onExit,onStartMatch}){
   const isAdmin=role==="admin";
   const[tournaments,setTournaments]=React.useState(undefined);
+  const[teamSquads,setTeamSquads]=React.useState({});
   const[selected,setSelected]=React.useState(null);
   const[newName,setNewName]=React.useState("");
   const[fxTeam1,setFxTeam1]=React.useState("");
   const[fxTeam2,setFxTeam2]=React.useState("");
+  const[fxTeam1Other,setFxTeam1Other]=React.useState(""); // free-text fallback when picking "— Other —"
+  const[fxTeam2Other,setFxTeam2Other]=React.useState("");
   const[editingFx,setEditingFx]=React.useState(null); // fixture id currently being renamed
   const[editT1,setEditT1]=React.useState("");
   const[editT2,setEditT2]=React.useState("");
@@ -7765,7 +7787,9 @@ function TournamentsPage({role,onExit,onStartMatch}){
     if(!FB_OK||!DB){setTournaments({});return;}
     const ref=DB.ref("tournaments");
     const cb=ref.on("value",s=>setTournaments(s.val()||{}));
-    return ()=>ref.off("value",cb);
+    const sqRef=DB.ref("teamSquads");
+    const sqCb=sqRef.on("value",s=>setTeamSquads(s.val()||{}));
+    return ()=>{ref.off("value",cb);sqRef.off("value",sqCb);};
   },[]);
 
   if(tournaments===undefined) return <Centered emoji="🏆" title="Loading tournaments…" onExit={onExit}/>;
@@ -7786,13 +7810,15 @@ function TournamentsPage({role,onExit,onStartMatch}){
     if(!confirm(`Delete "${cur.name}" and its whole fixture list? Matches already played are NOT deleted — only the tournament grouping.`))return;
     DB.ref("tournaments/"+selected).remove().then(()=>setSelected(null));
   };
+  const squadNames=Object.values(teamSquads).map(s=>s.name).sort((a,b)=>a.localeCompare(b));
+  const resolveTeamPick=(picked,otherText)=>picked==="__other__"?formatTeamName(otherText.trim()):picked;
   const addFixture=()=>{
-    const t1=fxTeam1.trim(),t2=fxTeam2.trim();
-    if(!t1||!t2){alert("Enter both team names.");return;}
+    const t1=resolveTeamPick(fxTeam1,fxTeam1Other),t2=resolveTeamPick(fxTeam2,fxTeam2Other);
+    if(!t1||!t2){alert("Pick (or type) both team names.");return;}
     const fid="f_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,6);
     const order=fixtures.length;
     DB.ref(`tournaments/${selected}/fixtures/${fid}`).set({team1:t1,team2:t2,played:false,matchId:null,order})
-      .then(()=>{setFxTeam1("");setFxTeam2("");})
+      .then(()=>{setFxTeam1("");setFxTeam2("");setFxTeam1Other("");setFxTeam2Other("");})
       .catch(e=>alert("Failed: "+e.message));
   };
   const removeFixture=(fid)=>{
@@ -7800,8 +7826,8 @@ function TournamentsPage({role,onExit,onStartMatch}){
     DB.ref(`tournaments/${selected}/fixtures/${fid}`).remove().catch(()=>{});
   };
   const saveFixtureEdit=(fid)=>{
-    const t1=editT1.trim(),t2=editT2.trim();
-    if(!t1||!t2){alert("Enter both team names.");return;}
+    const t1=formatTeamName(editT1.trim()),t2=formatTeamName(editT2.trim());
+    if(!editT1.trim()||!editT2.trim()){alert("Enter both team names.");return;}
     DB.ref(`tournaments/${selected}/fixtures/${fid}`).update({team1:t1,team2:t2})
       .then(()=>setEditingFx(null)).catch(e=>alert("Failed: "+e.message));
   };
@@ -7855,10 +7881,27 @@ function TournamentsPage({role,onExit,onStartMatch}){
             {isAdmin&&<button onClick={deleteTournament} style={{background:"none",border:"none",color:"#f87171",fontSize:11,cursor:"pointer"}}>🗑️ Delete tournament</button>}
           </div>
           {isAdmin&&(
-            <div style={{display:"flex",gap:6,marginBottom:16}}>
-              <input value={fxTeam1} onChange={e=>setFxTeam1(e.target.value)} placeholder="Team 1…" style={{flex:1,fontSize:13}}/>
-              <input value={fxTeam2} onChange={e=>setFxTeam2(e.target.value)} placeholder="Team 2…" style={{flex:1,fontSize:13}}/>
-              <button className="btn btn-primary" onClick={addFixture} style={{padding:"10px 14px",whiteSpace:"nowrap"}}>+ Add</button>
+            <div style={{marginBottom:16}}>
+              <div style={{display:"flex",gap:6,marginBottom:fxTeam1==="__other__"||fxTeam2==="__other__"?6:0}}>
+                <select value={fxTeam1} onChange={e=>setFxTeam1(e.target.value)} style={{flex:1,fontSize:13,background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:12,padding:"10px 8px",color:fxTeam1?"#fff":"#818cf8"}}>
+                  <option value="">— Team 1 —</option>
+                  {squadNames.map(n=><option key={n} value={n}>{n}</option>)}
+                  <option value="__other__">✏️ Other (type name)…</option>
+                </select>
+                <select value={fxTeam2} onChange={e=>setFxTeam2(e.target.value)} style={{flex:1,fontSize:13,background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:12,padding:"10px 8px",color:fxTeam2?"#fff":"#818cf8"}}>
+                  <option value="">— Team 2 —</option>
+                  {squadNames.map(n=><option key={n} value={n}>{n}</option>)}
+                  <option value="__other__">✏️ Other (type name)…</option>
+                </select>
+              </div>
+              {(fxTeam1==="__other__"||fxTeam2==="__other__")&&(
+                <div style={{display:"flex",gap:6,marginBottom:6}}>
+                  {fxTeam1==="__other__"&&<input value={fxTeam1Other} onChange={e=>setFxTeam1Other(e.target.value)} placeholder="Team 1 name…" style={{flex:1,fontSize:13}}/>}
+                  {fxTeam2==="__other__"&&<input value={fxTeam2Other} onChange={e=>setFxTeam2Other(e.target.value)} placeholder="Team 2 name…" style={{flex:1,fontSize:13}}/>}
+                </div>
+              )}
+              <button className="btn btn-primary w-full" onClick={addFixture} style={{padding:"10px 14px"}}>+ Add Fixture</button>
+              {squadNames.length===0&&<p style={{color:"#6b7280",fontSize:10,fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>No saved squads yet — set them up first in Roster → Tools → Squads, or use "Other" to type a name directly.</p>}
             </div>
           )}
           {fixtures.length===0?(
@@ -7870,9 +7913,21 @@ function TournamentsPage({role,onExit,onStartMatch}){
                   {editingFx===fid?(
                     <div>
                       <div style={{display:"flex",gap:6,marginBottom:8}}>
-                        <input value={editT1} onChange={e=>setEditT1(e.target.value)} style={{flex:1,fontSize:13}}/>
-                        <input value={editT2} onChange={e=>setEditT2(e.target.value)} style={{flex:1,fontSize:13}}/>
+                        <select value={squadNames.includes(editT1)?editT1:"__other__"} onChange={e=>setEditT1(e.target.value==="__other__"?"":e.target.value)} style={{flex:1,fontSize:13,background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:12,padding:"9px 6px",color:"#fff"}}>
+                          {squadNames.map(n=><option key={n} value={n}>{n}</option>)}
+                          <option value="__other__">✏️ Other (type name)…</option>
+                        </select>
+                        <select value={squadNames.includes(editT2)?editT2:"__other__"} onChange={e=>setEditT2(e.target.value==="__other__"?"":e.target.value)} style={{flex:1,fontSize:13,background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:12,padding:"9px 6px",color:"#fff"}}>
+                          {squadNames.map(n=><option key={n} value={n}>{n}</option>)}
+                          <option value="__other__">✏️ Other (type name)…</option>
+                        </select>
                       </div>
+                      {(!squadNames.includes(editT1)||!squadNames.includes(editT2))&&(
+                        <div style={{display:"flex",gap:6,marginBottom:8}}>
+                          {!squadNames.includes(editT1)&&<input value={editT1} onChange={e=>setEditT1(e.target.value)} placeholder="Team 1 name…" style={{flex:1,fontSize:13}}/>}
+                          {!squadNames.includes(editT2)&&<input value={editT2} onChange={e=>setEditT2(e.target.value)} placeholder="Team 2 name…" style={{flex:1,fontSize:13}}/>}
+                        </div>
+                      )}
                       <div style={{display:"flex",gap:6}}>
                         <button className="btn btn-primary" onClick={()=>saveFixtureEdit(fid)} style={{flex:1,padding:"8px"}}>Save</button>
                         <button className="btn" onClick={()=>setEditingFx(null)} style={{flex:1,padding:"8px"}}>Cancel</button>
