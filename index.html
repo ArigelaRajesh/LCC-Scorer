@@ -260,7 +260,7 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .btn-undo:disabled{border-color:#1f2937;color:#374151;cursor:not-allowed}
 
 /* Score header */
-.score-header{background:linear-gradient(135deg,rgba(34,211,238,.12),rgba(14,33,72,.55),rgba(56,189,248,.08));border-bottom:1px solid var(--border);padding:10px 14px 8px;position:sticky;top:0;z-index:40;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.score-header{background:linear-gradient(135deg,rgba(34,211,238,.12),rgba(14,33,72,.55),rgba(56,189,248,.08));border-bottom:1px solid var(--border);padding:10px 14px 8px;position:sticky;top:0;z-index:40;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);transform:translateZ(0);-webkit-transform:translateZ(0);will-change:transform}
 .score-big{font-family:'Oswald',sans-serif;font-size:48px;font-weight:700;line-height:1;background:linear-gradient(135deg,#fff,#a5e9f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .score-wkt{-webkit-text-fill-color:#f87171}
 
@@ -2764,21 +2764,16 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
         </div>
       )}
 
-      {/* Last-action toast — rendered INLINE right above the buttons (not as a fixed viewport overlay
-          anymore). It used to be pinned to the bottom of the screen, which meant it covered whatever
-          buttons happened to be on-screen at that moment — almost always the exact 1D/2D/More Actions
-          row the user might want to tap next, since a toast appears right after they've just used
-          this same button area. Inline means it can never block a tap; it just briefly pushes the
-          buttons down a few pixels while visible. */}
+      {/* Last-action toast — a quick confirmation of what was just recorded ("6 runs", "Wicket
+          recorded", etc.), rendered INLINE right above the buttons so it can never cover anything
+          tappable. It used to also carry its own Undo button, but that was pure duplication — the
+          persistent header Undo (top-right, next to the score) already does the exact same thing and
+          stays reachable even after this toast auto-dismisses. One Undo, not two. */}
       {toast&&(
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,
+        <div style={{display:"flex",alignItems:"center",gap:10,
           background:"var(--surface-2)",border:"1px solid var(--border-soft)",borderRadius:14,
-          padding:"9px 10px 9px 14px",marginBottom:8,animation:"screenIn .25s ease-out both"}}>
+          padding:"9px 14px",marginBottom:8,animation:"screenIn .25s ease-out both"}}>
           <span style={{fontSize:13,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{toast}</span>
-          {canUndo&&(
-            <button onClick={()=>{onUndo();}} style={{background:"rgba(34,211,238,.15)",border:"1px solid var(--primary)",
-              color:"var(--primary)",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>↩ Undo</button>
-          )}
         </div>
       )}
 
@@ -4760,7 +4755,8 @@ function PageHeader({title,onBack,backLabel,right}){
       background:"rgba(8,6,30,.97)",
       backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",
       borderBottom:"1px solid rgba(99,102,241,.2)",
-      padding:"10px 16px"
+      padding:"10px 16px",
+      transform:"translateZ(0)",WebkitTransform:"translateZ(0)",willChange:"transform"
     }}>
       <div style={{display:"flex",alignItems:"center",gap:10,maxWidth:640,margin:"0 auto"}}>
         {onBack&&(
