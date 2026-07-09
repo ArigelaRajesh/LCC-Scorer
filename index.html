@@ -443,6 +443,15 @@ function computeCareerStats(history, roster){
     return players[k];
   };
   Object.values(history||{}).forEach((m,mi)=>{
+    // Playing XI, if this match recorded one — the authoritative "who actually played" list. Credits
+    // a match-played count even to someone who fielded the whole game without batting or bowling,
+    // which the old bat/bowl-inference approach below could never see. Falls back gracefully for
+    // matches saved before this was tracked (pubTeamA/B simply won't be present).
+    [...(m&&m.pubTeamA)||[],...(m&&m.pubTeamB)||[]].forEach(name=>{
+      if(!name) return;
+      const pl=ensure({name});
+      pl.matchesSet[mi]=true;
+    });
     [m&&m.inn1,m&&m.inn2].forEach(inn=>{
       if(!inn) return;
       (inn.battingOrder||[]).forEach(name=>{
@@ -610,8 +619,18 @@ function AdminTip({id,children}){
   );
 }
 
-function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
+function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
   const rA=useRef(),rB=useRef();
+  // Pre-fill from a tournament fixture ("Start This Match"), if we arrived here that way. Runs once
+  // on mount — refs aren't state, so setting .value directly is the correct way to seed an
+  // uncontrolled input, same as the rest of this form already does.
+  const[fxTournamentId,setFxTournamentId]=useState(prefillFixture?.tournamentId||null);
+  const[fxFixtureId,setFxFixtureId]=useState(prefillFixture?.fixtureId||null);
+  React.useEffect(()=>{
+    if(!prefillFixture)return;
+    if(rA.current&&prefillFixture.team1) rA.current.value=prefillFixture.team1;
+    if(rB.current&&prefillFixture.team2) rB.current.value=prefillFixture.team2;
+  },[]);
   const[venue,setVenue]=useState(null);
   const[overs,setOvers]=useState(8);
   const[wkts,setWkts]=useState(6);
@@ -644,6 +663,11 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
   const[selectedPub,setSelectedPub]=useState(null);
   const[roster,setRoster]=useState({});
   const[imported,setImported]=useState(false);
+  // Persistent per-team squads (e.g. "Rutul" -> his ~15 registered players), separate from the
+  // clubwide roster. When the entered team name matches one of these, the assignment picker below
+  // narrows to just that squad instead of showing the whole club — this is what makes it a genuine
+  // "pick today's playing XI" step rather than a free-for-all assignment.
+  const[teamSquads,setTeamSquads]=useState({});
   // Optional team assignment at setup: tap each club player to put them on Team A or Team B. When set,
   // the match starts WITH teams known, so the "who bats/bowls next" pickers show only that team's
   // players instead of the whole club. Kept optional so the quick-setup flow still works if skipped.
@@ -655,6 +679,8 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
     if(!FB_OK||!DB) return;
     const rRef=DB.ref("roster");
     const rCb=rRef.on("value",s=>setRoster(s.val()||{}));
+    const tsRef=DB.ref("teamSquads");
+    const tsCb=tsRef.on("value",s=>setTeamSquads(s.val()||{}));
     const ptRef=DB.ref("publishedTeams");
     const ptCb=ptRef.on("value",s=>{
       const v=s.val()||{};
@@ -669,7 +695,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
       // deliberately taps a set. A brand-new match therefore starts with NO teams, ready for players to
       // be added before and during the match.
     });
-    return()=>{rRef.off("value",rCb);ptRef.off("value",ptCb);};
+    return()=>{rRef.off("value",rCb);tsRef.off("value",tsCb);ptRef.off("value",ptCb);};
   },[]);
 
   const importTeams=(pub)=>{
@@ -824,6 +850,8 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
       tossSummary:`${winnerName} won the toss, chose to ${tossChoice} first`,
       pubTeamA: pubA,
       pubTeamB: pubB,
+      tournamentId: fxTournamentId||null,
+      fixtureId: fxFixtureId||null,
       ...v});
   };
   const clr=()=>{[rA,rB].forEach(r=>{if(r.current)r.current.value=""});setTossWinner(null);setTossChoice(null);rA.current?.focus();};
@@ -853,6 +881,12 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
 
   const teamAName=rA.current?.value?.trim()||"Team A";
   const teamBName=rB.current?.value?.trim()||"Team B";
+  // Team squads are keyed by a Firebase-safe, normalized version of the FORMATTED team name (the same
+  // name that ends up stored as match.teamA/teamB), so a squad saved for "Raj" is found again whether
+  // the admin types "Raj", "raj", or " Raj " next time.
+  const squadKey=(name)=>normName(formatTeamName(name)).replace(/[.#$\[\]\/]/g,"_");
+  const squadA=teamSquads[squadKey(teamAName)];
+  const squadB=teamSquads[squadKey(teamBName)];
 
   return(
     <div className="screen">
@@ -1133,8 +1167,51 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
               );
             })()}
 
+            {/* Playing XI picker — shown when a persistent squad exists for either entered team name.
+                Each team's own registered ~15-16 players are listed with a checkbox for "playing
+                today", instead of the generic whole-club assignment picker below (which still handles
+                the case where a team has no saved squad yet — nothing here is required). */}
+            {(squadA||squadB)&&(()=>{
+              const toggle=(setFn,list,name)=>setFn(list.includes(name)?list.filter(n=>n!==name):[...list,name]);
+              const squadCol=(label,squad,list,setFn,color)=>!squad?null:(
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{color,fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".1em",marginBottom:8}}>{label} · {list.length} playing</p>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {squad.map(n=>{
+                      const on=list.includes(n);
+                      return(
+                        <button key={n} onClick={()=>toggle(setFn,list,n)} style={{
+                          display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:10,textAlign:"left",
+                          border:`1.5px solid ${on?color:"rgba(148,163,184,.25)"}`,background:on?color+"22":"rgba(255,255,255,.03)",
+                          color:on?"#fff":"#94a3b8",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:on?600:400
+                        }}>
+                          <span style={{width:16,height:16,borderRadius:5,border:`1.5px solid ${on?color:"#4b5563"}`,background:on?color:"transparent",
+                            display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,color:"#111"}}>{on?"✓":""}</span>
+                          {n}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+              return(
+                <div style={{background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.25)",borderRadius:14,padding:14}}>
+                  <p style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:10}}>🏏 Who's playing today?</p>
+                  <div style={{display:"flex",gap:14}}>
+                    {squadCol(teamAName,squadA,assignA,setAssignA,"#f59e0b")}
+                    {squadCol(teamBName,squadB,assignB,setAssignB,"#34d399")}
+                  </div>
+                  <p style={{color:"#4338ca",fontSize:10,fontFamily:"'JetBrains Mono',monospace",marginTop:10}}>
+                    Manage each team's full squad from Roster → Tools → Team Squads.
+                  </p>
+                </div>
+              );
+            })()}
+
             {/* Optional team assignment — tap a club member to put them on a side. Keeps the pickers
-                clean later (only that team's players show as next bowler/batsman). Fully optional. */}
+                clean later (only that team's players show as next bowler/batsman). Fully optional.
+                This whole-club picker stays available even when squads exist above, in case someone
+                not in the registered squad (a substitute) needs to be added for just this match. */}
             {(()=>{
               const allNames=Object.values(roster||{}).map(p=>p&&p.name).filter(Boolean).sort((a,b)=>a.localeCompare(b));
               if(allNames.length===0) return null;
@@ -1190,7 +1267,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster}){
 }
 
 // ── App root ─────────────────────────────────────────────────────────────────
-function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
+function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
   const isScorer=role==="scorer"||role==="admin";
   const[match,setMatch]=useState(null);
   const[tab,setTab]=useState("score");
@@ -1550,10 +1627,16 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     // all watching the same finished match.
     histRef.transaction(cur=>{
       if(cur) return cur; // already saved by another device — leave it untouched
-      return JSON.parse(JSON.stringify({result:mo,inn1:inn1||null,inn2:inn,teamA:match?.teamA,teamB:match?.teamB,tossSummary:match?.tossSummary||null,venue:inn.venue,format:inn.format,overs:inn.overs,maxWkts:inn.maxWkts,potm:potm?.winner||null,potmVoting:{open:true,votes:{}},finishedAt:Date.now()}));
+      return JSON.parse(JSON.stringify({result:mo,inn1:inn1||null,inn2:inn,teamA:match?.teamA,teamB:match?.teamB,pubTeamA:match?.pubTeamA||null,pubTeamB:match?.pubTeamB||null,tossSummary:match?.tossSummary||null,venue:inn.venue,format:inn.format,overs:inn.overs,maxWkts:inn.maxWkts,potm:potm?.winner||null,potmVoting:{open:true,votes:{}},finishedAt:Date.now(),tournamentId:match?.tournamentId||null}));
     }).then(()=>{
       setSaved(true);
       DB.ref("potm").update({matchId}).catch(()=>{});
+      // If this match was started from a tournament fixture, mark that fixture played and link it
+      // to the finished match — this is what lets the Tournaments page show "✅ Played" and jump
+      // straight to the scorecard instead of offering "Start This Match" again.
+      if(match?.tournamentId&&match?.fixtureId){
+        DB.ref(`tournaments/${match.tournamentId}/fixtures/${match.fixtureId}`).update({played:true,matchId}).catch(()=>{});
+      }
     }).catch(e=>console.error("hist save failed",e));
   },[mo,saved,isScorer,inn,inn1,match]);
 
@@ -1604,14 +1687,22 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     }
   };
 
-  const startMatch=({teamA,teamB,battingFirst,bowlingFirst,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary})=>{
+  const startMatch=({teamA,teamB,battingFirst,bowlingFirst,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary,pubTeamA,pubTeamB,tournamentId,fixtureId})=>{
     setSaved(false);
     // Stable match ID created ONCE here and synced inside the match object to every device.
     // All scorers/admins then write the final result to history/{matchId} — the SAME key — so
     // the match is saved exactly once no matter how many people have the scorer open. Using
     // push() (random key per device) was what created the duplicate "won" entries.
     const matchId="m_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,8);
-    setMatch({matchId,teamA,teamB,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary});setHist([]);setInn1(null);
+    // NOTE: pubTeamA/pubTeamB (the playing-XI list Setup computes — from a manual assignment, an
+    // imported published team, or a saved squad picker) were being silently dropped here: this
+    // function's destructuring never named them, so they never made it into the stored match object
+    // despite Setup sending them correctly. That meant every "who's playing today" selection was
+    // discarded the moment a match started. Now captured properly, along with tournamentId/fixtureId
+    // for matches started from a tournament fixture.
+    setMatch({matchId,teamA,teamB,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary,
+      pubTeamA:pubTeamA||[],pubTeamB:pubTeamB||[],tournamentId:tournamentId||null,fixtureId:fixtureId||null});
+    setHist([]);setInn1(null);
     // Shell innings — no players yet, batting team must enter openers
     setInn({battingTeam:battingFirst,bowlingTeam:bowlingFirst,inningsNum:1,
       venue,format,overs,maxWkts,single:!!single,
@@ -2140,7 +2231,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce}){
     if(role!=="admin"){
       return <Centered emoji="🏏" title="No active match yet" sub="Ask the admin to start a match first. This screen will update automatically once they do." onExit={onExit}/>;
     }
-    return<Setup onStart={startMatch} role={role} onExit={onExit} onHistory={onHistory} onPoll={onPoll} onRoster={onRoster}/>;
+    return<Setup onStart={startMatch} role={role} onExit={onExit} onHistory={onHistory} onPoll={onPoll} onRoster={onRoster} prefillFixture={prefillFixture}/>;
   }
   if(!inn)   return null;
   if(inn.awaitingOpeners) return<OpenersForm inn={inn} match={match} onSubmit={fillOpeners} role={role} onExit={onExit} rosterNames={rosterNames}/>;
@@ -6602,14 +6693,106 @@ function PlayerToolsInline({roster,history}){
     </div>);
   }
 
+  function SquadsTab(){
+    const[squads,setSquads]=React.useState(undefined);
+    const[selectedTeam,setSelectedTeam]=React.useState("");
+    const[newTeamName,setNewTeamName]=React.useState("");
+    const[addPlayerName,setAddPlayerName]=React.useState("");
+    React.useEffect(()=>{
+      if(!FB_OK||!DB){setSquads({});return;}
+      const ref=DB.ref("teamSquads");
+      const cb=ref.on("value",s=>setSquads(s.val()||{}));
+      return ()=>ref.off("value",cb);
+    },[]);
+    if(squads===undefined) return <p style={{color:"#6b7280",fontSize:13}}>Loading squads…</p>;
+    const squadKey=(name)=>normName(formatTeamName(name)).replace(/[.#$\[\]\/]/g,"_");
+    const teamKeys=Object.keys(squads).sort((a,b)=>(squads[a].name||"").localeCompare(squads[b].name||""));
+    const rosterNames=Object.values(roster||{}).map(p=>p&&p.name).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+
+    const createSquad=()=>{
+      const nm=newTeamName.trim();
+      if(!nm){alert("Enter a team/captain name.");return;}
+      const formatted=formatTeamName(nm);
+      const key=squadKey(nm);
+      if(squads[key]){alert(`"${formatted}" already has a saved squad.`);setSelectedTeam(key);setNewTeamName("");return;}
+      DB.ref("teamSquads/"+key).set({name:formatted,players:[]})
+        .then(()=>{setSelectedTeam(key);setNewTeamName("");})
+        .catch(e=>alert("Failed: "+e.message));
+    };
+    const addPlayer=()=>{
+      const nm=addPlayerName.trim();
+      if(!nm||!selectedTeam)return;
+      const cur=squads[selectedTeam]?.players||[];
+      if(cur.some(p=>normName(p)===normName(nm))){alert(`${nm} is already in this squad.`);return;}
+      DB.ref("teamSquads/"+selectedTeam+"/players").set([...cur,nm]).catch(e=>alert("Failed: "+e.message));
+      setAddPlayerName("");
+    };
+    const removePlayer=(nm)=>{
+      const cur=squads[selectedTeam]?.players||[];
+      DB.ref("teamSquads/"+selectedTeam+"/players").set(cur.filter(p=>p!==nm)).catch(()=>{});
+    };
+    const deleteSquad=()=>{
+      if(!confirm(`Delete the saved squad for "${squads[selectedTeam]?.name}"? Players already in past matches are unaffected — this only removes the pre-registered list for picking playing XIs.`))return;
+      DB.ref("teamSquads/"+selectedTeam).remove().then(()=>setSelectedTeam(""));
+    };
+
+    return(<div>
+      <p style={{color:"#9ca3af",fontSize:12,marginBottom:14,lineHeight:1.5}}>
+        Save each team's registered players once (~15-16 per team), then pick who's actually playing from that list every match — no retyping the same names each time.
+      </p>
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
+        <input value={newTeamName} onChange={e=>setNewTeamName(e.target.value)} placeholder="New team/captain name…" style={{flex:1,fontSize:13}}/>
+        <button className="btn btn-primary" onClick={createSquad} style={{padding:"10px 16px",whiteSpace:"nowrap"}}>+ Add Team</button>
+      </div>
+      {teamKeys.length===0?(
+        <p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No team squads saved yet.</p>
+      ):(<>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+          {teamKeys.map(k=>(
+            <button key={k} onClick={()=>setSelectedTeam(k)} style={{
+              padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:"none",
+              background:selectedTeam===k?"linear-gradient(135deg,#6366f1,#8b5cf6)":"rgba(255,255,255,.07)",
+              color:selectedTeam===k?"#fff":"#9ca3af"
+            }}>{squads[k].name} <span style={{opacity:.6}}>({(squads[k].players||[]).length})</span></button>
+          ))}
+        </div>
+        {selectedTeam&&squads[selectedTeam]&&(
+          <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(99,102,241,.2)",borderRadius:14,padding:14}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+              <p style={{fontWeight:700,fontSize:14}}>{squads[selectedTeam].name}</p>
+              <button onClick={deleteSquad} style={{background:"none",border:"none",color:"#f87171",fontSize:11,cursor:"pointer"}}>🗑️ Delete squad</button>
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <input value={addPlayerName} onChange={e=>setAddPlayerName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addPlayer()}
+                list={"roster-names-"+selectedTeam} placeholder="Add a player…" style={{flex:1,fontSize:13}}/>
+              <datalist id={"roster-names-"+selectedTeam}>{rosterNames.map(n=><option key={n} value={n}/>)}</datalist>
+              <button className="btn" onClick={addPlayer} style={{padding:"10px 14px"}}>+</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {(squads[selectedTeam].players||[]).length===0&&<p style={{color:"#6b7280",fontSize:12}}>No players added yet.</p>}
+              {(squads[selectedTeam].players||[]).map(n=>(
+                <div key={n} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",background:"rgba(255,255,255,.03)",borderRadius:9}}>
+                  <span style={{fontSize:13}}>{n}</span>
+                  <button onClick={()=>removePlayer(n)} style={{background:"none",border:"none",color:"#6b7280",fontSize:14,cursor:"pointer"}}>✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </>)}
+    </div>);
+  }
+
   return(
     <div>
-      <div className="tabs" style={{marginBottom:16,gridTemplateColumns:"1fr 1fr"}}>
+      <div className="tabs" style={{marginBottom:16,gridTemplateColumns:"1fr 1fr 1fr"}}>
         <button className={`tab${toolTab==="merge"?" active":""}`} onClick={()=>setToolTab("merge")}>🔀 Merge</button>
+        <button className={`tab${toolTab==="squads"?" active":""}`} onClick={()=>setToolTab("squads")}>🏏 Squads</button>
         <button className={`tab${toolTab==="bulk"?" active":""}`} onClick={()=>setToolTab("bulk")}>➕ Bulk Add</button>
       </div>
       <div className="mini-card">
         {toolTab==="merge"&&<MergeTab/>}
+        {toolTab==="squads"&&<SquadsTab/>}
         {toolTab==="bulk"&&<BulkAddTab/>}
       </div>
     </div>
@@ -7210,16 +7393,19 @@ function PlayerAvatar({name,avatar,size=38}){
 function StatsPage({onExit}){
   const[history,setHistory]=React.useState(undefined);
   const[roster,setRoster]=React.useState({});
+  const[tournaments,setTournaments]=React.useState({});
   const[view,setView]=React.useState("leaders");
   const[expanded,setExpanded]=React.useState(null);
   const[q,setQ]=React.useState("");
   const[venueF,setVenueF]=React.useState("All");
+  const[tournF,setTournF]=React.useState("All");
   React.useEffect(()=>{
     if(!FB_OK||!DB){setHistory({});return;}
-    const hRef=DB.ref("history").limitToLast(200), rRef=DB.ref("roster");
+    const hRef=DB.ref("history").limitToLast(200), rRef=DB.ref("roster"), tRef=DB.ref("tournaments");
     const c1=hRef.on("value",s=>setHistory(s.val()||{}));
     const c2=rRef.on("value",s=>setRoster(s.val()||{}));
-    return ()=>{hRef.off("value",c1);rRef.off("value",c2);};
+    const c3=tRef.on("value",s=>setTournaments(s.val()||{}));
+    return ()=>{hRef.off("value",c1);rRef.off("value",c2);tRef.off("value",c3);};
   },[]);
   if(history===undefined) return <Centered emoji="📊" title="Loading stats…" onExit={onExit}/>;
 
@@ -7230,7 +7416,11 @@ function StatsPage({onExit}){
     return rank(a)-rank(b)||a.localeCompare(b);
   });
   const filteredHistory={};
-  Object.entries(history||{}).forEach(([k,m])=>{if(venueF==="All"||canonVenue(m&&m.venue)===venueF)filteredHistory[k]=m;});
+  Object.entries(history||{}).forEach(([k,m])=>{
+    if(venueF!=="All"&&canonVenue(m&&m.venue)!==venueF) return;
+    if(tournF!=="All"&&(m&&m.tournamentId)!==tournF) return;
+    filteredHistory[k]=m;
+  });
   const stats=computeCareerStats(filteredHistory,roster);
   const badges=computeBadges(stats);
   const topRuns=[...stats].filter(s=>s.bat.runs>0).sort((a,b)=>b.bat.runs-a.bat.runs).slice(0,10);
@@ -7353,6 +7543,24 @@ function StatsPage({onExit}){
                   background:active?"linear-gradient(135deg,#f59e0b,#ef4444)":"rgba(255,255,255,.07)",
                   color:active?"#111":"#9ca3af"
                 }}>{label}{v!=="All"&&<span style={{opacity:.55,marginLeft:4}}>{venueCounts[v]}</span>}</button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Tournament filter — scopes every leader/award/player stat below to just that tournament's
+            matches, using the tournamentId stamped on history at match-finish time. */}
+        {Object.keys(tournaments).length>0&&(
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
+            {[["All","All"],...Object.entries(tournaments).map(([id,t])=>[id,t.name])].map(([id,label])=>{
+              const active=tournF===id;
+              return(
+                <button key={id} onClick={()=>{setTournF(id);setExpanded(null);}} style={{
+                  padding:"5px 12px",borderRadius:20,cursor:"pointer",fontSize:11,fontWeight:600,
+                  fontFamily:"'Inter',sans-serif",border:"none",transition:"all .15s",
+                  background:active?"linear-gradient(135deg,#34d399,#10b981)":"rgba(255,255,255,.07)",
+                  color:active?"#111":"#9ca3af"
+                }}>{id==="All"?"All tournaments":"🏆 "+label}</button>
               );
             })}
           </div>
@@ -7538,6 +7746,166 @@ function StatsPage({onExit}){
   );
 }
 // ── Super Admin: Announcement manager — post a notice visible on the home screen
+// ── Tournaments — a reusable, named fixture list (e.g. "2026 Cricket Tournament") that can be
+// created fresh each time a new tournament rolls around. Each fixture is just a Team1 vs Team2
+// pairing; "Start This Match" hands the pairing straight to Setup with the names pre-filled, and
+// once that match finishes, the fixture is automatically marked played and linked to it.
+function TournamentsPage({role,onExit,onStartMatch}){
+  const isAdmin=role==="admin";
+  const[tournaments,setTournaments]=React.useState(undefined);
+  const[selected,setSelected]=React.useState(null);
+  const[newName,setNewName]=React.useState("");
+  const[fxTeam1,setFxTeam1]=React.useState("");
+  const[fxTeam2,setFxTeam2]=React.useState("");
+  const[editingFx,setEditingFx]=React.useState(null); // fixture id currently being renamed
+  const[editT1,setEditT1]=React.useState("");
+  const[editT2,setEditT2]=React.useState("");
+
+  React.useEffect(()=>{
+    if(!FB_OK||!DB){setTournaments({});return;}
+    const ref=DB.ref("tournaments");
+    const cb=ref.on("value",s=>setTournaments(s.val()||{}));
+    return ()=>ref.off("value",cb);
+  },[]);
+
+  if(tournaments===undefined) return <Centered emoji="🏆" title="Loading tournaments…" onExit={onExit}/>;
+
+  const list=Object.entries(tournaments).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
+  const cur=selected?tournaments[selected]:null;
+  const fixtures=cur?Object.entries(cur.fixtures||{}).sort((a,b)=>(a[1].order||0)-(b[1].order||0)):[];
+
+  const createTournament=()=>{
+    const nm=newName.trim();
+    if(!nm){alert("Enter a tournament name.");return;}
+    const id="t_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,8);
+    DB.ref("tournaments/"+id).set({name:nm,createdAt:Date.now(),fixtures:{}})
+      .then(()=>{setSelected(id);setNewName("");})
+      .catch(e=>alert("Failed: "+e.message));
+  };
+  const deleteTournament=()=>{
+    if(!confirm(`Delete "${cur.name}" and its whole fixture list? Matches already played are NOT deleted — only the tournament grouping.`))return;
+    DB.ref("tournaments/"+selected).remove().then(()=>setSelected(null));
+  };
+  const addFixture=()=>{
+    const t1=fxTeam1.trim(),t2=fxTeam2.trim();
+    if(!t1||!t2){alert("Enter both team names.");return;}
+    const fid="f_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,6);
+    const order=fixtures.length;
+    DB.ref(`tournaments/${selected}/fixtures/${fid}`).set({team1:t1,team2:t2,played:false,matchId:null,order})
+      .then(()=>{setFxTeam1("");setFxTeam2("");})
+      .catch(e=>alert("Failed: "+e.message));
+  };
+  const removeFixture=(fid)=>{
+    if(!confirm("Remove this fixture from the tournament?"))return;
+    DB.ref(`tournaments/${selected}/fixtures/${fid}`).remove().catch(()=>{});
+  };
+  const saveFixtureEdit=(fid)=>{
+    const t1=editT1.trim(),t2=editT2.trim();
+    if(!t1||!t2){alert("Enter both team names.");return;}
+    DB.ref(`tournaments/${selected}/fixtures/${fid}`).update({team1:t1,team2:t2})
+      .then(()=>setEditingFx(null)).catch(e=>alert("Failed: "+e.message));
+  };
+  const startFixture=(fid,fx)=>{
+    onStartMatch({team1:fx.team1,team2:fx.team2,tournamentId:selected,fixtureId:fid});
+  };
+
+  const playedCount=fixtures.filter(([,fx])=>fx.played).length;
+
+  return(
+    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh"}}>
+      <PageHeader title={cur?`🏆 ${cur.name}`:"🏆 Tournaments"} onBack={cur?()=>setSelected(null):onExit} backLabel={cur?"tournaments":"home"}/>
+      <div style={{padding:"16px 16px 32px"}}>
+        {!cur?(<>
+          {isAdmin&&(
+            <div style={{display:"flex",gap:8,marginBottom:16}}>
+              <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createTournament()}
+                placeholder="New tournament name…" style={{flex:1,fontSize:13}}/>
+              <button className="btn btn-primary" onClick={createTournament} style={{padding:"10px 16px",whiteSpace:"nowrap"}}>+ Create</button>
+            </div>
+          )}
+          {list.length===0?(
+            <div style={{textAlign:"center",padding:"40px 16px"}}>
+              <div style={{fontSize:48,marginBottom:12}}>🏆</div>
+              <p style={{fontWeight:700,fontSize:16,marginBottom:6}}>No tournaments yet</p>
+              <p style={{color:"#6b7280",fontSize:13}}>{isAdmin?"Create one above to build a fixture list.":"Check back once an admin sets one up."}</p>
+            </div>
+          ):(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {list.map(([id,t])=>{
+                const fx=Object.values(t.fixtures||{});
+                const played=fx.filter(f=>f.played).length;
+                return(
+                  <button key={id} onClick={()=>setSelected(id)} style={{
+                    display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",
+                    borderRadius:16,textAlign:"left",cursor:"pointer",border:"1px solid rgba(52,211,153,.25)",
+                    background:"rgba(255,255,255,.03)",color:"#fff"}}>
+                    <span>
+                      <span style={{display:"block",fontWeight:700,fontSize:15}}>{t.name}</span>
+                      <span style={{display:"block",fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{fx.length} fixture{fx.length===1?"":"s"} · {played} played</span>
+                    </span>
+                    <span style={{color:"#4b5563"}}>→</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </>):(<>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <p style={{color:"#6ee7b7",fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{fixtures.length} fixtures · {playedCount} played</p>
+            {isAdmin&&<button onClick={deleteTournament} style={{background:"none",border:"none",color:"#f87171",fontSize:11,cursor:"pointer"}}>🗑️ Delete tournament</button>}
+          </div>
+          {isAdmin&&(
+            <div style={{display:"flex",gap:6,marginBottom:16}}>
+              <input value={fxTeam1} onChange={e=>setFxTeam1(e.target.value)} placeholder="Team 1…" style={{flex:1,fontSize:13}}/>
+              <input value={fxTeam2} onChange={e=>setFxTeam2(e.target.value)} placeholder="Team 2…" style={{flex:1,fontSize:13}}/>
+              <button className="btn btn-primary" onClick={addFixture} style={{padding:"10px 14px",whiteSpace:"nowrap"}}>+ Add</button>
+            </div>
+          )}
+          {fixtures.length===0?(
+            <p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No fixtures added yet.</p>
+          ):(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {fixtures.map(([fid,fx])=>(
+                <div key={fid} style={{background:"rgba(255,255,255,.03)",border:`1px solid ${fx.played?"rgba(52,211,153,.3)":"rgba(99,102,241,.2)"}`,borderRadius:14,padding:"12px 14px"}}>
+                  {editingFx===fid?(
+                    <div>
+                      <div style={{display:"flex",gap:6,marginBottom:8}}>
+                        <input value={editT1} onChange={e=>setEditT1(e.target.value)} style={{flex:1,fontSize:13}}/>
+                        <input value={editT2} onChange={e=>setEditT2(e.target.value)} style={{flex:1,fontSize:13}}/>
+                      </div>
+                      <div style={{display:"flex",gap:6}}>
+                        <button className="btn btn-primary" onClick={()=>saveFixtureEdit(fid)} style={{flex:1,padding:"8px"}}>Save</button>
+                        <button className="btn" onClick={()=>setEditingFx(null)} style={{flex:1,padding:"8px"}}>Cancel</button>
+                      </div>
+                    </div>
+                  ):(
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <p style={{fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fx.team1} <span style={{color:"#6b7280",fontWeight:400}}>vs</span> {fx.team2}</p>
+                        {fx.played?<p style={{fontSize:11,color:"#34d399",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>✅ Played</p>
+                          :<p style={{fontSize:11,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>Not played yet</p>}
+                      </div>
+                      {isAdmin&&(
+                        <div style={{display:"flex",gap:6,flexShrink:0}}>
+                          {!fx.played&&<>
+                            <button onClick={()=>{setEditingFx(fid);setEditT1(fx.team1);setEditT2(fx.team2);}} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.3)",color:"#a5b4fc",borderRadius:8,padding:"6px 9px",fontSize:12,cursor:"pointer"}}>✏️</button>
+                            <button onClick={()=>removeFixture(fid)} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.3)",color:"#f87171",borderRadius:8,padding:"6px 9px",fontSize:12,cursor:"pointer"}}>🗑️</button>
+                            <button onClick={()=>startFixture(fid,fx)} style={{background:"linear-gradient(135deg,#10b981,#059669)",border:"none",color:"#111",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>▶ Start</button>
+                          </>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>)}
+      </div>
+    </div>
+  );
+}
+
 function AnnouncementPage({onExit}){
   const[current,setCurrent]=React.useState(undefined);
   const[text,setText]=React.useState("");
@@ -7772,12 +8140,15 @@ function AdminHome({tier,onPick,onExit}){
         <div style={{height:8}}/>
         <Tile em="📊" title="Stats & Records" sub="Leaderboard · player profiles · venue filter"
           col="245,158,11" full onClick={()=>onPick("stats")} delay={.14}/>
+        <div style={{height:8}}/>
+        <Tile em="🏆" title="Tournaments" sub="Fixtures · start matches · scoped stats"
+          col="52,211,153" full onClick={()=>onPick("tournaments")} delay={.17}/>
       </div>
     </div>
   );
 }
 
-function SuperAdminHome({onScore,onHistory,onAnnounce,onRoster,onStats,onPoll,onPins,onExit}){
+function SuperAdminHome({onScore,onHistory,onAnnounce,onRoster,onStats,onPoll,onPins,onTournaments,onExit}){
   return <AdminHome tier="super" onPick={(s)=>{
     if(s==="admin")      onScore();
     else if(s==="history")  onHistory();
@@ -7786,6 +8157,7 @@ function SuperAdminHome({onScore,onHistory,onAnnounce,onRoster,onStats,onPoll,on
     else if(s==="stats")    onStats();
     else if(s==="poll")     onPoll();
     else if(s==="pinMgmt")  onPins();
+    else if(s==="tournaments") onTournaments();
   }} onExit={onExit}/>;
 }
 
@@ -7838,6 +8210,11 @@ function Root(){
   // Maintain an in-app navigation stack. Every setScreen() pushes a browser
   // history entry so the back button stays inside the app instead of leaving.
   const navStack=React.useRef(["landing"]);
+  // Carries a fixture's team names (and tournament/fixture ids) from "Start This Match" on the
+  // Tournaments page into the Setup screen, so the team-name fields come pre-filled instead of
+  // needing to be retyped. A ref rather than state because it only needs to be read once, at the
+  // moment Setup mounts — it's not something anything should re-render in response to.
+  const pendingFixtureRef=React.useRef(null);
   const adminAutoTriedRef=React.useRef(false);
 
   const go=(s)=>{
@@ -7926,7 +8303,9 @@ function Root(){
   if(screen==="stats")   return <StatsPage onExit={()=>nav(adminHome)}/>;
   if(screen==="announce") return <AnnouncementPage onExit={()=>nav(adminHome)}/>;
   if(screen==="scorer")    return <App role="scorer" onExit={home}/>;
-  if(screen==="adminScore") return <App role="admin" onExit={()=>nav(adminHome)} onHistory={()=>nav("history")} onPoll={()=>nav("poll")} onRoster={()=>nav("roster")} onAnnounce={()=>nav("announce")}/>;
+  if(screen==="adminScore") return <App role="admin" onExit={()=>nav(adminHome)} onHistory={()=>nav("history")} onPoll={()=>nav("poll")} onRoster={()=>nav("roster")} onAnnounce={()=>nav("announce")} prefillFixture={pendingFixtureRef.current}/>;
+  if(screen==="tournaments") return <TournamentsPage role={isAdmin?"admin":"viewer"} onExit={()=>nav(adminHome)}
+    onStartMatch={(fixture)=>{ pendingFixtureRef.current=fixture; nav(adminHome==="superAdmin"?"admin":"adminScore"); }}/>;
   if(screen==="superAdmin") return <SuperAdminHome
     onScore={()=>nav("admin")}
     onHistory={()=>nav("history")}
@@ -7935,9 +8314,10 @@ function Root(){
     onRoster={()=>nav("roster")}
     onAnnounce={()=>nav("announce")}
     onPins={()=>nav("pinMgmt")}
+    onTournaments={()=>nav("tournaments")}
     onExit={home}/>;
   if(screen==="pinMgmt") return <PinMgmtModal onClose={()=>nav(adminHome)}/>;
-  if(screen==="admin") return <App role="admin" onExit={()=>nav(adminHome)} onHistory={()=>nav("history")} onPoll={()=>nav("poll")} onRoster={()=>nav("roster")} onAnnounce={()=>nav("announce")}/>;
+  if(screen==="admin") return <App role="admin" onExit={()=>nav(adminHome)} onHistory={()=>nav("history")} onPoll={()=>nav("poll")} onRoster={()=>nav("roster")} onAnnounce={()=>nav("announce")} prefillFixture={pendingFixtureRef.current}/>;
   return <Landing onPick={pick}/>;
 }
 
