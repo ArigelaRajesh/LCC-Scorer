@@ -621,17 +621,29 @@ function AdminTip({id,children}){
 
 function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
   const rA=useRef(),rB=useRef();
-  // Pre-fill from a tournament fixture ("Start This Match"), if we arrived here that way. Runs once
-  // on mount — refs aren't state, so setting .value directly is the correct way to seed an
-  // uncontrolled input, same as the rest of this form already does.
   const[fxTournamentId,setFxTournamentId]=useState(prefillFixture?.tournamentId||null);
   const[fxFixtureId,setFxFixtureId]=useState(prefillFixture?.fixtureId||null);
+  // Setup's own venue picker uses short internal ids ("lakes"/"millennium"), but a tournament stores
+  // its venue as the full display name ("Lakes High School"/"Millennium Park") since that's what
+  // reads naturally on the Tournaments page. This maps one to the other so the two don't silently
+  // desync — passing the full name straight through as venue state would have looked fine at a
+  // glance (the UI would just show "other"/uncategorized) while quietly breaking every venue===
+  // check used for the overs/wickets defaults and picker highlighting throughout this form.
+  const venueNameToId=(v)=>{
+    const s=(v||"").toLowerCase();
+    if(s.includes("lakes")) return "lakes";
+    if(s.includes("millennium")) return "millennium";
+    return v||null;
+  };
+  const[venue,setVenue]=useState(venueNameToId(prefillFixture?.venue)||null);
+  // Depends on `venue` (not just `[]`) as a safety net for fixtures that don't specify a venue: the
+  // team inputs only exist once venue is set some other way (the user picking manually), so this needs
+  // to be able to retry once that happens, not just once at mount.
   React.useEffect(()=>{
     if(!prefillFixture)return;
     if(rA.current&&prefillFixture.team1) rA.current.value=prefillFixture.team1;
     if(rB.current&&prefillFixture.team2) rB.current.value=prefillFixture.team2;
-  },[]);
-  const[venue,setVenue]=useState(null);
+  },[venue]);
   const[overs,setOvers]=useState(8);
   const[wkts,setWkts]=useState(6);
   const[customOv,setCustomOv]=useState(false);
@@ -885,8 +897,8 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
   // name that ends up stored as match.teamA/teamB), so a squad saved for "Raj" is found again whether
   // the admin types "Raj", "raj", or " Raj " next time.
   const squadKey=(name)=>normName(formatTeamName(name)).replace(/[.#$\[\]\/]/g,"_");
-  const squadA=teamSquads[squadKey(teamAName)];
-  const squadB=teamSquads[squadKey(teamBName)];
+  const squadA=teamSquads[squadKey(teamAName)]?.players||null;
+  const squadB=teamSquads[squadKey(teamBName)]?.players||null;
 
   return(
     <div className="screen">
@@ -7775,6 +7787,7 @@ function TournamentsPage({role,onExit,onStartMatch}){
   const[teamSquads,setTeamSquads]=React.useState({});
   const[selected,setSelected]=React.useState(null);
   const[newName,setNewName]=React.useState("");
+  const[newVenue,setNewVenue]=React.useState("Millennium Park");
   const[fxTeam1,setFxTeam1]=React.useState("");
   const[fxTeam2,setFxTeam2]=React.useState("");
   const[fxTeam1Other,setFxTeam1Other]=React.useState(""); // free-text fallback when picking "— Other —"
@@ -7802,7 +7815,7 @@ function TournamentsPage({role,onExit,onStartMatch}){
     const nm=newName.trim();
     if(!nm){alert("Enter a tournament name.");return;}
     const id="t_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,8);
-    DB.ref("tournaments/"+id).set({name:nm,createdAt:Date.now(),fixtures:{}})
+    DB.ref("tournaments/"+id).set({name:nm,venue:newVenue,createdAt:Date.now(),fixtures:{}})
       .then(()=>{setSelected(id);setNewName("");})
       .catch(e=>alert("Failed: "+e.message));
   };
@@ -7832,7 +7845,7 @@ function TournamentsPage({role,onExit,onStartMatch}){
       .then(()=>setEditingFx(null)).catch(e=>alert("Failed: "+e.message));
   };
   const startFixture=(fid,fx)=>{
-    onStartMatch({team1:fx.team1,team2:fx.team2,tournamentId:selected,fixtureId:fid});
+    onStartMatch({team1:fx.team1,team2:fx.team2,tournamentId:selected,fixtureId:fid,venue:cur.venue||null});
   };
 
   const playedCount=fixtures.filter(([,fx])=>fx.played).length;
@@ -7843,10 +7856,21 @@ function TournamentsPage({role,onExit,onStartMatch}){
       <div style={{padding:"16px 16px 32px"}}>
         {!cur?(<>
           {isAdmin&&(
-            <div style={{display:"flex",gap:8,marginBottom:16}}>
+            <div style={{marginBottom:16}}>
               <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createTournament()}
-                placeholder="New tournament name…" style={{flex:1,fontSize:13}}/>
-              <button className="btn btn-primary" onClick={createTournament} style={{padding:"10px 16px",whiteSpace:"nowrap"}}>+ Create</button>
+                placeholder="New tournament name…" style={{width:"100%",fontSize:13,marginBottom:8}}/>
+              <div style={{display:"flex",gap:6,marginBottom:8}}>
+                {["Lakes High School","Millennium Park"].map(v=>(
+                  <button key={v} onClick={()=>setNewVenue(v)} style={{
+                    flex:1,padding:"9px 6px",borderRadius:12,cursor:"pointer",fontSize:12,fontWeight:600,
+                    border:`1.5px solid ${newVenue===v?"#f59e0b":"rgba(148,163,184,.25)"}`,
+                    background:newVenue===v?"rgba(245,158,11,.15)":"transparent",
+                    color:newVenue===v?"#fbbf24":"#94a3b8"
+                  }}>{v==="Lakes High School"?"🎾 Lakes":"🏟️ Millennium"}</button>
+                ))}
+              </div>
+              <button className="btn btn-primary w-full" onClick={createTournament} style={{padding:"10px 16px"}}>+ Create Tournament</button>
+              <p style={{color:"#6b7280",fontSize:10,fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>Every match started from this tournament will default to this ground — no need to pick it again each time.</p>
             </div>
           )}
           {list.length===0?(
