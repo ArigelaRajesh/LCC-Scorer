@@ -136,6 +136,8 @@
   70%{opacity:1;}
   100%{transform:translate(var(--dx),var(--dy)) rotate(var(--rot));opacity:0;}
 }
+/* Duck emoji waddle — a little side-to-side tilt so the 🦆 feels alive/comedic during a duck-out. */
+@keyframes duckWaddle{0%,100%{transform:rotate(-9deg)}50%{transform:rotate(9deg)}}
 /* End-of-match finale overlay fade-out at the end of the show. */
 @keyframes finaleFade{0%{opacity:1}82%{opacity:1}100%{opacity:0}}
 /* Wicket flash shake — a sharp side-to-side punctuation so a dismissal reads as jarring/sudden,
@@ -2427,39 +2429,44 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
             the chase gets a full-width equation strip below, which is far more readable. */}
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
           <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",minWidth:0}}>
-              <span style={{color:role==="admin"?"var(--admin)":"var(--green-2)",fontFamily:"'JetBrains Mono',monospace",fontSize:8,fontWeight:700,textTransform:"uppercase",letterSpacing:".15em",border:`1px solid ${role==="admin"?"var(--admin)":"rgba(52,211,153,.5)"}`,borderRadius:6,padding:"2px 6px",boxShadow:role==="admin"?"0 0 10px var(--admin-glow)":"none"}}>{role==="admin"?"🔑 Admin":"✏️ Scorer"}</span>
-              <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:9,textTransform:"uppercase",letterSpacing:".2em"}}>{inn.inningsNum===1?"1st":"2nd"} Inn</span>
-              <span style={{width:3,height:3,borderRadius:"50%",background:"#4338ca",display:"inline-block"}}/>
-              <span style={{fontWeight:700,fontSize:13}}>{inn.battingTeam}</span>
-              <span style={{color:"#4b5563",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",rowGap:6}}>
-              <ManualFixButton inn={inn} rosterNames={rosterNames} onSave={({striker,nonStriker,bowler})=>fixPlayers({striker,nonStriker,bowler})}/>
-              {(role==="admin"||role==="scorer")&&<AdminActionsMenu
-                onHistory={role==="admin"?onHistory:null} onAnnounce={role==="admin"?onAnnounce:null}
-                inn={inn} onEditMatchSave={role==="admin"?(({overs,maxWkts})=>setInn(p=>({...p,overs,maxWkts}))):null}
-                match={match} role={role} rosterNames={rosterNames} onAbandonMatch={role==="admin"?abandonMatch:null}
-                hiCon={hiCon} setHiCon={setHiCon} bigText={bigText} setBigText={setBigText}
-                celebrationSound={celebrationSound} setCelebrationSound={setCelebrationSound}
-                onUpdateTeams={(pubTeamA,pubTeamB)=>{
-                  setMatch(m=>m?({...m,pubTeamA,pubTeamB}):m);
-                  // Persist any brand-new names added via the team editor to the club roster too, so
-                  // late-arrival players assigned here also become permanent club members (consistent
-                  // with the auto-save on the quick batsman/bowler fields).
-                  if(FB_OK&&DB){
-                    const known=new Set((rosterNames||[]).map(n=>n.toLowerCase()));
-                    [...pubTeamA,...pubTeamB].forEach(nm=>{
-                      if(nm&&!known.has(nm.toLowerCase())){
-                        known.add(nm.toLowerCase());
-                        const id="p_"+Math.random().toString(36).slice(2)+Date.now().toString(36);
-                        DB.ref("roster/"+id).set({name:nm,role:"All-rounder",keeper:false,bat:"Right",bowl:null}).catch(()=>{});
-                      }
-                    });
-                  }
-                }}
-              />}
-              {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",minWidth:0}}>
+                <span style={{color:role==="admin"?"var(--admin)":"var(--green-2)",fontFamily:"'JetBrains Mono',monospace",fontSize:8,fontWeight:700,textTransform:"uppercase",letterSpacing:".15em",border:`1px solid ${role==="admin"?"var(--admin)":"rgba(52,211,153,.5)"}`,borderRadius:6,padding:"2px 6px",boxShadow:role==="admin"?"0 0 10px var(--admin-glow)":"none"}}>{role==="admin"?"🔑 Admin":"✏️ Scorer"}</span>
+                <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:9,textTransform:"uppercase",letterSpacing:".2em"}}>{inn.inningsNum===1?"1st":"2nd"} Inn</span>
+                <span style={{width:3,height:3,borderRadius:"50%",background:"#4338ca",display:"inline-block"}}/>
+                <span style={{fontWeight:700,fontSize:13}}>{inn.battingTeam}</span>
+                <span style={{color:"#4b5563",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
+              </div>
+              {/* Controls moved to the top-right so they no longer occupy their own row. Fix Players
+                  now lives INSIDE the ⚙️ menu, reclaiming the vertical space that used to push the
+                  scoring pad below the fold. */}
+              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                {(role==="admin"||role==="scorer")&&<AdminActionsMenu
+                  onHistory={role==="admin"?onHistory:null} onAnnounce={role==="admin"?onAnnounce:null}
+                  inn={inn} onEditMatchSave={role==="admin"?(({overs,maxWkts})=>setInn(p=>({...p,overs,maxWkts}))):null}
+                  match={match} role={role} rosterNames={rosterNames} onAbandonMatch={role==="admin"?abandonMatch:null}
+                  hiCon={hiCon} setHiCon={setHiCon} bigText={bigText} setBigText={setBigText}
+                  celebrationSound={celebrationSound} setCelebrationSound={setCelebrationSound}
+                  onFixPlayers={({striker,nonStriker,bowler})=>fixPlayers({striker,nonStriker,bowler})}
+                  onUpdateTeams={(pubTeamA,pubTeamB)=>{
+                    setMatch(m=>m?({...m,pubTeamA,pubTeamB}):m);
+                    // Persist any brand-new names added via the team editor to the club roster too, so
+                    // late-arrival players assigned here also become permanent club members (consistent
+                    // with the auto-save on the quick batsman/bowler fields).
+                    if(FB_OK&&DB){
+                      const known=new Set((rosterNames||[]).map(n=>n.toLowerCase()));
+                      [...pubTeamA,...pubTeamB].forEach(nm=>{
+                        if(nm&&!known.has(nm.toLowerCase())){
+                          known.add(nm.toLowerCase());
+                          const id="p_"+Math.random().toString(36).slice(2)+Date.now().toString(36);
+                          DB.ref("roster/"+id).set({name:nm,role:"All-rounder",keeper:false,bat:"Right",bowl:null}).catch(()=>{});
+                        }
+                      });
+                    }
+                  }}
+                />}
+                {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap"}}>← home</button>}
+              </div>
             </div>
             <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:8,flexWrap:"wrap",minWidth:0,marginTop:"auto"}}>
               <div style={{display:"flex",alignItems:"baseline",gap:8,minWidth:0}}>
@@ -2653,6 +2660,68 @@ function playWicketSound(){
       osc.connect(og); og.connect(ctx.destination);
       osc.start(t+n.start); osc.stop(t+n.start+n.dur+0.05);
     });
+  }catch(e){}
+}
+// Duck (batter out for 0) — a comedic "quack quack". Two short nasal buzzes made from a fast
+// downward sawtooth sweep through a peaky bandpass (that vowel-y "waa" shape reads as a quack).
+// A GOLDEN duck (out first ball) adds a bright three-note bell shimmer on top, so it lands as
+// special/unlucky rather than just sad.
+function playDuckSound(golden){
+  const ctx=_getHeroCtx(); if(!ctx)return;
+  try{
+    const t=ctx.currentTime;
+    const quack=(start,f0,f1)=>{
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      const bp=ctx.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=900; bp.Q.value=6;
+      osc.type="sawtooth";
+      osc.frequency.setValueAtTime(f0,t+start);
+      osc.frequency.exponentialRampToValueAtTime(f1,t+start+0.13);
+      g.gain.setValueAtTime(0.0001,t+start);
+      g.gain.exponentialRampToValueAtTime(0.2,t+start+0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+start+0.16);
+      osc.connect(bp); bp.connect(g); g.connect(ctx.destination);
+      osc.start(t+start); osc.stop(t+start+0.18);
+    };
+    quack(0,520,300);
+    quack(0.22,470,270);
+    if(golden){
+      // bright ascending bell arpeggio (E6, G#6, B6) for the "golden" shimmer
+      [1319,1661,1976].forEach((f,i)=>{
+        const osc=ctx.createOscillator(), g=ctx.createGain();
+        osc.type="sine"; osc.frequency.value=f;
+        const st=t+0.44+i*0.09;
+        g.gain.setValueAtTime(0.0001,st);
+        g.gain.exponentialRampToValueAtTime(0.14,st+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001,st+0.5);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(st); osc.stop(st+0.55);
+      });
+    }
+  }catch(e){}
+}
+// Siren — a two-tone alternating warble (like a referee/emergency alert), so a scorer can hear a
+// NO BALL and shout "free hit!" to their fielding side without looking at the screen.
+function playSiren(){
+  const ctx=_getHeroCtx(); if(!ctx)return;
+  try{
+    const t=ctx.currentTime;
+    const osc=ctx.createOscillator(), g=ctx.createGain();
+    osc.type="square";
+    // three up/down sweeps between ~660Hz and ~990Hz
+    const hi=990, lo=660; let k=t;
+    osc.frequency.setValueAtTime(lo,k);
+    for(let i=0;i<3;i++){
+      osc.frequency.linearRampToValueAtTime(hi,k+0.16); k+=0.16;
+      osc.frequency.linearRampToValueAtTime(lo,k+0.16); k+=0.16;
+    }
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.12,t+0.04);
+    g.gain.setValueAtTime(0.12,k-0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001,k+0.05);
+    // gentle lowpass so the square wave isn't harsh
+    const lp=ctx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=1600;
+    osc.connect(lp); lp.connect(g); g.connect(ctx.destination);
+    osc.start(t); osc.stop(k+0.1);
   }catch(e){}
 }
 
@@ -3413,9 +3482,25 @@ function PinMgmtModal({onClose}){
 // Replaces the 6-button overflow row with a tidy dropdown. Navigation items
 // (History, Notice) close the menu and navigate. Modal items manage their own
 // open state locally so the dropdown stays out of their way.
-function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,onUpdateTeams,rosterNames,onAbandonMatch,hiCon,setHiCon,bigText,setBigText,celebrationSound,setCelebrationSound}){
+function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,onUpdateTeams,rosterNames,onAbandonMatch,hiCon,setHiCon,bigText,setBigText,celebrationSound,setCelebrationSound,onFixPlayers}){
   const[open,setOpen]=React.useState(false);
   const[editOpen,setEditOpen]=React.useState(false);
+  // Fix Players now lives inside this menu (it used to be a separate header button, which cost a
+  // whole extra row and pushed the scoring buttons below the fold). Same fields/validation as before.
+  const[fixOpen,setFixOpen]=React.useState(false);
+  const[fixSk,setFixSk]=React.useState("");
+  const[fixNs,setFixNs]=React.useState("");
+  const[fixBw,setFixBw]=React.useState("");
+  const openFix=()=>{ setFixSk(inn?.strikerName||"");setFixNs(inn?.nonStrikerName||"");setFixBw(inn?.bowlerName||"");setFixOpen(true); };
+  const saveFix=()=>{
+    const s=fixSk.trim(),n=fixNs.trim(),b=fixBw.trim();
+    if(!s){alert("Striker name can't be empty.");return;}
+    if(!inn?.single&&!n){alert("Non-striker name can't be empty.");return;}
+    if(!b){alert("Bowler name can't be empty.");return;}
+    if(!inn?.single&&s.toLowerCase()===n.toLowerCase()){alert("Striker and non-striker can't be the same person.");return;}
+    onFixPlayers&&onFixPlayers({striker:s,nonStriker:inn?.single?null:n,bowler:b});
+    setFixOpen(false);
+  };
   const[pinMgmtOpen,setPinMgmtOpen]=React.useState(false);
   const[pinViewOpen,setPinViewOpen]=React.useState(false);
   const[qrOpen,setQrOpen]=React.useState(false);
@@ -3517,6 +3602,7 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
           padding:"10px",boxShadow:"0 16px 48px rgba(0,0,0,.7)",backdropFilter:"blur(20px)",
           animation:"fadeUp .15s ease both"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+            {onFixPlayers&&cell("🔧","Fix Players","#6ee7b7",openFix)}
             {setHiCon&&cell("◐","High Contrast","#67e8f9",()=>setHiCon(h=>{const n=!h;try{localStorage.setItem("lcc_hc",n?"1":"0")}catch(e){}return n;}),hiCon)}
             {setBigText&&cell("A+","Larger Text","#67e8f9",()=>setBigText(b=>{const n=!b;try{localStorage.setItem("lcc_bigtext",n?"1":"0")}catch(e){}return n;}),bigText)}
             {setCelebrationSound&&cell("🔊","Ball Sounds","#fbbf24",()=>setCelebrationSound(v=>{const n=!v;try{localStorage.setItem("lcc_ball_sound",n?"1":"0")}catch(e){}return n;}),celebrationSound)}
@@ -3550,6 +3636,21 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
         <input type="number" min={minWk} value={wk} onChange={e=>setWk(e.target.value)} style={{marginBottom:6}}/>
         <p style={{color:"#4b5563",fontSize:10,marginBottom:14}}>{inn?.wickets||0} wicket{inn?.wickets===1?"":"s"} already fallen</p>
         <button className="btn btn-primary w-full" onClick={saveEdit}>Save Changes</button>
+      </Modal>}
+
+      {/* Fix Players modal (moved here from the header) */}
+      {fixOpen&&<Modal onClose={()=>setFixOpen(false)} title="🔧 Correct Striker / Bowler">
+        <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Use this if a name was entered wrong (e.g. wrong bowler typed in) or strike rotation needs a manual correction. Scores already recorded are not affected — this only changes who's currently at the crease/bowling.</p>
+        <label>{inn?.single?"Batsman":"Striker (on strike now)"}</label>
+        <input value={fixSk} onChange={e=>setFixSk(e.target.value)} list="fixPlayersMenu" placeholder="Striker's name" style={{marginBottom:12}}/>
+        {!inn?.single&&(<>
+          <label>Non-striker</label>
+          <input value={fixNs} onChange={e=>setFixNs(e.target.value)} list="fixPlayersMenu" placeholder="Non-striker's name" style={{marginBottom:12}}/>
+        </>)}
+        <label>Current bowler</label>
+        <input value={fixBw} onChange={e=>setFixBw(e.target.value)} list="fixPlayersMenu" placeholder="Bowler's name" style={{marginBottom:14}}/>
+        <datalist id="fixPlayersMenu">{(rosterNames||[]).map(n=><option key={n} value={n}/>)}</datalist>
+        <button className="btn btn-primary w-full" onClick={saveFix}>Save Correction</button>
       </Modal>}
 
       {/* Manage PINs modal */}
@@ -4712,26 +4813,49 @@ function CornerSpray({side,count=16}){
   );
 }
 
+// The most recent delivery event in this innings (current over, or the last completed over if the
+// current one just rolled over). Used by BallFlash to tell a no-ball / duck apart from a plain ball.
+function lastBallEvent(inn){
+  if(!inn) return null;
+  const oe=(inn.overEvents&&inn.overEvents.length)?inn.overEvents:((inn.completedOvers||[]).slice(-1)[0]||[]);
+  return oe[oe.length-1]||null;
+}
 function BallFlash({inn,soundOn}){
   const prevRef=React.useRef(null);
   const[flash,setFlash]=React.useState(null);
+  // Monotonic count of delivery events this innings (every ball, wide, no-ball and wicket appends
+  // one). This is the trigger: it changes on EVERY delivery — including a no-ball or a dot — which a
+  // pure runs/wickets diff would miss, and it lets us look at the actual last event to classify it.
+  const evc=inn?((inn.completedOvers||[]).reduce((a,o)=>a+((o&&o.length)||0),0)+((inn.overEvents||[]).length)):0;
   React.useEffect(()=>{
     if(!inn){prevRef.current=null;return;}
-    const cur={mid:inn.matchId||null,innNum:inn.inningsNum||1,runs:inn.totalRuns||0,wkts:inn.wickets||0};
+    const outSet=new Set(Object.entries(inn.batsmen||{}).filter(([,b])=>b&&b.out).map(([n])=>n));
+    const cur={mid:inn.matchId||null,innNum:inn.inningsNum||1,runs:inn.totalRuns||0,wkts:inn.wickets||0,evc,outSet};
     const prev=prevRef.current;
     prevRef.current=cur;
     if(!prev) return;
-    if(prev.innNum!==cur.innNum) return; // new innings — not a real "next ball", skip
+    if(prev.mid!==cur.mid||prev.innNum!==cur.innNum) return; // new match/innings — not a "next ball"
+    if(cur.evc<=prev.evc) return; // no new delivery (e.g. an undo/correction) — stay silent
+    const ev=lastBallEvent(inn);
     const dr=cur.runs-prev.runs, dw=cur.wkts-prev.wkts;
     let f=null;
-    // Wicket: NOT a confetti moment (that's a celebration; a dismissal is the opposite for the
-    // batting side) — instead a sharper, shorter, shake-punctuated flash. Sound is unchanged: still
-    // the dedicated stump-rattle wicket sound, not the crowd cheer used for boundaries.
-    if(dw>0){ f={type:"wicket",label:"OUT!",color:"#f87171",dur:900}; if(soundOn){try{playWicketSound();}catch(e){}} }
+    if(dw>0||(ev&&ev.type==="W")){
+      // Which batsman just fell? The one now out who wasn't out on the previous snapshot.
+      let newOut=null;
+      for(const n of cur.outSet){ if(!prev.outSet.has(n)){ newOut=n; break; } }
+      const b=newOut?inn.batsmen[newOut]:null;
+      const isDuck=!!b&&(b.runs||0)===0;                 // out for zero
+      const isGolden=isDuck&&(b.balls||0)===1;            // out for zero, first ball faced
+      if(isGolden){ f={type:"golden",label:"GOLDEN DUCK!",emoji:"🦆",sub:"OUT FIRST BALL",color:"#f59e0b",dur:1900}; if(soundOn){try{playDuckSound(true);}catch(e){}} }
+      else if(isDuck){ f={type:"duck",label:"DUCK!",emoji:"🦆",sub:"OUT FOR A DUCK",color:"#f87171",dur:1700}; if(soundOn){try{playDuckSound(false);}catch(e){}} }
+      else { f={type:"wicket",label:"OUT!",color:"#f87171",dur:900}; if(soundOn){try{playWicketSound();}catch(e){}} }
+    }
+    // No ball → free hit: siren so the scorer can call it to their side, plus a bold banner.
+    else if(ev&&ev.type==="NB"){ f={type:"noball",label:"NO BALL",sub:"FREE HIT",color:"#fb923c",dur:1800}; if(soundOn){try{playSiren();}catch(e){}} }
     else if(dr>=6){ f={type:"six",label:"SIX!",color:"#34d399",dur:1600}; if(soundOn){try{playCrowdCheer(true);}catch(e){}} }
     else if(dr>=4){ f={type:"four",label:"FOUR!",color:"#fbbf24",dur:1450}; if(soundOn){try{playCrowdCheer(false);}catch(e){}} }
     if(f) setFlash({...f,id:Date.now()});
-  },[inn&&inn.totalRuns,inn&&inn.wickets,inn&&inn.inningsNum,inn&&inn.matchId]);
+  },[evc,inn&&inn.inningsNum,inn&&inn.matchId]);
   React.useEffect(()=>{
     if(!flash)return;
     const t=setTimeout(()=>setFlash(null),flash.dur||1100);
@@ -4739,10 +4863,14 @@ function BallFlash({inn,soundOn}){
   },[flash&&flash.id]);
   if(!flash||typeof document==="undefined") return null;
   const dur=(flash.dur||1100)/1000;
-  // Gradient word colours per event — SIX in emerald→cyan, FOUR in gold, OUT in red.
+  const isOut=flash.type==="wicket"||flash.type==="duck"||flash.type==="golden";
+  // Gradient word colours per event.
   const grad=flash.type==="six"?"linear-gradient(180deg,#d1fae5,#34d399 55%,#0d9488)"
     :flash.type==="four"?"linear-gradient(180deg,#fff7d6,#fbbf24 55%,#d97706)"
+    :flash.type==="golden"?"linear-gradient(180deg,#fff7d6,#fbbf24 55%,#b45309)"
+    :flash.type==="noball"?"linear-gradient(180deg,#ffedd5,#fb923c 55%,#c2410c)"
     :"linear-gradient(180deg,#fecaca,#f87171 55%,#dc2626)";
+  const wordSize=flash.type==="six"?64:flash.type==="four"?60:flash.type==="golden"?38:flash.type==="noball"?54:52;
   return ReactDOM.createPortal(
     <div key={flash.id} style={{position:"fixed",inset:0,zIndex:250,pointerEvents:"none",overflow:"hidden"}}>
       {/* Soft coloured glow hugging the screen edges — sells the moment without covering content. */}
@@ -4759,15 +4887,28 @@ function BallFlash({inn,soundOn}){
         <Firework x="50%" y="22%" delay={0.05} dist={80} count={20}
           colors={["#fde68a","#fbbf24","#f59e0b","#fff"]}/>
       </>}
-      <div style={{position:"absolute",top:flash.type==="wicket"?"16%":"13%",left:"50%",
+      {/* Golden duck: unlucky for the batter but a fun moment — a couple of gold sparkle bursts. */}
+      {flash.type==="golden"&&<>
+        <Firework x="30%" y="26%" delay={0.05} dist={70} count={16} colors={["#fde68a","#fbbf24","#f59e0b","#fff"]}/>
+        <Firework x="70%" y="22%" delay={0.22} dist={70} count={16} colors={["#fde68a","#fbbf24","#f59e0b","#fff"]}/>
+      </>}
+      <div style={{position:"absolute",top:isOut?"15%":"12%",left:"50%",
         animation:`bigWordIn ${dur}s cubic-bezier(.2,1,.35,1) both`,textAlign:"center"}}>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:flash.type==="wicket"?52:64,fontWeight:800,
-          fontStyle:"italic",letterSpacing:".04em",lineHeight:1,
+        {/* Emoji sits OUTSIDE the gradient-clipped word — a gradient text-clip turns an emoji
+            transparent on iOS Safari, so the 🦆 has to be its own element. */}
+        {flash.emoji&&<div style={{fontSize:56,lineHeight:1,marginBottom:2,
+          animation:"duckWaddle .5s ease-in-out infinite"}}>{flash.emoji}</div>}
+        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:wordSize,fontWeight:800,
+          fontStyle:"italic",letterSpacing:".04em",lineHeight:1,display:"inline-block",
           background:grad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",
           filter:`drop-shadow(0 4px 18px ${flash.color}aa) drop-shadow(0 1px 2px rgba(0,0,0,.7))`,
-          animation:flash.type==="wicket"?"ballFlashShake .4s ease-in-out .05s 2":"none"}}>
+          animation:isOut?"ballFlashShake .4s ease-in-out .05s 2":"none"}}>
           {flash.label}
         </div>
+        {flash.sub&&<div style={{marginTop:5,fontFamily:"'JetBrains Mono',monospace",fontSize:13,fontWeight:700,
+          letterSpacing:".22em",color:flash.color,textTransform:"uppercase",
+          textShadow:`0 0 12px ${flash.color}88, 0 1px 2px rgba(0,0,0,.8)`,
+          animation:flash.type==="noball"?"menuPulse 1s ease-in-out infinite":"none"}}>{flash.sub}</div>}
       </div>
     </div>,
     document.body
