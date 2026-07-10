@@ -1398,6 +1398,39 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
   // late echo can't snap us back to "match completed" after we've intentionally reverted.
   const moClearedAt=React.useRef(0);
 
+  // ── Concurrent-scorer awareness ─────────────────────────────────────────────────────────────
+  // This app's whole design assumes ONE device is actively scoring at a time — Undo only tracks
+  // THIS device's own actions (never balls that arrive from another device via the listener), and
+  // the single shared Firebase node is last-write-wins, so two devices scoring around the same
+  // moment can silently overwrite each other. Neither of those is something to patch around safely;
+  // the real fix is making the collision visible so people can coordinate BEFORE it happens, rather
+  // than trying to rebuild the sync engine's conflict handling. Uses a completely separate Firebase
+  // path (not nested under `live`) so this can never interfere with the existing regression-guarded
+  // read/write path there — it's a pure side-channel presence signal, nothing more.
+  const[otherScorers,setOtherScorers]=React.useState([]);
+  React.useEffect(()=>{
+    if(!isScorer||!FB_OK||!DB||!match?.matchId)return;
+    const path=`activeScorers/${match.matchId}`;
+    const myRef=DB.ref(`${path}/${writerId.current}`);
+    const beat=()=>{ myRef.set({role,lastSeen:Date.now()}).catch(()=>{}); };
+    beat();
+    const interval=setInterval(beat,6000);
+    const allRef=DB.ref(path);
+    const cb=allRef.on("value",s=>{
+      const v=s.val()||{};
+      const now=Date.now();
+      const others=Object.entries(v)
+        .filter(([wid,e])=>wid!==writerId.current && e && (now-(e.lastSeen||0))<15000)
+        .map(([,e])=>e.role);
+      setOtherScorers(others);
+    });
+    return ()=>{
+      clearInterval(interval);
+      allRef.off("value",cb);
+      myRef.remove().catch(()=>{});
+    };
+  },[isScorer,match?.matchId,role]);
+
   // Track whether a revert snapshot exists in Firebase, so the super-admin revert button
   // stays available even after a page refresh (when local preEnd state is lost).
   React.useEffect(()=>{
@@ -2334,6 +2367,12 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
         <div style={{position:"sticky",top:0,zIndex:41,background:"rgba(251,191,36,.15)",borderBottom:"1px solid rgba(251,191,36,.4)",
           padding:"6px 14px",textAlign:"center",fontSize:11,fontFamily:"'JetBrains Mono',monospace",color:"var(--amber-2)"}}>
           📡 Offline — scoring is saved locally and will sync automatically once you're back online
+        </div>
+      )}
+      {otherScorers.length>0&&(
+        <div style={{position:"sticky",top:0,zIndex:41,background:"rgba(239,68,68,.16)",borderBottom:"1px solid rgba(239,68,68,.45)",
+          padding:"7px 14px",textAlign:"center",fontSize:11,fontFamily:"'JetBrains Mono',monospace",color:"#fca5a5",lineHeight:1.5}}>
+          ⚠️ Another {otherScorers.includes("admin")?"admin":"scorer"} device is ALSO active on this match right now — scoring from both at once can silently overwrite each other's balls and Undo may not cover balls the other device scores. Best to have only one device actively score at a time.
         </div>
       )}
       <div className="score-header">
