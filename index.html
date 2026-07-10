@@ -136,6 +136,13 @@
   70%{opacity:1;}
   100%{transform:translate(var(--dx),var(--dy)) rotate(var(--rot));opacity:0;}
 }
+/* NO BALL top banner — slides down from above the viewport, holds, then lifts back up. */
+@keyframes nbBanner{
+  0%{transform:translateX(-50%) translateY(-120%);opacity:0;}
+  12%{transform:translateX(-50%) translateY(0);opacity:1;}
+  82%{transform:translateX(-50%) translateY(0);opacity:1;}
+  100%{transform:translateX(-50%) translateY(-40%);opacity:0;}
+}
 /* Duck emoji waddle — a little side-to-side tilt so the 🦆 feels alive/comedic during a duck-out. */
 @keyframes duckWaddle{0%,100%{transform:rotate(-9deg)}50%{transform:rotate(9deg)}}
 /* End-of-match finale overlay fade-out at the end of the show. */
@@ -301,7 +308,7 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .btn-outline-amber:hover{background:rgba(217,119,6,.15)}
 .btn-outline-gray{background:transparent;border:1.5px solid #374151;color:#6b7280;padding:13px 14px}
 .btn-outline-gray:hover{border-color:#6366f1;color:#818cf8}
-.btn-run{background:var(--surface-2);border:1.5px solid var(--border);color:#fff;padding:12px 8px;font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;border-radius:14px;width:100%;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .08s ease,box-shadow .08s ease,background .08s ease;cursor:pointer;user-select:none}
+.btn-run{background:var(--surface-2);border:1.5px solid var(--border);color:#fff;padding:10px 8px;font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;border-radius:14px;width:100%;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .08s ease,box-shadow .08s ease,background .08s ease;cursor:pointer;user-select:none}
 .btn-run:active{transform:scale(.9);background:rgba(99,102,241,.45);border-color:#818cf8;box-shadow:0 0 20px rgba(99,102,241,.5)}
 .btn-run:hover{border-color:#818cf8;background:rgba(99,102,241,.2)}
 .btn-run.amber{background:linear-gradient(135deg,var(--amber),#d97706);color:#111;border:none;box-shadow:0 0 24px rgba(245,158,11,.45);text-shadow:0 1px 0 rgba(0,0,0,.15)}
@@ -313,12 +320,12 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .btn-undo:disabled{border-color:#1f2937;color:#374151;cursor:not-allowed}
 
 /* Score header */
-.score-header{background:linear-gradient(135deg,rgba(34,211,238,.12),rgba(14,33,72,.55),rgba(56,189,248,.08));border-bottom:1px solid var(--border);padding:10px 14px 8px;position:sticky;top:0;z-index:40;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-.score-big{font-family:'Oswald',sans-serif;font-size:48px;font-weight:700;line-height:1;background:linear-gradient(135deg,#fff,#a5e9f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.score-header{background:linear-gradient(135deg,rgba(34,211,238,.12),rgba(14,33,72,.55),rgba(56,189,248,.08));border-bottom:1px solid var(--border);padding:6px 14px 6px;position:sticky;top:0;z-index:40;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.score-big{font-family:'Oswald',sans-serif;font-size:40px;font-weight:700;line-height:1;background:linear-gradient(135deg,#fff,#a5e9f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .score-wkt{-webkit-text-fill-color:#f87171}
 
 /* Tabs */
-.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:var(--surface-2);border-radius:16px;padding:4px;margin:8px 14px}
+.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:var(--surface-2);border-radius:16px;padding:4px;margin:6px 14px}
 .tab{background:transparent;border:none;color:#6b7280;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.08em;padding:10px;border-radius:12px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s}
 .tab.active{background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#04121a}
 
@@ -374,15 +381,15 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .mt-3{margin-top:12px}
 .mt-4{margin-top:16px}
 .flex{display:flex}.items-center{align-items:center}.justify-between{justify-content:space-between}
-.space-y-3>*+*{margin-top:8px}
-.space-y-4>*+*{margin-top:16px}
+.space-y-3>*+*{margin-top:6px}
+.space-y-4>*+*{margin-top:12px}
 .text-right{text-align:right}
 .text-center{text-align:center}
 .truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .w-full{width:100%}
 .shrink-0{flex-shrink:0}
 .ml-2{margin-left:8px}
-.content{padding:0 14px 12px}
+.content{padding:0 14px 8px}
 @keyframes flash{0%,100%{opacity:1}50%{opacity:.3}}
 .flash{animation:flash .5s ease}
 
@@ -2427,8 +2434,8 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
         {/* Single-column header — no more tall right-hand panel (it sat mostly empty in the 1st
             innings and squeezed the score). Stats now live as compact chips on the score line, and
             the chase gets a full-width equation strip below, which is far more readable. */}
-        <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
               <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",minWidth:0}}>
                 <span style={{color:role==="admin"?"var(--admin)":"var(--green-2)",fontFamily:"'JetBrains Mono',monospace",fontSize:8,fontWeight:700,textTransform:"uppercase",letterSpacing:".15em",border:`1px solid ${role==="admin"?"var(--admin)":"rgba(52,211,153,.5)"}`,borderRadius:6,padding:"2px 6px",boxShadow:role==="admin"?"0 0 10px var(--admin-glow)":"none"}}>{role==="admin"?"🔑 Admin":"✏️ Scorer"}</span>
@@ -2664,8 +2671,8 @@ function playWicketSound(){
 }
 // Duck (batter out for 0) — a comedic "quack quack". Two short nasal buzzes made from a fast
 // downward sawtooth sweep through a peaky bandpass (that vowel-y "waa" shape reads as a quack).
-// A GOLDEN duck (out first ball) adds a bright three-note bell shimmer on top, so it lands as
-// special/unlucky rather than just sad.
+// Deliberately the ONLY sound for a duck OR golden duck — no celebratory tone layered on top, so it
+// stays purely satirical (the `golden` flag now only affects the on-screen visuals, not audio).
 function playDuckSound(golden){
   const ctx=_getHeroCtx(); if(!ctx)return;
   try{
@@ -2684,19 +2691,6 @@ function playDuckSound(golden){
     };
     quack(0,520,300);
     quack(0.22,470,270);
-    if(golden){
-      // bright ascending bell arpeggio (E6, G#6, B6) for the "golden" shimmer
-      [1319,1661,1976].forEach((f,i)=>{
-        const osc=ctx.createOscillator(), g=ctx.createGain();
-        osc.type="sine"; osc.frequency.value=f;
-        const st=t+0.44+i*0.09;
-        g.gain.setValueAtTime(0.0001,st);
-        g.gain.exponentialRampToValueAtTime(0.14,st+0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001,st+0.5);
-        osc.connect(g); g.connect(ctx.destination);
-        osc.start(st); osc.stop(st+0.55);
-      });
-    }
   }catch(e){}
 }
 // Siren — a two-tone alternating warble (like a referee/emergency alert), so a scorer can hear a
@@ -2773,7 +2767,6 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
   const[showOT,setShowOT]=useState(false);
   const[otBase,setOTBase]=useState(0);
   const[otThrow,setOTThrow]=useState(1);
-  const[showFH,setShowFH]=useState(false);
   const isFreeHit=!!(inn&&inn.isFreeHit); // lives on `inn` itself (not local state) so it survives a
   // reload and stays in sync across devices — same class of bug as the old local-only `hist`: a local
   // useState here meant a reload right after a No Ball silently lost free-hit protection, and a
@@ -2836,11 +2829,10 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
     if(em==="WD"){record({type:"WD",extraRuns:1+er});/* wide on free hit: free hit carries, don't clear */}
     else if(em==="NB"){
       record({type:"NB",extraRuns:1,batRuns:er,isDeclNB:nbDecl});
-      // Next delivery is a FREE HIT — play sound and show banner
-      playFreeHitSound();
-      setShowFH(true);
-      setIsFreeHit(true); // arm free hit for next legal delivery
-      setTimeout(()=>setShowFH(false),3500);
+      // Next delivery is a FREE HIT. The announcement (top banner) and the siren are handled by the
+      // shared <BallFlash> when it sees this NB event — so it also reaches viewers and respects the
+      // ball-sound toggle. We only need to arm the free-hit state here.
+      setIsFreeHit(true);
     }
     else if(em==="DECL"){record({type:"DECL",runs:er||1});setIsFreeHit(false);}
     else{record({type:em,extraRuns:er||1});setIsFreeHit(false);}
@@ -3130,7 +3122,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           <p className="section-title" style={{marginBottom:0}}>Over {Math.floor(inn.totalBalls/6)+1}/{inn.overs} · <span style={{color:"#fbbf24"}}>{inn.totalBalls%6} of 6 balls</span>{(inn.overEvents||[]).filter(e=>e.type==="WD"||e.type==="NB").length>0&&<span style={{color:"#fb923c"}}> +{(inn.overEvents||[]).filter(e=>e.type==="WD"||e.type==="NB").length} extra</span>}</p>
           <button className="btn-undo" onClick={onUndo} disabled={!canUndo} title={canUndo?"Undo the last ball":"Nothing to undo yet this innings"}>↩ Undo</button>
         </div>
-        <div style={{background:"#130f3a",border:"1px solid #1e1b4b",borderRadius:12,padding:"7px 10px",display:"flex",gap:6,minHeight:44,overflowX:"auto",alignItems:"center"}}>
+        <div style={{background:"#130f3a",border:"1px solid #1e1b4b",borderRadius:12,padding:"6px 10px",display:"flex",gap:6,minHeight:40,overflowX:"auto",alignItems:"center"}}>
           {(inn.overEvents||[]).length===0
             ?<span style={{color:"#2d2a6a",fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>— new over —</span>
             :(inn.overEvents||[]).map((ev,i)=><div key={i} className={chipClass(ev)}>{chipLbl(ev)}</div>)
@@ -3160,27 +3152,13 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
         })()}
       </div>
 
-      {/* Free Hit banner — animated 3.5s popup after No Ball */}
-      {showFH&&(
-        <div style={{
-          position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-54%)",
-          zIndex:999,textAlign:"center",pointerEvents:"none",
-          animation:"bounceIn .35s ease both"
-        }}>
-          <div style={{
-            background:"linear-gradient(135deg,#fbbf24,#f59e0b,#ef4444)",
-            borderRadius:24,padding:"18px 32px",
-            boxShadow:"0 0 0 4px rgba(251,191,36,.3),0 0 48px rgba(251,191,36,.6),0 8px 32px rgba(0,0,0,.6)"
-          }}>
-            <div style={{fontSize:10,color:"rgba(0,0,0,.55)",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".25em",marginBottom:4}}>NEXT BALL IS A</div>
-            <div style={{fontSize:38,fontFamily:"'Oswald',sans-serif",fontWeight:700,color:"#111",lineHeight:1}}>🟡 FREE HIT!</div>
-            <div style={{fontSize:10,color:"rgba(0,0,0,.5)",fontFamily:"'JetBrains Mono',monospace",marginTop:5}}>only run out can dismiss the batter</div>
-          </div>
-        </div>
-      )}
+      {/* The transient "no ball → free hit" announcement is now handled by the shared <BallFlash>
+          top banner (visible to scorer AND viewers, with the siren), so the old center-screen popup
+          that used to live here was removed — it duplicated that and overlapped the batting card. */}
 
-      {/* Persistent free hit chip — stays visible through wides and until legal delivery */}
-      {isFreeHit&&!showFH&&(
+      {/* Persistent free hit chip — a slim strip that stays visible for the whole free-hit delivery
+          (through any wides) until the next legal ball, so the scorer always has it on screen. */}
+      {isFreeHit&&(
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,
           padding:"9px 16px",borderRadius:30,marginBottom:6,
           background:"rgba(234,179,8,.13)",border:"1.5px solid rgba(234,179,8,.45)"}}>
@@ -4887,29 +4865,38 @@ function BallFlash({inn,soundOn}){
         <Firework x="50%" y="22%" delay={0.05} dist={80} count={20}
           colors={["#fde68a","#fbbf24","#f59e0b","#fff"]}/>
       </>}
-      {/* Golden duck: unlucky for the batter but a fun moment — a couple of gold sparkle bursts. */}
-      {flash.type==="golden"&&<>
-        <Firework x="30%" y="26%" delay={0.05} dist={70} count={16} colors={["#fde68a","#fbbf24","#f59e0b","#fff"]}/>
-        <Firework x="70%" y="22%" delay={0.22} dist={70} count={16} colors={["#fde68a","#fbbf24","#f59e0b","#fff"]}/>
-      </>}
-      <div style={{position:"absolute",top:isOut?"15%":"12%",left:"50%",
-        animation:`bigWordIn ${dur}s cubic-bezier(.2,1,.35,1) both`,textAlign:"center"}}>
-        {/* Emoji sits OUTSIDE the gradient-clipped word — a gradient text-clip turns an emoji
-            transparent on iOS Safari, so the 🦆 has to be its own element. */}
-        {flash.emoji&&<div style={{fontSize:56,lineHeight:1,marginBottom:2,
-          animation:"duckWaddle .5s ease-in-out infinite"}}>{flash.emoji}</div>}
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:wordSize,fontWeight:800,
-          fontStyle:"italic",letterSpacing:".04em",lineHeight:1,display:"inline-block",
-          background:grad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",
-          filter:`drop-shadow(0 4px 18px ${flash.color}aa) drop-shadow(0 1px 2px rgba(0,0,0,.7))`,
-          animation:isOut?"ballFlashShake .4s ease-in-out .05s 2":"none"}}>
-          {flash.label}
+      {flash.type==="noball"?(
+        // NO BALL / free-hit alert — a clean SOLID banner pinned near the very top so it never
+        // overlaps the batting card the way the big transparent word did. Slides down, holds, lifts.
+        <div style={{position:"absolute",top:"3.5%",left:"50%",transform:"translateX(-50%)",
+          animation:`nbBanner ${dur}s cubic-bezier(.2,1,.35,1) both`,textAlign:"center",maxWidth:"92%"}}>
+          <div style={{background:"linear-gradient(135deg,#fbbf24,#f59e0b,#ea580c)",borderRadius:16,
+            padding:"10px 22px",boxShadow:"0 10px 34px rgba(234,88,12,.5),0 0 0 3px rgba(251,191,36,.25)"}}>
+            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:30,fontWeight:800,fontStyle:"italic",
+              color:"#1a1204",letterSpacing:".02em",lineHeight:1}}>🟡 NO BALL</div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:700,marginTop:4,
+              letterSpacing:".28em",color:"#3b1d00"}}>FREE HIT — RUN OUT ONLY</div>
+          </div>
         </div>
-        {flash.sub&&<div style={{marginTop:5,fontFamily:"'JetBrains Mono',monospace",fontSize:13,fontWeight:700,
-          letterSpacing:".22em",color:flash.color,textTransform:"uppercase",
-          textShadow:`0 0 12px ${flash.color}88, 0 1px 2px rgba(0,0,0,.8)`,
-          animation:flash.type==="noball"?"menuPulse 1s ease-in-out infinite":"none"}}>{flash.sub}</div>}
-      </div>
+      ):(
+        <div style={{position:"absolute",top:isOut?"15%":"12%",left:"50%",
+          animation:`bigWordIn ${dur}s cubic-bezier(.2,1,.35,1) both`,textAlign:"center"}}>
+          {/* Emoji sits OUTSIDE the gradient-clipped word — a gradient text-clip turns an emoji
+              transparent on iOS Safari, so the 🦆 has to be its own element. */}
+          {flash.emoji&&<div style={{fontSize:56,lineHeight:1,marginBottom:2,
+            animation:"duckWaddle .5s ease-in-out infinite"}}>{flash.emoji}</div>}
+          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:wordSize,fontWeight:800,
+            fontStyle:"italic",letterSpacing:".04em",lineHeight:1,display:"inline-block",
+            background:grad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",
+            filter:`drop-shadow(0 4px 18px ${flash.color}aa) drop-shadow(0 1px 2px rgba(0,0,0,.7))`,
+            animation:isOut?"ballFlashShake .4s ease-in-out .05s 2":"none"}}>
+            {flash.label}
+          </div>
+          {flash.sub&&<div style={{marginTop:5,fontFamily:"'JetBrains Mono',monospace",fontSize:13,fontWeight:700,
+            letterSpacing:".22em",color:flash.color,textTransform:"uppercase",
+            textShadow:`0 0 12px ${flash.color}88, 0 1px 2px rgba(0,0,0,.8)`}}>{flash.sub}</div>}
+        </div>
+      )}
     </div>,
     document.body
   );
