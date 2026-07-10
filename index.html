@@ -2424,10 +2424,16 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
           </div>
           <div style={{textAlign:"right",flexShrink:0}}>
             <div style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap"}}>CRR <span style={{color:"#fbbf24",fontWeight:600}}>{crr}</span></div>
-            {inn.target&&<>
+            {inn.target?(<>
               <div style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap"}}>T:<span style={{color:"#fff",fontWeight:600}}>{inn.target}</span> Need <span style={{color:"#fff",fontWeight:600}}>{Math.max(req,0)}</span>/<span style={{color:"#fff",fontWeight:600}}>{bLeft}b</span></div>
               {rrr&&<div style={{color:parseFloat(rrr)>12?"#f87171":"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap"}}>RRR <span style={{fontWeight:600,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span></div>}
-            </>}
+            </>):(
+              // 1st innings — no target to chase yet, so there's nothing to show progress against.
+              // Show a projected final score instead (current run rate extrapolated across the full
+              // innings) — the standard broadcast stat for exactly this situation, and it fills the
+              // same space that would otherwise sit empty until 2nd innings starts.
+              inn.totalBalls>0&&inn.overs>0&&<div style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap"}}>Proj <span style={{color:"#fff",fontWeight:600}}>{Math.round(parseFloat(crr)*inn.overs)}</span></div>
+            )}
           </div>
         </div>
         {/* Chase progress bar — a compact single line, replacing what used to be a whole extra row of
@@ -3056,18 +3062,10 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
         </div>
       )}
 
-      {/* Last-action toast — a quick confirmation of what was just recorded ("6 runs", "Wicket
-          recorded", etc.), rendered INLINE right above the buttons so it can never cover anything
-          tappable. It used to also carry its own Undo button, but that was pure duplication — the
-          persistent header Undo (top-right, next to the score) already does the exact same thing and
-          stays reachable even after this toast auto-dismisses. One Undo, not two. */}
-      {toast&&(
-        <div style={{display:"flex",alignItems:"center",gap:10,
-          background:"var(--surface-2)",border:"1px solid var(--border-soft)",borderRadius:14,
-          padding:"9px 14px",marginBottom:8,animation:"screenIn .25s ease-out both"}}>
-          <span style={{fontSize:13,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{toast}</span>
-        </div>
-      )}
+      {/* Note: a "last action" toast used to render here, restating what was just recorded (e.g.
+          "6 runs"). Removed — the ball-history chips right above already show exactly that, and the
+          score itself updates instantly, so it was pure duplication taking up vertical space for no
+          added information. */}
 
       {/* Buttons */}
       <div style={{opacity:dis?.4:1,pointerEvents:dis?"none":"auto"}} className="space-y-3">
