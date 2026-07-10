@@ -110,6 +110,34 @@
   65%{opacity:1;}
   100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy) + 70px)) rotate(var(--rot)) scale(.55);opacity:0;}
 }
+/* Fireworks — glowing spark streaks fly radially out from a burst point, drift down and fade.
+   Pure transform+opacity, so cheap on phones; no canvas, no rAF loop. */
+@keyframes fwSpark{
+  0%{transform:translate(-50%,-50%) scale(1);opacity:0;}
+  8%{opacity:1;}
+  100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy) + 36px)) scale(.3);opacity:0;}
+}
+/* The bright core flash at the centre of each firework burst. */
+@keyframes fwFlash{0%{transform:scale(.2);opacity:1}100%{transform:scale(2.8);opacity:0}}
+/* Big boundary word ("SIX!" / "FOUR!" / "OUT!") — punchy pop-in, hold, drift-up fade-out. */
+@keyframes bigWordIn{
+  0%{transform:translateX(-50%) scale(.35) rotate(-5deg);opacity:0;}
+  14%{transform:translateX(-50%) scale(1.15) rotate(1deg);opacity:1;}
+  24%{transform:translateX(-50%) scale(1) rotate(0deg);}
+  78%{transform:translateX(-50%) scale(1);opacity:1;}
+  100%{transform:translateX(-50%) scale(1.06) translateY(-14px);opacity:0;}
+}
+/* Soft coloured glow around the screen edges during a boundary — sells the moment without
+   covering any content in the middle. */
+@keyframes edgeGlowPulse{0%{opacity:0}16%{opacity:1}68%{opacity:.7}100%{opacity:0}}
+/* Corner confetti spray (FOUR) — pieces launch up and inward from the bottom corners. */
+@keyframes confettiSpray{
+  0%{transform:translate(0,0) rotate(0deg);opacity:1;}
+  70%{opacity:1;}
+  100%{transform:translate(var(--dx),var(--dy)) rotate(var(--rot));opacity:0;}
+}
+/* End-of-match finale overlay fade-out at the end of the show. */
+@keyframes finaleFade{0%{opacity:1}82%{opacity:1}100%{opacity:0}}
 /* Wicket flash shake — a sharp side-to-side punctuation so a dismissal reads as jarring/sudden,
    the visual opposite of a boundary's smooth pop-in. */
 @keyframes ballFlashShake{
@@ -2394,12 +2422,10 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
       <div className="score-header">
         <MilestoneCelebration inn={inn} resetKey={(match?.matchId||"m")+":"+(inn.inningsNum||1)} playSound={true}/>
         <BallFlash inn={inn} soundOn={celebrationSound}/>
-        {/* True 2-column layout — left column stacks everything (badge/teams, admin controls, score),
-            right column holds all the stats and spans the FULL HEIGHT of that stack via alignItems
-            stretch, not just the score row. That's what was leaving the top-right corner empty before:
-            the stats panel only ever sat next to the score, so the space next to the rows ABOVE it
-            (badge/teams, Fix Players/gear/home) was never touched no matter what went in the panel. */}
-        <div style={{display:"flex",alignItems:"stretch",gap:10}}>
+        {/* Single-column header — no more tall right-hand panel (it sat mostly empty in the 1st
+            innings and squeezed the score). Stats now live as compact chips on the score line, and
+            the chase gets a full-width equation strip below, which is far more readable. */}
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
           <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",minWidth:0}}>
               <span style={{color:role==="admin"?"var(--admin)":"var(--green-2)",fontFamily:"'JetBrains Mono',monospace",fontSize:8,fontWeight:700,textTransform:"uppercase",letterSpacing:".15em",border:`1px solid ${role==="admin"?"var(--admin)":"rgba(52,211,153,.5)"}`,borderRadius:6,padding:"2px 6px",boxShadow:role==="admin"?"0 0 10px var(--admin-glow)":"none"}}>{role==="admin"?"🔑 Admin":"✏️ Scorer"}</span>
@@ -2435,41 +2461,49 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
               />}
               {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
             </div>
-            <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap",minWidth:0,marginTop:"auto"}}>
-              <span key={inn.totalRuns+"-"+inn.wickets} className={`score-big score-pulse${flash?" flash":""}`}>{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
-              <span style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>({ovStr(inn.totalBalls)} ov)</span>
+            <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:8,flexWrap:"wrap",minWidth:0,marginTop:"auto"}}>
+              <div style={{display:"flex",alignItems:"baseline",gap:8,minWidth:0}}>
+                <span key={inn.totalRuns+"-"+inn.wickets} className={`score-big score-pulse${flash?" flash":""}`}>{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
+                <span style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>({ovStr(inn.totalBalls)} ov)</span>
+              </div>
+              {/* Compact stat chips on the score line — CRR always; Proj only in the 1st innings
+                  (extrapolated final at the current rate, the standard broadcast stat). */}
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#9ca3af",
+                  background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",
+                  borderRadius:9,padding:"4px 9px",whiteSpace:"nowrap"}}>CRR <span style={{color:"#fbbf24",fontWeight:700}}>{crr}</span></span>
+                {!inn.target&&inn.totalBalls>0&&inn.overs>0&&
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#a5b4fc",
+                    background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",
+                    borderRadius:9,padding:"4px 9px",whiteSpace:"nowrap"}}>Proj <span style={{color:"#fff",fontWeight:700}}>{Math.round(parseFloat(crr)*inn.overs)}</span></span>}
+              </div>
             </div>
           </div>
-          {/* Right column — spans the full height of the left column via alignItems:stretch above,
-              so it genuinely occupies the space next to EVERY row, not just the score. */}
-          <div style={{textAlign:"right",flexShrink:0,minWidth:118,background:"rgba(255,255,255,.04)",
-            border:"1px solid rgba(255,255,255,.08)",borderRadius:12,padding:"10px 12px",
-            display:"flex",flexDirection:"column",justifyContent:"center",gap:4}}>
-            <div style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap"}}>CRR <span style={{color:"#fbbf24",fontWeight:700}}>{crr}</span></div>
-            {inn.target?(<>
-              <div style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap"}}>T:<span style={{color:"#fff",fontWeight:600}}>{inn.target}</span> Need <span style={{color:"#fff",fontWeight:600}}>{Math.max(req,0)}</span>/<span style={{color:"#fff",fontWeight:600}}>{bLeft}b</span></div>
-              {rrr&&<div style={{color:parseFloat(rrr)>12?"#f87171":"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap"}}>RRR <span style={{fontWeight:600,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span></div>}
-              {(()=>{
-                const pct=Math.min(100,Math.max(0,(inn.totalRuns/inn.target)*100));
-                const ahead=parseFloat(crr)>=parseFloat(rrr||crr);
-                return(
-                  <div style={{marginTop:4}}>
-                    <div style={{height:5,borderRadius:3,background:"rgba(255,255,255,.08)",overflow:"hidden"}}>
-                      <div style={{height:"100%",width:pct+"%",borderRadius:3,transition:"width .4s ease",
-                        background:ahead?"linear-gradient(90deg,#34d399,#10b981)":"linear-gradient(90deg,#f87171,#ef4444)"}}/>
-                    </div>
-                    <span style={{fontSize:9,fontFamily:"'JetBrains Mono',monospace",fontWeight:700,
-                      color:ahead?"#34d399":"#f87171"}}>{ahead?"▲ ON TRACK":"▼ BEHIND"}</span>
-                  </div>
-                );
-              })()}
-            </>):(
-              // 1st innings — no target to chase yet, so there's nothing to show progress against.
-              // Show a projected final score instead (current run rate extrapolated across the full
-              // innings) — the standard broadcast stat for exactly this situation.
-              inn.totalBalls>0&&inn.overs>0&&<div style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap"}}>Proj <span style={{color:"#fff",fontWeight:700}}>{Math.round(parseFloat(crr)*inn.overs)}</span></div>
-            )}
-          </div>
+          {/* CHASE STRIP — full-width match equation during the 2nd innings, with a progress bar
+              that actually has room to breathe (the old narrow side panel cramped all of this). */}
+          {inn.target&&(()=>{
+            const pct=Math.min(100,Math.max(0,(inn.totalRuns/inn.target)*100));
+            const ahead=parseFloat(crr)>=parseFloat(rrr||crr);
+            return(
+              <div style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.09)",
+                borderRadius:12,padding:"8px 12px"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap",marginBottom:6}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#818cf8",whiteSpace:"nowrap"}}>
+                    Target <span style={{color:"#fff",fontWeight:700}}>{inn.target}</span> · Need <span style={{color:"#fff",fontWeight:700}}>{Math.max(req,0)}</span> off <span style={{color:"#fff",fontWeight:700}}>{bLeft}</span>b
+                  </span>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap",
+                    color:rrr&&parseFloat(rrr)>12?"#f87171":"#9ca3af"}}>
+                    {rrr&&<>RRR <span style={{fontWeight:700,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span> · </>}
+                    <span style={{fontWeight:700,color:ahead?"#34d399":"#f87171"}}>{ahead?"▲ ON TRACK":"▼ BEHIND"}</span>
+                  </span>
+                </div>
+                <div style={{height:5,borderRadius:3,background:"rgba(255,255,255,.08)",overflow:"hidden"}}>
+                  <div style={{height:"100%",width:pct+"%",borderRadius:3,transition:"width .4s ease",
+                    background:ahead?"linear-gradient(90deg,#34d399,#10b981)":"linear-gradient(90deg,#f87171,#ef4444)"}}/>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -4370,19 +4404,46 @@ function POTMVoting({inn,inn1,potm,role}){
 // End-of-match FINALE — a bigger, one-time celebratory burst on the result screen itself (the actual
 // emotional peak of the match), on top of the milestone celebrations that already fire during play.
 // Ties (no winner) get a calmer "Match Tied" treatment, no confetti.
+// End-of-match FINALE — a full fireworks show over a dark vignette, with a gold winner banner:
+// the actual emotional peak of the match. One-time, ~6.5s, auto-fades, pointerEvents:none so the
+// result screen underneath stays fully tappable throughout. Portalled to <body> so no ancestor
+// backdrop-filter can clip it. Ties (no winner) get no finale.
 function MatchFinale({winner}){
   const[show,setShow]=React.useState(true);
-  React.useEffect(()=>{ const t=setTimeout(()=>setShow(false),3200); return ()=>clearTimeout(t); },[]);
-  if(!show||!winner) return null;
-  const bits=[6,14,22,30,38,46,54,62,70,78,86,94].map((l,i)=>({l,d:i*0.06,e:["🎉","✨","🏆","🎊","⭐"][i%5]}));
-  return(
-    <div style={{position:"fixed",inset:0,zIndex:150,pointerEvents:"none",overflow:"hidden"}}>
-      {bits.map((b,i)=><span key={i} style={{position:"absolute",top:0,left:b.l+"%",fontSize:26,
-        animation:`confettiFall 2.4s ease-in ${b.d}s both`}}>{b.e}</span>)}
-      <div style={{position:"absolute",top:"18%",left:0,right:0,textAlign:"center",animation:"milestoneIn .55s cubic-bezier(.22,1,.36,1) both"}}>
-        <div style={{fontSize:60}}>🏆</div>
+  React.useEffect(()=>{ const t=setTimeout(()=>setShow(false),6500); return ()=>clearTimeout(t); },[]);
+  if(!show||!winner||typeof document==="undefined") return null;
+  // A staggered volley of bursts across the top two-thirds of the screen — like a real display,
+  // they don't all go off at once.
+  const bursts=[
+    {x:"20%",y:"22%",d:0.0},{x:"78%",y:"16%",d:0.5},{x:"50%",y:"30%",d:1.0},
+    {x:"12%",y:"42%",d:1.6},{x:"86%",y:"38%",d:2.1},{x:"38%",y:"12%",d:2.7},
+    {x:"64%",y:"46%",d:3.3},{x:"26%",y:"26%",d:3.9},{x:"74%",y:"22%",d:4.5},
+    {x:"48%",y:"18%",d:5.1},
+  ];
+  return ReactDOM.createPortal(
+    <div style={{position:"fixed",inset:0,zIndex:150,pointerEvents:"none",overflow:"hidden",
+      animation:"finaleFade 6.5s ease both"}}>
+      {/* Dark vignette so the fireworks pop like a night sky, while the centre stays readable. */}
+      <div style={{position:"absolute",inset:0,
+        background:"radial-gradient(ellipse at 50% 40%, rgba(2,6,23,.25), rgba(2,6,23,.72))"}}/>
+      {bursts.map((b,i)=><Firework key={i} x={b.x} y={b.y} delay={b.d}
+        count={i%3===0?30:24} dist={i%3===0?130:100}/>)}
+      <div style={{position:"absolute",top:"20%",left:0,right:0,textAlign:"center",padding:"0 20px",
+        animation:"milestoneIn .55s cubic-bezier(.22,1,.36,1) .25s both"}}>
+        <div style={{fontSize:56,filter:"drop-shadow(0 0 24px rgba(251,191,36,.8))"}}>🏆</div>
+        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:40,fontWeight:800,fontStyle:"italic",
+          lineHeight:1.05,letterSpacing:".03em",
+          background:"linear-gradient(180deg,#fff7d6,#fbbf24 55%,#d97706)",
+          WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",
+          filter:"drop-shadow(0 4px 20px rgba(251,191,36,.55)) drop-shadow(0 1px 2px rgba(0,0,0,.8))"}}>
+          {winner}
+        </div>
+        <div style={{marginTop:6,fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:700,
+          letterSpacing:".35em",color:"#fde68a",textTransform:"uppercase",
+          textShadow:"0 0 14px rgba(251,191,36,.6)"}}>Champions of the day</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -4586,37 +4647,66 @@ const MILESTONE_CONFETTI=[
 // attention the way a 100 does. Portaled to <body> for the same reason Modal/MilestoneCelebration
 // are — this sits inside .score-header, which has backdrop-filter and becomes a containing block for
 // any non-portaled fixed-position descendant.
-// A small confetti burst — genuinely randomized pieces flying outward and falling, not just a
-// single static shape. Pure CSS animation (transform + opacity), so it's cheap even on an older
-// phone — no canvas, no animation-frame loop.
-function ConfettiBurst(){
-  const pieces=React.useMemo(()=>{
-    const colors=["#fbbf24","#34d399","#60a5fa","#f472b6","#a78bfa","#fb923c"];
-    return Array.from({length:22},(_,i)=>{
-      const angle=Math.random()*Math.PI*2;
-      const dist=50+Math.random()*70;
+// A single CSS firework — bright core flash plus 20–30 glowing spark streaks flying radially
+// outward from (x,y). Positions are % of the viewport (the parent is a fixed inset:0 overlay).
+// Pure CSS animation (transform + opacity), no canvas/rAF, so several at once stay cheap even on
+// an older phone mid-match.
+function Firework({x,y,delay=0,colors,count=26,dist=110}){
+  const sparks=React.useMemo(()=>{
+    const cs=colors||["#fde68a","#fbbf24","#fb923c","#f472b6","#a78bfa","#60a5fa","#34d399","#fff"];
+    return Array.from({length:count},(_,i)=>{
+      const a=(i/count)*Math.PI*2+Math.random()*0.4;
+      const d=dist*(0.55+Math.random()*0.55);
       return {
         id:i,
-        dx:Math.round(Math.cos(angle)*dist),
-        dy:Math.round(Math.sin(angle)*dist*0.6-20), // biased upward on launch, gravity pulls down via the fall keyframe
-        rot:Math.round(Math.random()*520-260),
-        delay:(Math.random()*0.12).toFixed(2),
-        size:4+Math.round(Math.random()*4),
-        color:colors[i%colors.length],
-        tall:Math.random()>0.4,
+        dx:Math.round(Math.cos(a)*d),
+        dy:Math.round(Math.sin(a)*d),
+        c:cs[i%cs.length],
+        delay:(delay+Math.random()*0.08).toFixed(2),
+        dur:(0.9+Math.random()*0.5).toFixed(2),
+        w:Math.random()>0.5?3:2,
+        h:7+Math.round(Math.random()*6),
       };
     });
   },[]);
   return(
-    <div style={{position:"absolute",inset:0,pointerEvents:"none",overflow:"visible"}}>
+    <div style={{position:"absolute",left:x,top:y,pointerEvents:"none"}}>
+      <div style={{position:"absolute",left:-14,top:-14,width:28,height:28,borderRadius:"50%",
+        background:"radial-gradient(circle,#fff,rgba(255,225,160,.55) 45%,transparent 72%)",
+        animation:`fwFlash .55s ease-out ${delay}s both`}}/>
+      {sparks.map(s=>(
+        <div key={s.id} style={{position:"absolute",left:0,top:0,width:s.w,height:s.h,borderRadius:2,
+          background:s.c,boxShadow:`0 0 6px ${s.c},0 0 14px ${s.c}88`,
+          animation:`fwSpark ${s.dur}s cubic-bezier(.12,.65,.35,1) ${s.delay}s both`,
+          "--dx":s.dx+"px","--dy":s.dy+"px"}}/>
+      ))}
+    </div>
+  );
+}
+
+// Confetti spray from a bottom corner (FOUR) — golden pieces launch up and inward, tumble and fade.
+function CornerSpray({side,count=16}){
+  const pieces=React.useMemo(()=>{
+    const cs=["#fde68a","#fbbf24","#f59e0b","#fff7d6"];
+    return Array.from({length:count},(_,i)=>({
+      id:i,
+      dx:Math.round((50+Math.random()*180)*(side==="left"?1:-1)),
+      dy:-Math.round(140+Math.random()*220),
+      rot:Math.round(Math.random()*680-340),
+      delay:(Math.random()*0.16).toFixed(2),
+      size:5+Math.round(Math.random()*5),
+      c:cs[i%cs.length],
+      tall:Math.random()>0.4,
+    }));
+  },[]);
+  return(
+    <div style={{position:"absolute",bottom:"14%",[side==="left"?"left":"right"]:"6%",pointerEvents:"none"}}>
       {pieces.map(p=>(
-        <div key={p.id} style={{
-          position:"absolute",left:"50%",top:"50%",
+        <div key={p.id} style={{position:"absolute",left:0,top:0,
           width:p.tall?p.size*0.6:p.size,height:p.tall?p.size*1.8:p.size,
-          background:p.color,borderRadius:p.tall?1:"50%",
-          animation:`confettiFly 1s cubic-bezier(.15,.6,.4,1) ${p.delay}s both`,
-          "--dx":p.dx+"px","--dy":p.dy+"px","--rot":p.rot+"deg"
-        }}/>
+          background:p.c,borderRadius:p.tall?1:"50%",boxShadow:`0 0 5px ${p.c}66`,
+          animation:`confettiSpray 1.25s cubic-bezier(.15,.6,.4,1) ${p.delay}s both`,
+          "--dx":p.dx+"px","--dy":p.dy+"px","--rot":p.rot+"deg"}}/>
       ))}
     </div>
   );
@@ -4637,9 +4727,9 @@ function BallFlash({inn,soundOn}){
     // Wicket: NOT a confetti moment (that's a celebration; a dismissal is the opposite for the
     // batting side) — instead a sharper, shorter, shake-punctuated flash. Sound is unchanged: still
     // the dedicated stump-rattle wicket sound, not the crowd cheer used for boundaries.
-    if(dw>0){ f={type:"wicket",label:"OUT!",emoji:"🏏",color:"#f87171",confetti:false,shake:true,dur:850}; if(soundOn){try{playWicketSound();}catch(e){}} }
-    else if(dr>=6){ f={type:"six",label:"SIX!",emoji:"🚀",color:"#34d399",confetti:true,shake:false,dur:1400}; if(soundOn){try{playCrowdCheer(true);}catch(e){}} }
-    else if(dr>=4){ f={type:"four",label:"FOUR!",emoji:"🎉",color:"#fbbf24",confetti:true,shake:false,dur:1300}; if(soundOn){try{playCrowdCheer(false);}catch(e){}} }
+    if(dw>0){ f={type:"wicket",label:"OUT!",color:"#f87171",dur:900}; if(soundOn){try{playWicketSound();}catch(e){}} }
+    else if(dr>=6){ f={type:"six",label:"SIX!",color:"#34d399",dur:1600}; if(soundOn){try{playCrowdCheer(true);}catch(e){}} }
+    else if(dr>=4){ f={type:"four",label:"FOUR!",color:"#fbbf24",dur:1450}; if(soundOn){try{playCrowdCheer(false);}catch(e){}} }
     if(f) setFlash({...f,id:Date.now()});
   },[inn&&inn.totalRuns,inn&&inn.wickets,inn&&inn.inningsNum,inn&&inn.matchId]);
   React.useEffect(()=>{
@@ -4648,15 +4738,36 @@ function BallFlash({inn,soundOn}){
     return ()=>clearTimeout(t);
   },[flash&&flash.id]);
   if(!flash||typeof document==="undefined") return null;
+  const dur=(flash.dur||1100)/1000;
+  // Gradient word colours per event — SIX in emerald→cyan, FOUR in gold, OUT in red.
+  const grad=flash.type==="six"?"linear-gradient(180deg,#d1fae5,#34d399 55%,#0d9488)"
+    :flash.type==="four"?"linear-gradient(180deg,#fff7d6,#fbbf24 55%,#d97706)"
+    :"linear-gradient(180deg,#fecaca,#f87171 55%,#dc2626)";
   return ReactDOM.createPortal(
-    <div key={flash.id} style={{position:"fixed",top:"16%",left:"50%",zIndex:250,pointerEvents:"none",
-      animation:`ballFlashPop ${(flash.dur||1100)/1000}s ease-out both`}}>
-      <div style={{position:"relative",background:`linear-gradient(135deg,${flash.color}f0,${flash.color}c0)`,
-        borderRadius:20,padding:"14px 30px",boxShadow:`0 14px 44px ${flash.color}77`,textAlign:"center",
-        animation:flash.shake?"ballFlashShake .4s ease-in-out .05s 2":"none"}}>
-        {flash.confetti&&<ConfettiBurst/>}
-        <div style={{fontSize:34,lineHeight:1}}>{flash.emoji}</div>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:800,color:"#111",letterSpacing:".06em",marginTop:2}}>{flash.label}</div>
+    <div key={flash.id} style={{position:"fixed",inset:0,zIndex:250,pointerEvents:"none",overflow:"hidden"}}>
+      {/* Soft coloured glow hugging the screen edges — sells the moment without covering content. */}
+      <div style={{position:"absolute",inset:0,animation:`edgeGlowPulse ${dur}s ease-out both`,
+        boxShadow:`inset 0 0 90px 16px ${flash.color}55`}}/>
+      {flash.type==="six"&&<>
+        <Firework x="24%" y="24%" delay={0}/>
+        <Firework x="76%" y="18%" delay={0.18}/>
+        <Firework x="50%" y="36%" delay={0.34} dist={95}/>
+      </>}
+      {flash.type==="four"&&<>
+        <CornerSpray side="left"/>
+        <CornerSpray side="right"/>
+        <Firework x="50%" y="22%" delay={0.05} dist={80} count={20}
+          colors={["#fde68a","#fbbf24","#f59e0b","#fff"]}/>
+      </>}
+      <div style={{position:"absolute",top:flash.type==="wicket"?"16%":"13%",left:"50%",
+        animation:`bigWordIn ${dur}s cubic-bezier(.2,1,.35,1) both`,textAlign:"center"}}>
+        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:flash.type==="wicket"?52:64,fontWeight:800,
+          fontStyle:"italic",letterSpacing:".04em",lineHeight:1,
+          background:grad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",
+          filter:`drop-shadow(0 4px 18px ${flash.color}aa) drop-shadow(0 1px 2px rgba(0,0,0,.7))`,
+          animation:flash.type==="wicket"?"ballFlashShake .4s ease-in-out .05s 2":"none"}}>
+          {flash.label}
+        </div>
       </div>
     </div>,
     document.body
@@ -4952,7 +5063,9 @@ function ViewerLive({onExit}){
   if(mo){
     const i2=inn;
     return (
-      <div className="result-screen"><div className="result-card">
+      <div className="result-screen">
+      <MatchFinale winner={mo.winner}/>
+      <div className="result-card">
         <div className="text-center" style={{marginBottom:16}}>
           <div style={{fontSize:54}}>🏆</div>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:36,fontWeight:700,background:"linear-gradient(135deg,#fff,#fbbf24)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{mo.winner?`${mo.winner} Win!`:"Match Tied!"}</h1>
@@ -8347,7 +8460,8 @@ function AdminHome({tier,onPick,onExit}){
 
   const now=new Date();
   const hour=now.getHours();
-  const greet=hour<12?"Good morning":"hour<17"?"Good afternoon":"Good evening";
+  // (Fixed: the old ternary compared against the STRING "hour<17", which is always truthy —
+  // and neither variable was ever rendered anyway.)
   const timeStr=hour<12?"Good morning ☀️":hour<17?"Good afternoon ⛅":"Good evening 🌙";
 
   return(
@@ -8367,12 +8481,16 @@ function AdminHome({tier,onPick,onExit}){
       }}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12}}>
           <div>
+            <p style={{fontSize:12,color:"rgba(255,255,255,.65)",fontFamily:"'Inter',sans-serif",marginBottom:4}}>
+              {timeStr} · {now.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}
+            </p>
             <p style={{fontSize:11,color:isSuper?"#fbbf24":"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginBottom:3,letterSpacing:".1em"}}>
               {isSuper?"⚡ FULL ACCESS":"🛠️ HELPER ACCESS"}
             </p>
-            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700,lineHeight:1,
-              color: isSuper?"#fde68a":"#fff"}}>
-              {isSuper?"👑 Super Admin":"🛠️ Basic Admin"}
+            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700,lineHeight:1}}>
+              <span>{isSuper?"👑 ":"🛠️ "}</span>
+              <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 60%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 60%,#818cf8)",
+                WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
             </h1>
           </div>
           <button onClick={onExit} style={{
