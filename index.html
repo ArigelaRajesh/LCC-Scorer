@@ -2065,13 +2065,37 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
     writeIntent.current="undo"; // this is a deliberate backward move — let it through the regression guard
     const prev=hist[hist.length-1];
     updateHist(h=>h.slice(0,-1));
-    setInn({...prev,pending:null});
+    // Restore the ball-by-ball state from before the undone delivery, but KEEP the current overs limit.
+    // The hist snapshot predates any mid-match "Edit Overs" admin correction, so blindly spreading the
+    // whole snapshot back in was silently discarding that edit every time Undo ran afterward — which is
+    // exactly the "Undo stops behaving right after editing overs" bug. The overs limit is an explicit
+    // admin correction, not part of any individual ball, so it must survive a ball-level undo.
+    setInn({...prev,pending:null,overs:inn.overs});
     // If the ball being undone is what just RE-TRIGGERED the innings/match-ending screen (very likely
     // right after a revert — you're undoing the exact ball that ends it again), also clear mo/ib so
     // the screen actually returns to live scoring instead of staying stuck showing "innings/match
     // over" with stale-looking data underneath. Without this, Undo would silently fix the numbers but
     // leave you stranded on a screen with no way back to the scoring buttons.
-    if(mo){ setMO(null); moClearedAt.current=Date.now(); }
+    if(mo){
+      setMO(null); moClearedAt.current=Date.now();
+      // The match-over effect saves to history/{matchId} the instant `mo` was first set (idempotent,
+      // so it may well have already happened before this Undo). If the ball being undone was the
+      // winning/final ball, that saved record is now WRONG — archive it the same non-destructive way
+      // Revert does (move to history_archive/, remove from the live history list) instead of leaving a
+      // stale "completed" entry sitting in Match History after the match no longer shows as finished.
+      setSaved(false);
+      if(FB_OK&&DB&&match?.matchId){
+        const hid="history/"+match.matchId;
+        DB.ref(hid).once("value").then(s=>{
+          const v=s.val();
+          if(v){
+            DB.ref("history_archive/"+match.matchId).set(v).catch(()=>{});
+            DB.ref(hid).remove().catch(()=>{});
+          }
+        }).catch(()=>{});
+        DB.ref("potm").remove().catch(()=>{});
+      }
+    }
     if(ib){ setIB(false); moClearedAt.current=Date.now(); if(prev.inningsNum===1) setInn1(null); }
     // pending state (pw/nnb/pr) is DERIVED from inn.pending, which we just cleared above — so the
     // "who bowls/bats next?" UI disappears automatically. Just clear the name input fields.
@@ -5086,11 +5110,18 @@ function Avatar({name,color,size}){
 // last event in the live data. Keyed by ball count so it animates in on every new delivery.
 function describeBall(ev,inn){
   if(!ev) return null;
-  const r=(ev.runs||0)+(ev.batRuns||0)+(ev.baseRuns||0)+(ev.overthrowRuns||0);
+  // MUST use evRuns() here, not a hand-rolled (ev.runs||0)+(ev.batRuns||0)+... sum — plain bat-off
+  // runs (tapping 0–6) are stored as just {type:"6"} with NO separate runs field, so that old formula
+  // always evaluated to 0 for ordinary balls and every four/six/single/dot was mislabeled "Dot ball"
+  // here regardless of what actually happened (the live header desyncing from the actual last ball).
+  // See the comment on evRuns() for the same bug class fixed at its other call sites.
+  const r=evRuns(ev);
   let head;
   if(ev.type==="W") head="WICKET!";
   else if(ev.type==="WD") head="Wide"+((ev.extraRuns||1)>1?" +"+((ev.extraRuns||1)-1):"");
   else if(ev.type==="NB") head="No ball!"+(r>0?" "+r+" run"+(r===1?"":"s"):"");
+  else if(ev.type==="B") head="Bye"+(r>0?" "+r+" run"+(r===1?"":"s"):"");
+  else if(ev.type==="LB") head="Leg bye"+(r>0?" "+r+" run"+(r===1?"":"s"):"");
   else if(r>=6) head="SIX!";
   else if(r>=4) head="FOUR!";
   else if(r===0) head="Dot ball";
@@ -5183,14 +5214,15 @@ function ViewerLive({onExit}){
   const[potm,setPotm]=React.useState(null);
   const[tab,setTab]=React.useState("live");
   // MATCH SOUNDS for viewers — when the live score changes, play a matching sound so watching feels
-  // alive: bat-crack for 1–3 runs, crowd cheer for a FOUR, big roar for a SIX or a WICKET. Off by
-  // default with a 🔊 toggle (browsers require a user tap before audio anyway — the toggle IS that
-  // tap). soundOnRef mirrors the state so the compare-effect reads the current value without
-  // re-subscribing anything.
+  // alive: bat-crack for 1–3 runs, crowd cheer for a FOUR, big roar for a SIX or a WICKET. Defaults ON
+  // (persisted per-device via localStorage) — browsers require a user tap before audio actually plays
+  // on first load, but the toggle lets people mute back off and that choice sticks across visits.
+  // soundOnRef mirrors the state so the compare-effect reads the current value without re-subscribing.
   // Bat-crack for ordinary 1–3 run singles/twos/threes — quiet audio-only feedback. Boundaries and
   // wickets are handled by the shared <BallFlash> component below instead (visual + sound together,
   // same component used on the scorer's own screen), so that logic isn't duplicated in two places.
-  const[soundOn,setSoundOn]=React.useState(false);
+  const[soundOn,setSoundOnRaw]=React.useState(()=>{try{return localStorage.getItem("lcc_viewer_sound")!=="0"}catch(e){return true}});
+  const setSoundOn=(v)=>{ setSoundOnRaw(prev=>{ const n=typeof v==="function"?v(prev):v; try{localStorage.setItem("lcc_viewer_sound",n?"1":"0");}catch(e){} return n; }); };
   const soundOnRef=React.useRef(false);
   React.useEffect(()=>{ soundOnRef.current=soundOn; },[soundOn]);
   const prevScoreRef=React.useRef(null);
