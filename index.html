@@ -1339,7 +1339,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
 }
 
 // ── App root ─────────────────────────────────────────────────────────────────
-function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
+function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,sessionSlot,mySessionId}){
   const isScorer=role==="scorer"||role==="admin";
   const[match,setMatch]=useState(null);
   const[tab,setTab]=useState("score");
@@ -1484,6 +1484,34 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
     };
   },[isScorer,match?.matchId,role]);
 
+  // ── Single-active-session lock: heartbeat + kick detection ─────────────────────────────────────
+  // The actual CLAIM — and any "someone else is already active, take over?" block — already happened
+  // at the PIN gate (ScorerGate for team scorers, Root's admin gate for admin) before this component
+  // ever mounted. From here on this device just needs to (a) keep renewing its claim so it never looks
+  // stale to anyone else's check, and (b) notice if another device hits "Take Over Anyway" and claims
+  // the slot out from under us mid-session, so we stop silently scoring into a session we no longer
+  // actually own — instead of the two-devices-editing-the-same-data problem just happening again one
+  // level up. mySlot mirrors exactly how the PIN gates computed it: "admin" is a single global slot
+  // (there's only ever one match live at a time), team slots are scoped to this specific match.
+  const mySessionIdSafe=mySessionId||writerId.current;
+  const mySlot=role==="admin"?"admin":(sessionSlot||null);
+  const sessionMatchId=role==="admin"?null:(match?.matchId||null);
+  const sessionReady=!!mySlot&&(role==="admin"||!!sessionMatchId);
+  const[kickedOut,setKickedOut]=React.useState(false);
+  const[retakingOver,setRetakingOver]=React.useState(false);
+  React.useEffect(()=>{
+    if(!isScorer||!FB_OK||!DB||!sessionReady)return;
+    const ref=DB.ref(sessionPath(sessionMatchId,mySlot));
+    const renew=()=>{ ref.set({sessionId:mySessionIdSafe,lastSeen:Date.now()}).catch(()=>{}); };
+    renew();
+    const hb=setInterval(renew,6000);
+    const cb=ref.on("value",s=>{
+      const v=s.val();
+      if(v&&v.sessionId&&v.sessionId!==mySessionIdSafe){ setKickedOut(true); }
+    });
+    return ()=>{ clearInterval(hb); ref.off("value",cb); };
+  },[isScorer,sessionReady,sessionMatchId,mySlot]);
+
   // Track whether a revert snapshot exists in Firebase, so the super-admin revert button
   // stays available even after a page refresh (when local preEnd state is lost).
   React.useEffect(()=>{
@@ -1502,6 +1530,12 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
   },[isScorer]);
   const resolvePid=React.useMemo(()=>buildPidResolver(roster),[roster]);
   const rosterNames=React.useMemo(()=>Object.values(roster||{}).map(p=>p&&p.name).filter(Boolean).sort((a,b)=>a.localeCompare(b)),[roster]);
+
+  // Kept fresh on every render (no deps — cheap) so the live-listener callback below, which is set up
+  // ONCE on mount and would otherwise only ever see the match/inn/inn1/ib/mo values from that first
+  // render, can read our actual CURRENT state when it needs to self-heal (see regression guard below).
+  const latestStateRef=React.useRef(null);
+  React.useEffect(()=>{ latestStateRef.current={match,inn,inn1,ib,mo}; });
 
   // Pull in any match that's already live (so a scorer/admin joining mid-match sees it)
   // and keep listening so both team scorers + admin always see the SAME shared match.
@@ -1538,12 +1572,22 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
       const incomingSig={ matchId:v.match.matchId||null, inningsNum:v.inn.inningsNum||1,
         balls:v.inn.totalBalls||0, runs:v.inn.totalRuns||0, wkts:v.inn.wickets||0 };
       const prev=appliedSig.current;
-      const sameInnings = prev && prev.matchId===incomingSig.matchId && prev.inningsNum===incomingSig.inningsNum;
-      const goesBackward = sameInnings && (
+      const sameMatch = prev && prev.matchId===incomingSig.matchId;
+      const sameInnings = sameMatch && prev.inningsNum===incomingSig.inningsNum;
+      // A backward move can happen two ways: (a) WITHIN the same innings, balls/runs/wkts drop — the
+      // original check below — or (b) the innings number itself drops (e.g. 2 → 1). Case (b) is exactly
+      // what let a whole 2nd innings vanish: two people confirmed the innings-2 handoff close together,
+      // and a device that hadn't yet moved past the completed-1st-innings/innings-break screen pushed
+      // its own (now-superseded) write. Because its inningsNum(1) didn't MATCH what we'd already applied
+      // (2), `sameInnings` was false and the guard skipped the check entirely — a stale innings-1 write
+      // sailed straight through and clobbered live innings-2 data. Any drop in inningsNum for the same
+      // match is exactly as much a regression as a ball-count drop and must be caught the same way.
+      const inningsRegressed = sameMatch && incomingSig.inningsNum < prev.inningsNum;
+      const goesBackward = inningsRegressed || (sameInnings && (
         incomingSig.balls<prev.balls ||
         (incomingSig.balls===prev.balls && incomingSig.runs<prev.runs) ||
         (incomingSig.balls===prev.balls && incomingSig.runs===prev.runs && incomingSig.wkts<prev.wkts)
-      );
+      ));
       const intentialBack = v.intent==="undo"||v.intent==="revert";
       // Admin priority applies ONLY to deliberate corrections (undo/revert), NOT to routine forward
       // scoring. Previously ANY admin write bypassed the guard, which caused a real multi-device bug:
@@ -1553,9 +1597,29 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
       // is explicitly an undo/revert — an accidental backward admin write is rejected like anyone's.
       const adminCorrection = v.role==="admin" && intentialBack;
       if(goesBackward && !intentialBack && !adminCorrection){
-        // A stale device tried to overwrite a more advanced score — ignore it, and re-assert our
-        // current (more advanced) state so that stale device gets corrected on its next read.
-        // Do NOT update appliedSig/lastAppliedT — we are keeping what we already have.
+        // A stale device tried to overwrite a more advanced score — ignore it locally, AND self-heal:
+        // re-push OUR more-advanced state back to `live` right away. Just returning here (as this used
+        // to) left the bad write sitting in Firebase — correct only in the memory of whichever device
+        // ignored it — until that device happened to score again. Any OTHER device or viewer reading
+        // `live` in the meantime (or the periodic backup snapshot, which reads local state blindly)
+        // would pick up the corrupted data, which is exactly why the backup restore didn't help either.
+        const ls=latestStateRef.current;
+        if(ls && ls.match && ls.inn && FB_OK && DB){
+          const healT=Math.max(Date.now(), lastWriteT.current+1, lastAppliedT.current+1);
+          lastWriteT.current=healT; lastAppliedT.current=healT;
+          appliedSig.current={ matchId:ls.match.matchId||null, inningsNum:ls.inn.inningsNum||1,
+            balls:ls.inn.totalBalls||0, runs:ls.inn.totalRuns||0, wkts:ls.inn.wickets||0 };
+          const healPayload=JSON.parse(JSON.stringify({
+            match:ls.match, inn:ls.inn, inn1:ls.inn1, ib:ls.ib, mo:ls.mo,
+            pinA:ls.match?.pinA||null, pinB:ls.match?.pinB||null,
+            teamA:ls.match?.teamA||null, teamB:ls.match?.teamB||null,
+            battingTeam:ls.inn?.battingTeam||null,
+            writer:writerId.current, role:role==="admin"?"admin":"scorer", intent:"normal", t:healT
+          }));
+          lastPayloadRef.current=healPayload;
+          try{localStorage.setItem("lcc_pending_write",JSON.stringify(healPayload));}catch(e){}
+          DB.ref("live").set(healPayload).catch(()=>{});
+        }
         return;
       }
       // ──────────────────────────────────────────────────────────────────────────────────────
@@ -1712,14 +1776,51 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
   // Event-driven backup — fire an IMMEDIATE snapshot right after the important, hard-to-recreate
   // moments (a wicket falling, an over completing). These are exactly the states you'd hate to lose,
   // so we capture them fresh instead of waiting for the next periodic tick.
+  //
+  // These moments ALSO write a durable CHECKPOINT — and checkpoints are what make restore actually
+  // trustworthy after a corruption event. latest/prev roll every ~8s, so if `live` gets poisoned
+  // (e.g. the two-devices regression that wiped a 2nd innings), the bad state overwrites BOTH rolling
+  // slots within ~16 seconds and there is nothing clean left to restore — exactly what happened in
+  // the real incident. Checkpoints fix this two ways: (1) each is keyed to a specific progress point
+  // (innings + balls bowled), and (2) each is WRITE-ONCE via a transaction — the first device to
+  // capture that progress point owns it forever; nothing that happens later, however corrupted, can
+  // overwrite it. A rolling window of the last 12 is kept so the node stays bounded (a T20 innings
+  // has 20 overs, so 12 checkpoints ≈ the last ~10 overs of play plus wickets — plenty of runway).
   const lastBackupKeyRef=React.useRef("");
+  const CHECKPOINT_KEEP=12;
+  const writeCheckpoint=()=>{
+    if(!isScorer||!FB_OK||!DB) return;
+    const {match,inn,inn1,ib,mo}=backupStateRef.current;
+    const mid=match?.matchId;
+    if(!mid||!inn||mo) return;
+    const key="c_"+(inn.inningsNum||1)+"_"+(inn.totalBalls||0)+"_"+(inn.wickets||0);
+    const snap=JSON.parse(JSON.stringify({
+      match,inn,inn1:inn1||null,ib:!!ib,mo:mo||null,
+      backedUpAt:Date.now(), by:writerId.current
+    }));
+    const cpRef=DB.ref("backup/"+mid+"/checkpoints/"+key);
+    cpRef.transaction(cur=>{
+      if(cur) return cur; // write-once: this progress point was already captured — never overwrite it
+      return snap;
+    }).then(()=>{
+      // Prune beyond the rolling window — delete oldest by backedUpAt.
+      DB.ref("backup/"+mid+"/checkpoints").once("value").then(s=>{
+        const all=s.val()||{};
+        const keys=Object.keys(all).sort((a,b)=>(all[a].backedUpAt||0)-(all[b].backedUpAt||0));
+        while(keys.length>CHECKPOINT_KEEP){
+          const oldest=keys.shift();
+          DB.ref("backup/"+mid+"/checkpoints/"+oldest).remove().catch(()=>{});
+        }
+      }).catch(()=>{});
+    }).catch(()=>{});
+  };
   React.useEffect(()=>{
     if(!isScorer||!FB_OK||!DB||!loaded||!inn||mo) return;
     const key=(inn.inningsNum||1)+":"+(inn.wickets||0)+":"+Math.floor((inn.totalBalls||0)/6);
     if(key!==lastBackupKeyRef.current){
       lastBackupKeyRef.current=key;
       // small delay so state has fully settled after the ball that caused the wicket/over-change
-      const id=setTimeout(()=>{ backupWriterRef.current&&backupWriterRef.current(); },400);
+      const id=setTimeout(()=>{ backupWriterRef.current&&backupWriterRef.current(); writeCheckpoint(); },400);
       return ()=>clearTimeout(id);
     }
   },[inn,mo,isScorer,loaded]);
@@ -1966,52 +2067,67 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
     }
   };
 
-  // Restore the live match from the most recent automatic backup. This is the disaster recovery path:
-  // if the live match was wiped or corrupted, this pulls back the latest periodic snapshot (or the one
-  // before it) and re-publishes it to `live` as the authoritative state.
+  // Restore the live match from an automatic backup. This is the disaster recovery path: if the live
+  // match was wiped or corrupted, this collects every restorable snapshot — the rolling latest/prev
+  // pair PLUS the durable write-once checkpoints (see writeCheckpoint above) — and presents them as a
+  // picker, newest first, so the admin can choose exactly which point to go back to. The picker is
+  // what makes checkpoints useful: when the newest snapshots are poisoned (the exact failure mode of
+  // the 2nd-innings incident), the admin can see that from the labels and pick an older clean one.
+  const[restoreChoices,setRestoreChoices]=React.useState(null); // null=closed, []=none found, [..]=picker open
+  const applyRestore=(snap)=>{
+    if(!snap||!snap.inn||!snap.match) return;
+    // Restore by setting React state and tagging the change as an admin "revert" intent. The normal
+    // sync effect then writes it to `live` (with all the right fields: pins, teams, battingTeam, the
+    // monotonic timestamp, and appliedSig kept in sync). We must NOT also write to `live` directly
+    // here — doing both caused two racing writes and left the scoring engine unable to add a bowler
+    // or score, because the device's own progress tracker (appliedSig) got out of step with Firebase.
+    writeIntent.current="revert";
+    clearHist(); // stale relative to the backup snapshot — Undo starts fresh from here
+    setMatch(snap.match);
+    setInn(snap.inn);
+    setInn1(snap.inn1||null);
+    setIB(!!snap.ib);
+    setMO(snap.mo||null);
+    setSaved(false);
+    setRestoreChoices(null);
+  };
   const restoreFromBackup=()=>{
     if(!FB_OK||!DB){ alert("Backup needs a live connection."); return; }
     const mid=match?.matchId;
-    const tryRestore=(snap,label)=>{
-      if(!snap||!snap.inn||!snap.match){ return false; }
-      const when=snap.backedUpAt?new Date(snap.backedUpAt).toLocaleTimeString():"unknown time";
-      if(!confirm(`Restore the match from the ${label} backup (saved ${when})?\n\nThis replaces the current live match with that snapshot.`)) return true;
-      // Restore by setting React state and tagging the change as an admin "revert" intent. The normal
-      // sync effect then writes it to `live` (with all the right fields: pins, teams, battingTeam, the
-      // monotonic timestamp, and appliedSig kept in sync). We must NOT also write to `live` directly
-      // here — doing both caused two racing writes and left the scoring engine unable to add a bowler
-      // or score, because the device's own progress tracker (appliedSig) got out of step with Firebase.
-      writeIntent.current="revert";
-      clearHist(); // stale relative to the backup snapshot — Undo starts fresh from here
-      setMatch(snap.match);
-      setInn(snap.inn);
-      setInn1(snap.inn1||null);
-      setIB(!!snap.ib);
-      setMO(snap.mo||null);
-      setSaved(false);
-      return true;
+    const describeSnap=(snap,kind)=>{
+      if(!snap||!snap.inn||!snap.match) return null;
+      return { snap, kind,
+        when:snap.backedUpAt||0,
+        label:`Inn ${snap.inn.inningsNum||1} · ${snap.inn.totalRuns||0}/${snap.inn.wickets||0} (${ovStr(snap.inn.totalBalls||0)} ov)`,
+      };
     };
-    const finishNoBackup=()=>alert("No backup found to restore. Backups are taken automatically ~20s into a live match.");
-    // Prefer the backup for the current matchId; if there's no current match, ask for the most recent any.
-    const base = mid ? "backup/"+mid : null;
-    if(base){
-      DB.ref(base).once("value").then(s=>{
-        const b=s.val();
-        if(b && tryRestore(b.latest,"latest")) return;
-        if(b && tryRestore(b.prev,"previous")) return;
-        finishNoBackup();
+    const buildChoices=(b)=>{
+      const out=[];
+      if(b){
+        const l=describeSnap(b.latest,"latest"); if(l) out.push(l);
+        const p=describeSnap(b.prev,"previous"); if(p) out.push(p);
+        Object.values(b.checkpoints||{}).forEach(cp=>{
+          const c=describeSnap(cp,"checkpoint"); if(c) out.push(c);
+        });
+      }
+      // Newest first. Checkpoints from the same moment as latest naturally dedupe visually by label.
+      out.sort((a,b2)=>(b2.when||0)-(a.when||0));
+      return out;
+    };
+    if(mid){
+      DB.ref("backup/"+mid).once("value").then(s=>{
+        setRestoreChoices(buildChoices(s.val()));
       }).catch(e=>alert("Could not read backup: "+(e.message||"")));
     } else {
       // No live matchId — find the most recently backed-up match across all backups.
       DB.ref("backup").once("value").then(s=>{
         const all=s.val()||{};
-        let best=null;
+        let best=null, bestT=0;
         Object.values(all).forEach(entry=>{
-          const cand=entry&&entry.latest;
-          if(cand&&cand.backedUpAt&&(!best||cand.backedUpAt>best.backedUpAt)) best=cand;
+          const t=(entry&&entry.latest&&entry.latest.backedUpAt)||0;
+          if(t>bestT){ bestT=t; best=entry; }
         });
-        if(best && tryRestore(best,"most recent")) return;
-        finishNoBackup();
+        setRestoreChoices(buildChoices(best));
       }).catch(e=>alert("Could not read backups: "+(e.message||"")));
     }
   };
@@ -2374,6 +2490,18 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
     setIB(false);
   };
 
+  if(kickedOut){
+    const label=mySlot==="admin"?"Admin":mySlot==="teamA"?(match?.teamA||"Your team"):(match?.teamB||"Your team");
+    return <Centered emoji="🔓" title="Session taken over"
+      sub={`${label}'s session was taken over from another device. If that wasn't you, check with whoever else has this PIN before taking it back.`}
+      onExit={onExit}>
+      <button className="btn btn-primary w-full" disabled={retakingOver} onClick={()=>{
+        setRetakingOver(true);
+        claimSession(sessionMatchId,mySlot,mySessionIdSafe,true).then(()=>{ setRetakingOver(false); setKickedOut(false); });
+      }}>{retakingOver?"Taking back over…":"⚡ Take Back Over"}</button>
+    </Centered>;
+  }
+
   if(!match){
     if(role!=="admin"){
       return <Centered emoji="🏏" title="No active match yet" sub="Ask the admin to start a match first. This screen will update automatically once they do." onExit={onExit}/>;
@@ -2562,6 +2690,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture}){
           onFixPlayers={fixPlayers}
           onEndInnings={manualEndInnings} onRevert={revert} canRevert={!!preEnd||preEndInDB} role={role}
           onEditOvers={editOvers} onRestore={restoreFromBackup}
+          restoreChoices={restoreChoices} onPickRestore={applyRestore} onCloseRestore={()=>setRestoreChoices(null)}
           onUndo={undo} canUndo={hist.length>0}
           setIsFreeHit={(v)=>setInn(p=>p?({...p,isFreeHit:v}):p)} toast={toast}/>}
         {tab==="batting"&&<><PartnershipChart inn={inn}/><BattingTab inn={inn}/></>}
@@ -2778,7 +2907,7 @@ function QuickAddPlayer({onAdded,onCancel}){
   );
 }
 
-function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onSwapStrike,onFixPlayers,onEndInnings,onRevert,canRevert,role,onEditOvers,onRestore,onUndo,canUndo,setIsFreeHit,toast}){
+function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsman,nnb,nbwn,setNBWN,confBowler,pr,onRetire,onSwapStrike,onFixPlayers,onEndInnings,onRevert,canRevert,role,onEditOvers,onRestore,restoreChoices,onPickRestore,onCloseRestore,onUndo,canUndo,setIsFreeHit,toast}){
   const[wt,setWT]=useState("Bowled");
   const[fielder,setFielder]=useState("");
   const[roRuns,setRoRuns]=useState(0);      // runs completed before the run-out happened
@@ -3238,9 +3367,41 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
       {role==="admin"&&onRestore&&(
         <button className="btn w-full" onClick={onRestore}
           style={{marginTop:8,borderRadius:14,fontSize:11,padding:"10px",background:"transparent",border:"1px solid rgba(99,102,241,.3)",color:"#6b7280"}}
-          title="Disaster recovery: restore the match from the latest automatic backup">🛟 Restore from backup</button>
+          title="Disaster recovery: restore the match from an automatic backup or checkpoint">🛟 Restore from backup</button>
       )}
       </>)}
+
+      {/* Restore picker — every restorable snapshot, newest first. Checkpoints (write-once, captured
+          at each wicket/over) are the trustworthy ones after a corruption event; latest/previous roll
+          every ~8s so they may already carry the bad state. Labels show score + time so a poisoned
+          snapshot is visually obvious (its score won't match what actually happened at that time). */}
+      {restoreChoices&&<Modal onClose={onCloseRestore} title="🛟 Restore from backup">
+        {restoreChoices.length===0
+          ?<p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12,lineHeight:1.6}}>No backups found yet. Backups are taken automatically a few seconds into a live match, plus a durable checkpoint at every wicket and completed over.</p>
+          :<>
+            <p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:12,lineHeight:1.5}}>Pick the point to go back to. If the newest ones look wrong, choose an older checkpoint — checkpoints can never be overwritten after they're captured.</p>
+            <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:"50vh",overflowY:"auto"}}>
+              {restoreChoices.map((c,i)=>{
+                const t=c.when?new Date(c.when).toLocaleTimeString():"unknown time";
+                const kindColor=c.kind==="checkpoint"?"#34d399":c.kind==="latest"?"#fbbf24":"#818cf8";
+                const kindLbl=c.kind==="checkpoint"?"🔒 checkpoint":c.kind==="latest"?"latest":"previous";
+                return(
+                  <button key={i} onClick={()=>{
+                      if(confirm(`Restore to: ${c.label}\nSaved ${t}\n\nThis replaces the current live match with that snapshot.`)) onPickRestore(c.snap);
+                    }}
+                    style={{textAlign:"left",padding:"12px 14px",borderRadius:12,cursor:"pointer",
+                      background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.25)"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                      <span style={{color:"#e5e7eb",fontFamily:"'JetBrains Mono',monospace",fontSize:13,fontWeight:600}}>{c.label}</span>
+                      <span style={{color:kindColor,fontFamily:"'JetBrains Mono',monospace",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",whiteSpace:"nowrap"}}>{kindLbl}</span>
+                    </div>
+                    <div style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:10,marginTop:3}}>saved {t}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </>}
+      </Modal>}
 
       {/* Wicket modal */}
       {showW&&<Modal onClose={()=>{setSW(false);setFielder("");setRoRuns(0);setRoEnd(null);setRoOut(null);}} title="🏏 How Out?">
@@ -5301,18 +5462,20 @@ function ViewerLive({onExit}){
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh"}}>
       <div className="score-header">
         <BallFlash inn={inn} soundOn={soundOn}/>
-        <div className="flex items-center justify-between" style={{marginBottom:6}}>
-          <span style={{fontSize:10,background:"rgba(16,185,129,.18)",color:"#34d399",border:"1px solid rgba(16,185,129,.4)",borderRadius:6,padding:"3px 9px",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>● LIVE</span>
+        <div className="flex items-center justify-between" style={{marginBottom:8}}>
+          <div className="flex items-center" style={{gap:8}}>
+            <span style={{fontSize:10,background:"rgba(16,185,129,.18)",color:"#34d399",border:"1px solid rgba(16,185,129,.4)",borderRadius:6,padding:"3px 9px",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>● LIVE</span>
+            <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".2em"}}>{inn.inningsNum===1?"1st":"2nd"} Innings</span>
+          </div>
           <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
         </div>
-        <div className="flex items-center justify-between" style={{marginBottom:6}}>
-          <div className="flex items-center" style={{gap:8}}>
-            <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".2em"}}>{inn.inningsNum===1?"1st":"2nd"} Inn</span>
-            <span style={{fontWeight:700,fontSize:14}}>{inn.battingTeam}</span>
-          </div>
-          <span style={{color:"#4b5563",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
+        {/* One clean matchup line — batting team leads (bold), bowling side in the same line rather
+            than floating detached on the far right, so the header reads as a single statement. */}
+        <div style={{marginBottom:2}}>
+          <span style={{fontWeight:700,fontSize:16}}>{inn.battingTeam}</span>
+          <span style={{color:"#6b7280",fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}> vs {inn.bowlingTeam}</span>
         </div>
-        {match?.tossSummary&&<div style={{marginBottom:6}}><span style={{fontSize:10,color:"#34d399",fontFamily:"'JetBrains Mono',monospace"}}>🪙 {match.tossSummary}</span></div>}
+        {match?.tossSummary&&<div style={{marginBottom:6}}><span style={{fontSize:10,color:"rgba(52,211,153,.75)",fontFamily:"'JetBrains Mono',monospace"}}>🪙 {match.tossSummary}</span></div>}
         <MilestoneCelebration inn={inn} resetKey={(match?.matchId||"m")+":"+(inn.inningsNum||1)} playSound={soundOn}/>
         <div className="flex items-center" style={{gap:10}}>
           <span key={inn.totalRuns+"-"+inn.wickets} className="score-number score-pulse">{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
@@ -5333,27 +5496,10 @@ function ViewerLive({onExit}){
             </div>
           );
         })()}
-        {/* BALL TICKER — a scrolling strip of the most recent deliveries (current over plus a bit of
-            the previous one), so viewers watching remotely get the same at-a-glance rhythm of play a
-            scorer sees, not just a single latest-ball line. Oldest on the left, most recent on the
-            right (auto-scrolled into view), same chip styling used in the scorer's own over history. */}
-        {(()=>{
-          const co=inn.completedOvers||[];
-          const prevOver=co.length>0?co[co.length-1]:[];
-          const curOver=inn.overEvents||[];
-          // Only pull in the tail of the previous over if the current one hasn't built up much yet,
-          // so the strip always shows a decent number of recent balls without getting cluttered.
-          const need=Math.max(0,10-curOver.length);
-          const combined=[...prevOver.slice(Math.max(0,prevOver.length-need)),...curOver];
-          if(combined.length===0) return null;
-          return(
-            <div style={{display:"flex",gap:5,overflowX:"auto",marginTop:8,paddingBottom:2}}>
-              {combined.map((ev,i)=>(
-                <div key={i} className={chipClass(ev)} style={{flexShrink:0,transform:"scale(.88)"}}>{chipLbl(ev)}</div>
-              ))}
-            </div>
-          );
-        })()}
+        {/* The mini ball-strip that used to sit here was removed on purpose: it showed the exact same
+            chips as the "This Over" card just below the fold, and the double display was the main
+            thing making the header feel cluttered. The single-line ticker above covers the latest
+            ball; the This Over card covers the over's rhythm. One home for each piece of info. */}
         {/* CHASE BANNER — the match equation front and centre during the 2nd innings, updating every
             ball. Cyan glow normally; warms to amber/red as the required rate climbs. */}
         {inn.target!=null&&bLeft>0&&req>0&&(
@@ -5363,13 +5509,19 @@ function ViewerLive({onExit}){
             <span style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,letterSpacing:.5}}>
               🎯 Need <span style={{color:"var(--primary)"}}>{Math.max(req,0)}</span> off <span style={{color:"var(--primary)"}}>{bLeft}</span> balls
             </span>
-            {rrr&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginTop:3,color:parseFloat(rrr)>12?"#f87171":parseFloat(rrr)>9?"#fbbf24":"var(--text-dim)"}}>required rate {rrr} · current {crr}</div>}
+            {rrr&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginTop:3,color:parseFloat(rrr)>12?"#f87171":parseFloat(rrr)>9?"#fbbf24":"var(--text-dim)"}}>req rate {rrr} · current {crr} · target {inn.target}</div>}
           </div>
         )}
-        <div className="flex" style={{gap:16,marginTop:8,flexWrap:"wrap"}}>
-          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280"}}>CRR <span style={{color:"#fbbf24",fontWeight:600}}>{crr}</span></span>
-          {inn.target&&<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#818cf8"}}>Target <span style={{color:"#fff",fontWeight:600}}>{inn.target}</span></span>}
-        </div>
+        {/* CRR / Target row — only when the chase banner is NOT showing (1st innings, or chase
+            resolved). During a live chase the banner directly above already displays required rate,
+            current rate, AND the equation — repeating "CRR x.xx · Target N" right under it was pure
+            duplication and made the header read as cluttered. One home for each piece of info. */}
+        {!(inn.target!=null&&bLeft>0&&req>0)&&(
+          <div className="flex" style={{gap:16,marginTop:8,flexWrap:"wrap"}}>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280"}}>CRR <span style={{color:"#fbbf24",fontWeight:600}}>{crr}</span></span>
+            {inn.target&&<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#818cf8"}}>Target <span style={{color:"#fff",fontWeight:600}}>{inn.target}</span></span>}
+          </div>
+        )}
       </div>
       <div className="content" style={{paddingTop:16}}>
         {/* Tabs as a clean 3-column segmented control; the sound control sits on its own as a
@@ -5431,13 +5583,23 @@ function ViewerLive({onExit}){
             </div>}
           </div>
         </div>
-        {/* This over */}
-        <p className="section-title">This Over</p>
-        <div style={{background:"#130f3a",border:"1px solid #1e1b4b",borderRadius:16,padding:"12px 14px",display:"flex",flexWrap:"wrap",gap:8,minHeight:60}}>
-          {(!inn.overEvents||inn.overEvents.length===0)
-            ?<span style={{color:"#2d2a6a",fontFamily:"'JetBrains Mono',monospace",fontSize:12,alignSelf:"center"}}>— new over —</span>
-            :inn.overEvents.map((ev,i)=><div key={i} className={chipClass(ev)}>{chipLbl(ev)}</div>)}
-        </div>
+        {/* This over — now the ONE home for ball chips (the header's duplicate mini-strip was
+            removed). Between overs, rather than an empty "— new over —" box, show the over that
+            just finished, dimmed and labelled, so the recent rhythm of play is never off-screen. */}
+        {(()=>{
+          const cur=inn.overEvents||[];
+          const co=inn.completedOvers||[];
+          const showingPrev=cur.length===0&&co.length>0;
+          const evs=showingPrev?co[co.length-1]:cur;
+          return(<>
+            <p className="section-title">{showingPrev?"Last Over":"This Over"}</p>
+            <div style={{background:"#130f3a",border:"1px solid #1e1b4b",borderRadius:16,padding:"12px 14px",display:"flex",flexWrap:"wrap",gap:8,minHeight:60,opacity:showingPrev?0.75:1}}>
+              {evs.length===0
+                ?<span style={{color:"#2d2a6a",fontFamily:"'JetBrains Mono',monospace",fontSize:12,alignSelf:"center"}}>— new over —</span>
+                :evs.map((ev,i)=><div key={i} className={chipClass(ev)}>{chipLbl(ev)}</div>)}
+            </div>
+          </>);
+        })()}
         </>)}
         <p style={{textAlign:"center",color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginTop:16}}>🔄 Updates automatically · {inn.venue}</p>
       </div>
@@ -6978,8 +7140,41 @@ function Landing({onPick}){
   );
 }
 
-function ScorerGate({onOk,onCancel}){
+// ── Single-active-session lock ────────────────────────────────────────────────────────────────────
+// Prevents two devices logging in under the SAME identity (the admin PIN, or one team's scorer PIN)
+// from being active at once — the exact scenario that let a whole 2nd innings get silently
+// overwritten (see the live-listener regression guard's "self-heal" comment above). Sessions are
+// scoped per matchId+slot, where slot is "admin", "teamA", or "teamB" — so the two TEAMS' scorers can
+// still legitimately be active at the same time (e.g. both entering their own openers during an
+// innings break); only a SECOND device using the SAME identity gets blocked.
+// A Firebase transaction makes the claim atomic — if two devices submit a claim in the same instant,
+// exactly one wins, deterministically, rather than a last-write-wins race.
+// A session is "stale" (safe to silently reclaim without anyone hitting Take Over) once its heartbeat
+// hasn't renewed in SESSION_TIMEOUT_MS — this is what stops a crashed tab or dead phone from
+// permanently locking everyone else out with no way back in.
+const SESSION_TIMEOUT_MS=20000;
+function sessionPath(matchId,slot){ return matchId?`sessions/${matchId}/${slot}`:`sessions/_admin/${slot}`; }
+function claimSession(matchId,slot,sessionId,force){
+  return new Promise(resolve=>{
+    if(!FB_OK||!DB||!slot){ resolve({ok:true}); return; } // fail OPEN — this feature must never itself block scoring
+    const ref=DB.ref(sessionPath(matchId,slot));
+    const now=Date.now();
+    ref.transaction(cur=>{
+      const activeElsewhere = cur&&cur.sessionId&&cur.sessionId!==sessionId&&(now-(cur.lastSeen||0))<SESSION_TIMEOUT_MS;
+      if(activeElsewhere&&!force) return; // abort the transaction — leave the existing claim untouched
+      return {sessionId,lastSeen:now};
+    },(err,committed,snap)=>{
+      if(err){ resolve({ok:true}); return; } // fail open on any Firebase error too
+      if(committed){ resolve({ok:true}); }
+      else { resolve({ok:false,heldSince:(snap&&snap.val()&&snap.val().lastSeen)||null}); }
+    });
+  });
+}
+
+function ScorerGate({onOk,onCancel,mySessionId}){
   const[data,setData]=React.useState(undefined);
+  const[conflict,setConflict]=React.useState(null); // {slot, r, heldSince} while blocked by another active device
+  const[claiming,setClaiming]=React.useState(false);
   const autoTriedRef=React.useRef(null);
   React.useEffect(()=>{
     if(!FB_OK||!DB){setData(null);return;}
@@ -7005,14 +7200,40 @@ function ScorerGate({onOk,onCancel}){
   if(data.mo) return <Centered emoji="🏆" title="Match has ended" sub="Ask the admin to start a new match." onExit={onCancel}/>;
 
   const verify=(entered)=>{
-    if(entered===ADMIN_PIN||entered===BASIC_ADMIN_PIN) return {ok:true};
+    if(entered===ADMIN_PIN||entered===BASIC_ADMIN_PIN) return {ok:true,slot:"admin"};
     const isTeamA=entered===data.pinA, isTeamB=entered===data.pinB;
     if(!isTeamA&&!isTeamB) return {ok:false,msg:"❌ Wrong PIN, try again"};
     const myTeam=isTeamA?data.teamA:data.teamB;
-    if(data.awaitingOpeners||data.ib) return {ok:true};
-    if(myTeam===data.battingTeam) return {ok:true};
+    const slot=isTeamA?"teamA":"teamB";
+    if(data.awaitingOpeners||data.ib) return {ok:true,slot,team:myTeam};
+    if(myTeam===data.battingTeam) return {ok:true,slot,team:myTeam};
     return {ok:false,msg:`🔒 ${myTeam} isn't batting yet — ${data.battingTeam} is batting now.`};
   };
+
+  // Between a successful PIN and actually letting the person in: claim the session slot. If another
+  // device already holds it (active within the last 20s), stop here and show the conflict screen
+  // instead of silently letting two devices score under the same identity at once — that's exactly
+  // what caused the 2nd-innings data loss.
+  const attemptClaim=(r,force)=>{
+    setClaiming(true);
+    claimSession(data.matchId,r.slot,mySessionId,force).then(res=>{
+      setClaiming(false);
+      if(res.ok){ onOk({...r,sessionSlot:r.slot}); }
+      else { setConflict({slot:r.slot,r,heldSince:res.heldSince}); }
+    });
+  };
+
+  if(conflict){
+    const label=conflict.slot==="admin"?"Admin":conflict.slot==="teamA"?data.teamA:data.teamB;
+    const secsAgo=conflict.heldSince?Math.max(0,Math.round((Date.now()-conflict.heldSince)/1000)):null;
+    return <Centered emoji="🔐" title="Already active elsewhere"
+      sub={`${label} is already signed in and active on another device${secsAgo!=null?` (last seen ${secsAgo}s ago)`:""}. Taking over will sign that device out.`}
+      onExit={onCancel}>
+      <button className="btn btn-primary w-full" style={{marginBottom:10}} disabled={claiming}
+        onClick={()=>attemptClaim(conflict.r,true)}>{claiming?"Taking over…":"⚡ Take Over Anyway"}</button>
+    </Centered>;
+  }
+  if(claiming) return <Centered emoji="🔑" title="Checking device…" sub="Making sure no one else is already active"/>;
 
   // "Remember this device" — if a PIN was saved for THIS exact match earlier, try it silently before
   // showing the gate at all. Always re-verifies against current match state (never blindly trusts
@@ -7024,11 +7245,11 @@ function ScorerGate({onOk,onCancel}){
     let saved=null; try{saved=localStorage.getItem(rememberKey);}catch(e){}
     if(saved){
       const r=verify(saved);
-      if(r.ok){ setTimeout(()=>onOk(r),0); return <Centered emoji="🔑" title="Welcome back…" sub="Remembered this device"/>; }
+      if(r.ok){ setTimeout(()=>attemptClaim(r,false),0); return <Centered emoji="🔑" title="Welcome back…" sub="Remembered this device"/>; }
     }
   }
 
-  return <PinGate title="Team Scorer Access" verify={verify} onOk={onOk} onCancel={onCancel} rememberKey={rememberKey}
+  return <PinGate title="Team Scorer Access" verify={verify} onOk={(r)=>attemptClaim(r,false)} onCancel={onCancel} rememberKey={rememberKey}
     hint={data.awaitingOpeners?"Setting up openers":data.ib?"Innings break — new team sets up":`${data.battingTeam} batting`}/>;
 }
 
@@ -8830,6 +9051,14 @@ function Root(){
   const[gate,setGate]=React.useState(null);
   const[adminTier,setAdminTier]=React.useState(null);
   const[dynPins,setDynPins]=React.useState(null);
+  // Stable per-tab identity for the single-active-session lock (see claimSession above) — generated
+  // once and reused for every claim/heartbeat this tab makes, whether as admin or as a team scorer.
+  const mySessionId=React.useRef(Math.random().toString(36).slice(2,10)+Date.now().toString(36)).current;
+  // Carries which slot ("teamA"/"teamB") the scorer's PIN resolved to, from ScorerGate into the <App>
+  // that mounts right after — App needs this to keep the claim alive with a heartbeat.
+  const scorerSlotRef=React.useRef(null);
+  const[adminConflict,setAdminConflict]=React.useState(null); // {heldSince} while another admin device is active
+  const[adminClaiming,setAdminClaiming]=React.useState(false);
 
   // ── Browser back button handling ──────────────────────────────────────────
   // Maintain an in-app navigation stack. Every setScreen() pushes a browser
@@ -8884,7 +9113,7 @@ function Root(){
     else nav(r);
   };
 
-  if(gate==="scorer") return <ScorerGate onOk={()=>{setGate(null);setScreen("scorer");}} onCancel={home}/>;
+  if(gate==="scorer") return <ScorerGate mySessionId={mySessionId} onOk={(r)=>{scorerSlotRef.current=r.sessionSlot||null;setGate(null);setScreen("scorer");}} onCancel={home}/>;
   if(gate==="admin"){
     const adminVerify=(v)=>{
       const pins=dynPins||{super:ADMIN_PIN,basic:BASIC_ADMIN_PIN};
@@ -8892,7 +9121,7 @@ function Root(){
       if(v===pins.basic) return {ok:true, tier:"basic"};
       return {ok:false, msg:"❌ Wrong PIN, try again"};
     };
-    const adminOnOk=(r)=>{
+    const finishAdminLogin=(r)=>{
       setGate(null);
       setAdminTier(r.tier);
       const dest=r.tier==="super"?"superAdmin":"basicAdmin";
@@ -8902,6 +9131,26 @@ function Root(){
       window.history.pushState({screen:dest,depth:2},"");
       setScreen(dest);
     };
+    // Same single-active-session lock as the team scorer gate, scoped globally to "admin" (there's
+    // only ever one match live at a time, so this doesn't need to be per-matchId). Blocks a second
+    // admin device from signing in while one is already active, with a manual Take Over override.
+    const adminOnOk=(r,force)=>{
+      setAdminClaiming(true);
+      claimSession(null,"admin",mySessionId,!!force).then(res=>{
+        setAdminClaiming(false);
+        if(res.ok){ finishAdminLogin(r); } else { setAdminConflict({r,heldSince:res.heldSince}); }
+      });
+    };
+    if(adminConflict){
+      const secsAgo=adminConflict.heldSince?Math.max(0,Math.round((Date.now()-adminConflict.heldSince)/1000)):null;
+      return <Centered emoji="🔐" title="Already active elsewhere"
+        sub={`Admin is already signed in and active on another device${secsAgo!=null?` (last seen ${secsAgo}s ago)`:""}. Taking over will sign that device out.`}
+        onExit={home}>
+        <button className="btn btn-primary w-full" style={{marginBottom:10}} disabled={adminClaiming}
+          onClick={()=>adminOnOk(adminConflict.r,true)}>{adminClaiming?"Taking over…":"⚡ Take Over Anyway"}</button>
+      </Centered>;
+    }
+    if(adminClaiming) return <Centered emoji="🔑" title="Checking device…" sub="Making sure no one else is already active"/>;
     // "Remember this device" for admin — same opt-in pattern as the scorer gate, always re-verified
     // against the current PINs (so a PIN change elsewhere correctly invalidates a stale remembered one).
     if(!adminAutoTriedRef.current){
@@ -8909,10 +9158,10 @@ function Root(){
       let saved=null; try{saved=localStorage.getItem("lcc_pin_admin");}catch(e){}
       if(saved){
         const r=adminVerify(saved);
-        if(r.ok){ setTimeout(()=>adminOnOk(r),0); return <Centered emoji="🔑" title="Welcome back…" sub="Remembered this device"/>; }
+        if(r.ok){ setTimeout(()=>adminOnOk(r,false),0); return <Centered emoji="🔑" title="Welcome back…" sub="Remembered this device"/>; }
       }
     }
-    return <PinGate title="Admin Access" hint="Super or Basic admin PIN" verify={adminVerify} onOk={adminOnOk} onCancel={home} rememberKey="lcc_pin_admin"/>;
+    return <PinGate title="Admin Access" hint="Super or Basic admin PIN" verify={adminVerify} onOk={(r)=>adminOnOk(r,false)} onCancel={home} rememberKey="lcc_pin_admin"/>;
   }
 
   const isAdmin=adminTier!==null;
@@ -8927,8 +9176,8 @@ function Root(){
   if(screen==="roster")  return <RosterPage role={isAdmin?"admin":"viewer"} onExit={()=>nav(adminHome)}/>;
   if(screen==="stats")   return <StatsPage onExit={()=>nav(adminHome)}/>;
   if(screen==="announce") return <AnnouncementPage onExit={()=>nav(adminHome)}/>;
-  if(screen==="scorer")    return <App role="scorer" onExit={home}/>;
-  if(screen==="adminScore") return <App role="admin" onExit={()=>nav(adminHome)} onHistory={()=>nav("history")} onPoll={()=>nav("poll")} onRoster={()=>nav("roster")} onAnnounce={()=>nav("announce")} prefillFixture={pendingFixtureRef.current}/>;
+  if(screen==="scorer")    return <App role="scorer" sessionSlot={scorerSlotRef.current} mySessionId={mySessionId} onExit={home}/>;
+  if(screen==="adminScore") return <App role="admin" mySessionId={mySessionId} onExit={()=>nav(adminHome)} onHistory={()=>nav("history")} onPoll={()=>nav("poll")} onRoster={()=>nav("roster")} onAnnounce={()=>nav("announce")} prefillFixture={pendingFixtureRef.current}/>;
   if(screen==="tournaments") return <TournamentsPage role={isAdmin?"admin":"viewer"} onExit={()=>nav(adminHome)}
     onStartMatch={(fixture)=>{ pendingFixtureRef.current=fixture; nav(adminHome==="superAdmin"?"admin":"adminScore"); }}/>;
   if(screen==="superAdmin") return <SuperAdminHome
@@ -8942,7 +9191,7 @@ function Root(){
     onTournaments={()=>nav("tournaments")}
     onExit={home}/>;
   if(screen==="pinMgmt") return <PinMgmtModal onClose={()=>nav(adminHome)}/>;
-  if(screen==="admin") return <App role="admin" onExit={()=>nav(adminHome)} onHistory={()=>nav("history")} onPoll={()=>nav("poll")} onRoster={()=>nav("roster")} onAnnounce={()=>nav("announce")} prefillFixture={pendingFixtureRef.current}/>;
+  if(screen==="admin") return <App role="admin" mySessionId={mySessionId} onExit={()=>nav(adminHome)} onHistory={()=>nav("history")} onPoll={()=>nav("poll")} onRoster={()=>nav("roster")} onAnnounce={()=>nav("announce")} prefillFixture={pendingFixtureRef.current}/>;
   return <Landing onPick={pick}/>;
 }
 
