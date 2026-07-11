@@ -2854,15 +2854,10 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
     if((pw||pr||nnb)&&pendRef.current){ try{pendRef.current.scrollIntoView({behavior:"smooth",block:"center"});}catch(e){} }
   },[pw,pr,nnb]);
   // Fielding-side player list for the dismissal dropdowns (caught by / run out by / stumped by), so the
-  // scorer picks a fielder instead of typing. Prefer the assigned bowling squad; otherwise fall back to
-  // everyone who's bowled plus the club roster. Always A–Z. A "＋ type a new name" option remains for a
-  // fielder not in any list (e.g. a substitute).
-  const fieldOpts=(()=>{
-    const hasPub=(match?.pubTeamA?.length>0||match?.pubTeamB?.length>0);
-    const pub=hasPub?((inn.battingTeam===match?.teamA?match.pubTeamB:match.pubTeamA)||[]):[];
-    const base=pub.length>0?pub:[...new Set([...(inn.bowlingOrder||[]),...(rosterNames||[])])];
-    return [...new Set(base)].sort((a,b)=>a.localeCompare(b));
-  })();
+  // scorer picks a fielder instead of typing. Uses the bowling team's assigned squad (roster fallback),
+  // with anyone who's already bowled folded in. Always A–Z, with a "＋ type a new name" escape hatch
+  // for a substitute fielder not on any list.
+  const fieldOpts=squadOptions(match, inn.bowlingTeam, rosterNames, inn.bowlingOrder);
   // Small reusable fielder dropdown + "type new" fallback. value/onChange drive the shared `fielder`.
   const FielderSelect=({placeholder})=>(
     <>
@@ -2947,11 +2942,14 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           {(()=>{
             const enteringAtStrikerEnd=(inn.pendingOutEnd||"striker")==="striker";
             const otherEndName=enteringAtStrikerEnd?inn.nonStrikerName:inn.strikerName;
-            const selectable=[...new Set([...retiredList,...(rosterNames||[])])]
+            // Pool = the batting team's squad when squads are assigned, otherwise the whole club
+            // roster. Retired batters are folded in so they can return. Then drop anyone who can't be
+            // the incoming batsman: the player at the other end, anyone already out, and anyone on the
+            // fielding side who has bowled.
+            const selectable=squadOptions(match, inn.battingTeam, rosterNames, retiredList)
               .filter(n=>!(otherEndName&&n.toLowerCase()===otherEndName.toLowerCase()))
               .filter(n=>!(inn.batsmen&&inn.batsmen[n]&&inn.batsmen[n].out))
-              .filter(n=>!(inn.bowlingOrder||[]).some(bn=>bn.toLowerCase()===n.toLowerCase()))
-              .sort((a,b)=>a.localeCompare(b));
+              .filter(n=>!(inn.bowlingOrder||[]).some(bn=>bn.toLowerCase()===n.toLowerCase()));
             return(
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <select value={nbn&&!selectable.includes(nbn)?"__new__":nbn}
@@ -2966,7 +2964,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
             );
           })()}
           {/* Manual name box appears only when nothing in the list matches (i.e. entering a new person) */}
-          {(nbn===""||![...retiredList,...(rosterNames||[])].includes(nbn))&&(
+          {(nbn===""||!squadOptions(match, inn.battingTeam, rosterNames, retiredList).includes(nbn))&&(
             <input value={nbn} onChange={e=>setNBN(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confBatsman()}
               placeholder="Type a new player's name…" style={{width:"100%",fontSize:13,marginTop:6}}/>
           )}
@@ -3056,18 +3054,18 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
             }
           })()}
 
-          {/* Dropdown picker (A–Z) — minimises manual typing. */}
+          {/* Dropdown picker (A–Z) — bowling team's squad when assigned, else the club roster. */}
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <select value={nbwn&&!(rosterNames||[]).includes(nbwn)?"__new__":nbwn}
+            <select value={nbwn&&!squadOptions(match, inn.bowlingTeam, rosterNames).includes(nbwn)?"__new__":nbwn}
               onChange={e=>{ const v=e.target.value; if(v==="__new__"){setNBWN("");} else {setNBWN(v);} }}
               style={{flex:1,fontSize:13,padding:"9px 10px",borderRadius:10}}>
               <option value="">— Select bowler —</option>
-              {(rosterNames||[]).slice().sort((a,b)=>a.localeCompare(b)).map(n=><option key={n} value={n}>{n}</option>)}
+              {squadOptions(match, inn.bowlingTeam, rosterNames).map(n=><option key={n} value={n}>{n}</option>)}
               <option value="__new__">＋ Type a new name…</option>
             </select>
             <button className="btn btn-primary" onClick={()=>confBowler()} style={{padding:"10px 18px",whiteSpace:"nowrap"}}>Bowl →</button>
           </div>
-          {(nbwn===""||!(rosterNames||[]).includes(nbwn))&&(
+          {(nbwn===""||!squadOptions(match, inn.bowlingTeam, rosterNames).includes(nbwn))&&(
             <input value={nbwn} onChange={e=>setNBWN(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confBowler()}
               placeholder="Type a new player's name…" style={{width:"100%",fontSize:13,marginTop:6}}/>
           )}
@@ -3093,7 +3091,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
                   background:"rgba(99,102,241,.15)",border:"1px solid rgba(99,102,241,.4)",color:"#a5b4fc",
                   fontFamily:"'JetBrains Mono',monospace"
                 }}>⇄</button>
-                <EditPlayersButton inn={inn} rosterNames={rosterNames} onSwap={onSwapStrike} onSave={onFixPlayers}/>
+                <EditPlayersButton inn={inn} match={match} rosterNames={rosterNames} onSwap={onSwapStrike} onSave={onFixPlayers}/>
               </div>
             )}
           </div>
@@ -3620,14 +3618,13 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
       {fixOpen&&<Modal onClose={()=>setFixOpen(false)} title="🔧 Correct Striker / Bowler">
         <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Use this if a name was entered wrong (e.g. wrong bowler typed in) or strike rotation needs a manual correction. Scores already recorded are not affected — this only changes who's currently at the crease/bowling.</p>
         <label>{inn?.single?"Batsman":"Striker (on strike now)"}</label>
-        <input value={fixSk} onChange={e=>setFixSk(e.target.value)} list="fixPlayersMenu" placeholder="Striker's name" style={{marginBottom:12}}/>
+        <div style={{marginBottom:12}}><PlayerSelectControlled value={fixSk} onChange={setFixSk} options={squadOptions(match, inn?.battingTeam, rosterNames)} placeholder="Choose striker"/></div>
         {!inn?.single&&(<>
           <label>Non-striker</label>
-          <input value={fixNs} onChange={e=>setFixNs(e.target.value)} list="fixPlayersMenu" placeholder="Non-striker's name" style={{marginBottom:12}}/>
+          <div style={{marginBottom:12}}><PlayerSelectControlled value={fixNs} onChange={setFixNs} options={squadOptions(match, inn?.battingTeam, rosterNames)} placeholder="Choose non-striker"/></div>
         </>)}
         <label>Current bowler</label>
-        <input value={fixBw} onChange={e=>setFixBw(e.target.value)} list="fixPlayersMenu" placeholder="Bowler's name" style={{marginBottom:14}}/>
-        <datalist id="fixPlayersMenu">{(rosterNames||[]).map(n=><option key={n} value={n}/>)}</datalist>
+        <div style={{marginBottom:14}}><PlayerSelectControlled value={fixBw} onChange={setFixBw} options={squadOptions(match, inn?.bowlingTeam, rosterNames)} placeholder="Choose bowler"/></div>
         <button className="btn btn-primary w-full" onClick={saveFix}>Save Correction</button>
       </Modal>}
 
@@ -3753,13 +3750,16 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
 // Accessible right from the batting card. Shows clear visual crease layout with
 // inline name editing and a swap button. ManualFixButton in the admin header
 // still works as a secondary entry point.
-function EditPlayersButton({inn,rosterNames,onSwap,onSave}){
+function EditPlayersButton({inn,match,rosterNames,onSwap,onSave}){
   const[open,setOpen]=React.useState(false);
   const[sk,setSk]=React.useState("");
   const[ns,setNs]=React.useState("");
   const[bw,setBw]=React.useState("");
   const[swapped,setSwapped]=React.useState(false);
   if(!inn||!onSave) return null;
+  // Batsmen come from the batting team's squad, the bowler from the bowling team's (roster fallback).
+  const batOpts=squadOptions(match, inn.battingTeam, rosterNames);
+  const bowlOpts=squadOptions(match, inn.bowlingTeam, rosterNames);
   const openModal=()=>{ setSk(inn.strikerName||""); setNs(inn.nonStrikerName||""); setBw(inn.bowlerName||""); setSwapped(false); setOpen(true); };
   const doSwap=()=>{ const t=sk; setSk(ns); setNs(t); setSwapped(s=>!s); };
   const save=()=>{
@@ -3772,10 +3772,6 @@ function EditPlayersButton({inn,rosterNames,onSwap,onSave}){
     onSave({striker:s,nonStriker:inn.single?null:n,bowler:b});
     setOpen(false);
   };
-  const nameInputStyle=(accent)=>({
-    flex:1,background:"rgba(7,5,15,.8)",border:`1.5px solid ${accent}`,borderRadius:10,
-    padding:"9px 12px",color:"#fff",fontSize:14,fontFamily:"'Inter',sans-serif",outline:"none"
-  });
   return(<>
     <button onClick={openModal} title="Edit player names or swap strike" style={{
       padding:"3px 8px",borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:600,
@@ -3794,7 +3790,7 @@ function EditPlayersButton({inn,rosterNames,onSwap,onSave}){
           <span style={{fontSize:9,fontWeight:700,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",background:"rgba(245,158,11,.15)",borderRadius:4,padding:"2px 7px"}}>● ON STRIKE</span>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <input value={sk} onChange={e=>setSk(e.target.value)} list="epPlayers" placeholder="Striker's name" style={nameInputStyle("rgba(245,158,11,.5)")}/>
+          <PlayerSelectControlled value={sk} onChange={setSk} options={batOpts} placeholder="Choose striker" accent="rgba(245,158,11,.5)"/>
         </div>
       </div>
 
@@ -3813,7 +3809,7 @@ function EditPlayersButton({inn,rosterNames,onSwap,onSave}){
           <span style={{fontSize:9,fontWeight:700,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",background:"rgba(99,102,241,.15)",borderRadius:4,padding:"2px 7px"}}>○ NON-STRIKER</span>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <input value={ns} onChange={e=>setNs(e.target.value)} list="epPlayers" placeholder="Non-striker's name" style={nameInputStyle("rgba(99,102,241,.45)")}/>
+          <PlayerSelectControlled value={ns} onChange={setNs} options={batOpts} placeholder="Choose non-striker" accent="rgba(99,102,241,.45)"/>
         </div>
       </div>}
 
@@ -3824,11 +3820,10 @@ function EditPlayersButton({inn,rosterNames,onSwap,onSave}){
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
             <span style={{fontSize:9,fontWeight:700,color:"#34d399",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",background:"rgba(52,211,153,.15)",borderRadius:4,padding:"2px 7px"}}>🎯 BOWLER</span>
           </div>
-          <input value={bw} onChange={e=>setBw(e.target.value)} list="epPlayers" placeholder="Bowler's name" style={nameInputStyle("rgba(52,211,153,.4)")}/>
+          <PlayerSelectControlled value={bw} onChange={setBw} options={bowlOpts} placeholder="Choose bowler" accent="rgba(52,211,153,.4)"/>
         </div>
       </div>
 
-      <datalist id="epPlayers">{(rosterNames||[]).map(n=><option key={n} value={n}/>)}</datalist>
       {swapped&&<p style={{color:"#a5b4fc",fontSize:11,fontFamily:"'JetBrains Mono',monospace",marginBottom:10,textAlign:"center"}}>⇄ Batsmen swapped — tap Save to confirm</p>}
       <button className="btn btn-primary w-full" style={{borderRadius:14}} onClick={save}>Save Changes</button>
     </Modal>}
@@ -3836,12 +3831,14 @@ function EditPlayersButton({inn,rosterNames,onSwap,onSave}){
 }
 
 // ── Super Admin: Fix current players / bowler mid-match ───────────────────────
-function ManualFixButton({inn,onSave,rosterNames}){
+function ManualFixButton({inn,match,onSave,rosterNames}){
   const[open,setOpen]=React.useState(false);
   const[sk,setSk]=React.useState("");
   const[ns,setNs]=React.useState("");
   const[bw,setBw]=React.useState("");
   if(!inn) return null;
+  const batOpts=squadOptions(match, inn.battingTeam, rosterNames);
+  const bowlOpts=squadOptions(match, inn.bowlingTeam, rosterNames);
   const openModal=()=>{ setSk(inn.strikerName||""); setNs(inn.nonStrikerName||""); setBw(inn.bowlerName||""); setOpen(true); };
   const save=()=>{
     const s=sk.trim(), n=ns.trim(), b=bw.trim();
@@ -3858,14 +3855,13 @@ function ManualFixButton({inn,onSave,rosterNames}){
       <Modal onClose={()=>setOpen(false)} title="🔧 Correct Striker / Bowler">
         <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Use this if a name was entered wrong (e.g. wrong bowler typed in) or strike rotation needs a manual correction. Scores already recorded are not affected — this only changes who's currently at the crease/bowling.</p>
         <label>{inn.single?"Batsman":"Striker (on strike now)"}</label>
-        <input value={sk} onChange={e=>setSk(e.target.value)} list="fixPlayers" placeholder="Striker's name" style={{marginBottom:12}}/>
+        <div style={{marginBottom:12}}><PlayerSelectControlled value={sk} onChange={setSk} options={batOpts} placeholder="Choose striker"/></div>
         {!inn.single&&(<>
           <label>Non-striker</label>
-          <input value={ns} onChange={e=>setNs(e.target.value)} list="fixPlayers" placeholder="Non-striker's name" style={{marginBottom:12}}/>
+          <div style={{marginBottom:12}}><PlayerSelectControlled value={ns} onChange={setNs} options={batOpts} placeholder="Choose non-striker"/></div>
         </>)}
         <label>Current bowler</label>
-        <input value={bw} onChange={e=>setBw(e.target.value)} list="fixPlayers" placeholder="Bowler's name" style={{marginBottom:14}}/>
-        <datalist id="fixPlayers">{(rosterNames||[]).map(n=><option key={n} value={n}/>)}</datalist>
+        <div style={{marginBottom:14}}><PlayerSelectControlled value={bw} onChange={setBw} options={bowlOpts} placeholder="Choose bowler"/></div>
         <button className="btn btn-primary w-full" onClick={save}>Save Correction</button>
       </Modal>
     )}
@@ -4039,6 +4035,27 @@ function BowlingTab({inn}){
 // choice that swaps in a one-off text box for the rare case of someone not in the list. Writes the
 // chosen/typed value into inputRef.current.value so existing go() handlers (which read the ref) keep
 // working unchanged. Options are expected pre-sorted A–Z by the caller.
+// Given a team NAME, return that team's assigned squad as a deduped, A–Z-sorted list — used to
+// populate every player dropdown in the app. If squads were assigned for this match (pubTeamA /
+// pubTeamB), the list is that team's members; otherwise we fall back to the whole club roster.
+// Team matching is case-/whitespace-insensitive so a stray trailing space on a name never drops the
+// squad back to the full roster. `extra` names (e.g. players already in this innings) are folded in
+// so a dropdown never omits someone who's genuinely on the field.
+function squadOptions(match, teamName, rosterNames, extra){
+  const az=(a,b)=>String(a).localeCompare(String(b));
+  const norm=s=>String(s==null?"":s).trim().toLowerCase();
+  const hasPub=((match&&match.pubTeamA&&match.pubTeamA.length>0)||(match&&match.pubTeamB&&match.pubTeamB.length>0));
+  let list;
+  if(hasPub){
+    list = norm(teamName)===norm(match&&match.teamA) ? (match.pubTeamA||[])
+         : norm(teamName)===norm(match&&match.teamB) ? (match.pubTeamB||[])
+         : (rosterNames||[]);
+  } else {
+    list = rosterNames||[];
+  }
+  return [...new Set([...(list||[]),...((extra||[]).filter(Boolean))].filter(Boolean))].sort(az);
+}
+
 function PlayerSelect({inputRef,options,placeholder}){
   const[val,setVal]=React.useState("");
   const[adding,setAdding]=React.useState(false);
@@ -4062,6 +4079,36 @@ function PlayerSelect({inputRef,options,placeholder}){
       style={{width:"100%",fontSize:13,padding:"10px",borderRadius:10,background:"#1e1b4b",color:val?"#e5e7eb":"#6b7280",border:"1px solid rgba(99,102,241,.3)"}}>
       <option value="">{placeholder||"Choose player…"}</option>
       {(options||[]).map(n=><option key={n} value={n} style={{color:"#e5e7eb"}}>{n}</option>)}
+      <option value="__add__" style={{color:"#6ee7b7"}}>➕ Add new player…</option>
+    </select>
+  );
+}
+
+// Controlled variant of PlayerSelect for the "edit / fix players" modals, where the field is
+// pre-filled with the CURRENT player and driven by value/onChange state (not a ref). Same team-aware
+// dropdown + "➕ Add new player…" escape hatch. The current value is always merged into the options
+// so an existing name is selectable even if it isn't in the assigned squad.
+function PlayerSelectControlled({value,onChange,options,placeholder,accent}){
+  const[adding,setAdding]=React.useState(false);
+  const az=(a,b)=>String(a).localeCompare(String(b));
+  const opts=[...new Set([...(options||[]),...(value?[value]:[])].filter(Boolean))].sort(az);
+  const border=accent||"rgba(99,102,241,.4)";
+  const base={flex:1,width:"100%",background:"rgba(7,5,15,.8)",border:`1.5px solid ${border}`,borderRadius:10,
+    padding:"10px 12px",fontSize:14,fontFamily:"'Inter',sans-serif",outline:"none"};
+  if(adding){
+    return(
+      <div style={{display:"flex",gap:6,width:"100%"}}>
+        <input autoFocus value={value} onChange={e=>onChange(e.target.value)} placeholder="New player name…" style={{...base,color:"#fff"}}/>
+        <button type="button" onClick={()=>{setAdding(false);onChange("");}}
+          style={{padding:"0 12px",borderRadius:10,border:"1px solid rgba(148,163,184,.3)",background:"transparent",color:"#94a3b8",cursor:"pointer",fontSize:12}}>✕</button>
+      </div>
+    );
+  }
+  return(
+    <select value={opts.includes(value)?value:""} onChange={e=>{ if(e.target.value==="__add__"){onChange("");setAdding(true);} else onChange(e.target.value); }}
+      style={{...base,color:value?"#fff":"#6b7280"}}>
+      <option value="">{placeholder||"Choose player…"}</option>
+      {opts.map(n=><option key={n} value={n} style={{color:"#e5e7eb"}}>{n}</option>)}
       <option value="__add__" style={{color:"#6ee7b7"}}>➕ Add new player…</option>
     </select>
   );
@@ -4109,16 +4156,11 @@ function OpenersForm({inn,match,onSubmit,role,onExit,rosterNames}){
           </div>
           <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em"}}>{inn.battingTeam}'s opening {single?"batsman":"pair"}</p>
           {(()=>{
-            // Build team-specific, A–Z-sorted option lists. If squads were assigned, batsmen come from
-            // the batting team's squad and the bowler from the bowling team's; otherwise fall back to
-            // the whole club roster. Everything is a real dropdown (<select>) — no manual typing — with
-            // a "➕ Add new player…" choice that reveals a one-off text box only when genuinely needed.
-            const az=(a,b)=>a.localeCompare(b);
-            const hasPub=(match?.pubTeamA?.length>0||match?.pubTeamB?.length>0);
-            const battingSquad=hasPub?((inn.battingTeam===match?.teamA?match.pubTeamA:match.pubTeamB)||[]):(rosterNames||[]);
-            const bowlingSquad=hasPub?((inn.bowlingTeam===match?.teamA?match.pubTeamA:match.pubTeamB)||[]):(rosterNames||[]);
-            const batOpts=[...new Set(battingSquad)].sort(az);
-            const bowlOpts=[...new Set(bowlingSquad)].sort(az);
+            // Batsmen come from the batting team's assigned squad, the bowler from the bowling team's
+            // (whole-club roster when no squads were assigned). Everything is a real dropdown — no
+            // manual typing — with a "➕ Add new player…" choice for a genuinely new name.
+            const batOpts=squadOptions(match, inn.battingTeam, rosterNames);
+            const bowlOpts=squadOptions(match, inn.bowlingTeam, rosterNames);
             return(<>
               <div><label>🟡 {single?"Batsman":"Striker (on strike)"}</label>
                 <PlayerSelect inputRef={rS} options={batOpts} placeholder={single?"Choose batsman":"Choose striker"}/></div>
@@ -4152,9 +4194,11 @@ function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onEditOvers,onE
     if(lb===s.toLowerCase()||(ns&&lb===ns.toLowerCase())){alert("The bowler can't also be a batsman — they're on opposite teams. Enter a different bowler.");return;}
     onStart({striker:s,nonStriker:single?null:ns,bowler:bw});
   };
-  const fields=single
-    ?[["🟡 Batsman",rS,"Batsman name"],["🎯 Opening Bowler",rBw,"Bowler name"]]
-    :[["🟡 Striker",rS,"On-strike batsman"],["⚪ Non-striker",rNS,"Non-strike batsman"],["🎯 Opening Bowler",rBw,"Bowler name"]];
+  // At the innings break, `inn` is the just-finished 1st innings — so the team that BOWLED first
+  // (inn.bowlingTeam) is the one now batting/chasing, and the team that BATTED first (inn.battingTeam)
+  // is now bowling. Populate the dropdowns from those squads (roster fallback when no squads assigned).
+  const batOpts=squadOptions(match, inn.bowlingTeam, rosterNames);
+  const bowlOpts=squadOptions(match, inn.battingTeam, rosterNames);
   return(
     <div className="screen">
       <div style={{width:"100%",maxWidth:"min(460px,100%)"}}>
@@ -4171,10 +4215,15 @@ function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onEditOvers,onE
         <div className="card space-y-4">
           <div className="tag-amber">🎯 {inn.bowlingTeam} need {inn.totalRuns+1} to win in {inn.overs} overs</div>
           <div className="divider"/>
-          {fields.map(([l,r,p])=>(
-            <div key={l}><label>{l}</label><input ref={r} list="rosterPlayers2" placeholder={p}/></div>
-          ))}
-          <datalist id="rosterPlayers2">{(rosterNames||[]).map(n=><option key={n} value={n}/>)}</datalist>
+          <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em"}}>{inn.bowlingTeam}'s opening {single?"batsman":"pair"}</p>
+          <div><label>🟡 {single?"Batsman":"Striker (on strike)"}</label>
+            <PlayerSelect inputRef={rS} options={batOpts} placeholder={single?"Choose batsman":"Choose striker"}/></div>
+          {!single&&<div><label>⚪ Non-striker</label>
+            <PlayerSelect inputRef={rNS} options={batOpts} placeholder="Choose non-striker"/></div>}
+          <div className="divider"/>
+          <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em"}}>{inn.battingTeam}'s opening bowler</p>
+          <div><label>🎯 Opening Bowler</label>
+            <PlayerSelect inputRef={rBw} options={bowlOpts} placeholder="Choose bowler"/></div>
           <button className="btn btn-primary w-full" onClick={go}>Start 2nd Innings</button>
           {onEditOvers&&(
             <button className="btn w-full" onClick={()=>{const v=prompt(`Change match overs (currently ${inn.overs}). Enter new total overs:`,String(inn.overs));if(v!==null)onEditOvers(v);}}
