@@ -1344,6 +1344,10 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
   const[match,setMatch]=useState(null);
   const[tab,setTab]=useState("score");
   const[inn,setInn]=useState(null);
+  // Restore-from-backup picker: null=closed, []=opened but nothing found, [...]=list of snapshots.
+  // Declared HERE at the top — not next to applyRestore/restoreFromBackup which use it — because App
+  // has a conditional early return (skeleton loading) partway down, and every hook must sit above it.
+  const[restoreChoices,setRestoreChoices]=useState(null);
   const[hist,setHist]=useState([]);
   // ── Undo history persistence ────────────────────────────────────────────────────────────────
   // `hist` (the local pre-ball snapshot stack that powers Undo) used to live ONLY in memory, which
@@ -2073,7 +2077,11 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
   // picker, newest first, so the admin can choose exactly which point to go back to. The picker is
   // what makes checkpoints useful: when the newest snapshots are poisoned (the exact failure mode of
   // the 2nd-innings incident), the admin can see that from the labels and pick an older clean one.
-  const[restoreChoices,setRestoreChoices]=React.useState(null); // null=closed, []=none found, [..]=picker open
+  // NOTE: restoreChoices state is declared at the TOP of App with the other useState calls — NOT here
+  // next to the logic that uses it. App has a conditional early return (the skeleton loading screen)
+  // between the top and this point; a hook declared below that return doesn't run during loading
+  // renders, then suddenly does once loaded — "more hooks than previous render", React #310, hard
+  // crash. Hooks must stay above ALL of App's early returns, however far that is from their logic.
   const applyRestore=(snap)=>{
     if(!snap||!snap.inn||!snap.match) return;
     // Restore by setting React state and tagging the change as an admin "revert" intent. The normal
