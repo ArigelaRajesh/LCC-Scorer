@@ -475,6 +475,42 @@ function buildPidResolver(roster){
 // ── Career stats engine — aggregates every completed match in `history` ──
 // Players are keyed by profile id when known (exact, survives name typos),
 // otherwise by normalized name. Returns one row per player with batting + bowling.
+// Head-to-head team records from match history. For every completed match, pull the two team names
+// and the winner, and tally an all-time record for each unordered pair of teams. Pure read-only
+// derivation — no state, safe to call in render. Team names are matched by their normalized form so
+// "OG's Team" and "OG's team" fold together, but the display keeps the first-seen original casing.
+function computeHeadToHead(history){
+  const pairs={}; // key: normalized "a|b" sorted -> {teams:[dispA,dispB], played, wins:{normName:count}, tied}
+  const disp={};  // normName -> first-seen display name
+  Object.values(history||{}).forEach(m=>{
+    if(!m) return;
+    // A completed match has two innings; team names come from each innings' batting side, falling back
+    // to the recorded teamA/teamB. inn2 is the chasing side; inn1 the side that set the total.
+    const t1=(m.inn1&&m.inn1.battingTeam)||m.teamA;
+    const t2=(m.inn2&&m.inn2.battingTeam)||m.teamB;
+    if(!t1||!t2) return;
+    const n1=normName(t1), n2=normName(t2);
+    if(!n1||!n2||n1===n2) return;
+    if(!disp[n1]) disp[n1]=t1;
+    if(!disp[n2]) disp[n2]=t2;
+    const key=[n1,n2].sort().join("|");
+    if(!pairs[key]) pairs[key]={teams:key.split("|"), played:0, wins:{}, tied:0};
+    const P=pairs[key];
+    P.played++;
+    const w=m.result&&m.result.winner;
+    if(!w){ P.tied++; }
+    else { const nw=normName(w); P.wins[nw]=(P.wins[nw]||0)+1; }
+  });
+  // Shape into a sorted list, most-played first.
+  return Object.values(pairs).map(P=>{
+    const [a,b]=P.teams;
+    return {
+      a:disp[a]||a, b:disp[b]||b,
+      aWins:P.wins[a]||0, bWins:P.wins[b]||0, tied:P.tied, played:P.played
+    };
+  }).sort((x,y)=>y.played-x.played);
+}
+
 function computeCareerStats(history, roster){
   const resolve=buildPidResolver(roster);
   const players={};
@@ -5173,13 +5209,14 @@ function MilestoneCelebration({inn,resetKey,playSound}){
   const[queue,setQueue]=React.useState([]);   // celebrations waiting to show, shown one at a time
   const[show,setShow]=React.useState(null);
   // Per-type "last celebrated level" refs so each achievement only fires once when it's first reached.
-  const seen=React.useRef({team:null,bat:{},part:null,hat:{},figs:{}});
+  // bat = fifties/centuries track (÷50); bat30 = the separate 30-run club milestone track (see below).
+  const seen=React.useRef({team:null,bat:{},bat30:{},part:null,hat:{},figs:{}});
   const keyRef=React.useRef(resetKey);
   const baselined=React.useRef(false);
 
   React.useEffect(()=>{
     if(!inn){ return; }
-    const fresh=()=>({team:null,bat:{},part:null,hat:{},figs:{}});
+    const fresh=()=>({team:null,bat:{},bat30:{},part:null,hat:{},figs:{}});
     // On a new innings/match, or first mount, BASELINE silently: record current levels so we don't
     // fire a burst of celebrations for a match opened mid-way. Only future crossings celebrate.
     if(keyRef.current!==resetKey || !baselined.current){
@@ -5187,7 +5224,7 @@ function MilestoneCelebration({inn,resetKey,playSound}){
       const s=fresh();
       s.team=Math.floor((inn.totalRuns||0)/50);
       s.part=Math.floor((inn.partnership||0)/50);
-      Object.entries(inn.batsmen||{}).forEach(([n,b])=>{ s.bat[n]=Math.floor((b.runs||0)/50); });
+      Object.entries(inn.batsmen||{}).forEach(([n,b])=>{ s.bat[n]=Math.floor((b.runs||0)/50); s.bat30[n]=(b.runs||0)>=30; });
       Object.entries(inn.bowlers||{}).forEach(([n,bw])=>{ s.hat[n]=bw.streak||0; s.figs[n]=bw.wickets||0; });
       seen.current=s;
       return;
@@ -5205,6 +5242,15 @@ function MilestoneCelebration({inn,resetKey,playSound}){
       if(S.bat[n]===undefined){S.bat[n]=f;return;}
       if(f>S.bat[n]&&b.runs>0){const label=f*50; found.push({kind:"bat",title:`${label===100?"CENTURY":label===50?"FIFTY":label}! `,sub:`${n} — ${b.runs}`,color:"#34d399",emoji:label>=100?"💯":"🏏"});}
       S.bat[n]=f;
+    });
+    // 2b) INDIVIDUAL batsman 30 — a genuine milestone in short club games. Separate one-shot track so
+    // it never interferes with the fifty/century logic above. Suppressed if they've already reached 50
+    // (S.bat[n]>=1), so a batsman who jumps from 29 to a fifty in one update sees only the FIFTY.
+    Object.entries(inn.batsmen||{}).forEach(([n,b])=>{
+      const hit=(b.runs||0)>=30;
+      if(S.bat30[n]===undefined){S.bat30[n]=hit;return;}
+      if(hit&&!S.bat30[n]&&(b.runs||0)<50&&(S.bat[n]||0)<1){ found.push({kind:"bat30",title:"30 UP! ",sub:`${n} — ${b.runs}`,color:"#38bdf8",emoji:"👏"}); }
+      S.bat30[n]=hit;
     });
     // 3) PARTNERSHIP 50/100… — meaningless in single-batsman format (no second batsman to partner
     // with), which is exactly what was producing "RAJESH ARIGELA & undefined".
@@ -5403,10 +5449,96 @@ function ViewerTeams({match,inn}){
   );
 }
 
+// Build a WhatsApp-ready FINAL RESULT message: winner, margin, both innings, and player of the match.
+// Read-only string building over the match-over snapshot. Used by the "Share Result" button.
+function buildResultShareText(snap,potm){
+  if(!snap||!snap.inn||!snap.mo) return "";
+  const inn=snap.inn, inn1=snap.inn1, mo=snap.mo;
+  const lines=[];
+  lines.push("🏆 "+(mo.winner?`${mo.winner} WON`:"MATCH TIED")+(mo.margin?` by ${mo.margin}`:""));
+  const title=[inn.format,inn.venue].filter(Boolean).join(" · ");
+  if(title) lines.push(title);
+  lines.push("");
+  if(inn1) lines.push(`${inn1.battingTeam}: ${inn1.totalRuns||0}/${inn1.wickets||0} (${ovStr(inn1.totalBalls||0)} ov)`);
+  lines.push(`${inn.battingTeam}: ${inn.totalRuns||0}/${inn.wickets||0} (${ovStr(inn.totalBalls||0)} ov)`);
+  // Top scorer from each innings, if available.
+  const s2=inningsSummary(inn), s1=inn1?inningsSummary(inn1):null;
+  const stars=[];
+  if(s1&&s1.topBat) stars.push(`${s1.topBat.name} ${s1.topBat.runs}(${s1.topBat.balls})`);
+  if(s2&&s2.topBat) stars.push(`${s2.topBat.name} ${s2.topBat.runs}(${s2.topBat.balls})`);
+  if(stars.length){ lines.push(""); lines.push("⭐ "+stars.join("  |  ")); }
+  const pom=potm&&potm.winner;
+  if(pom){ lines.push(""); lines.push("🏅 Player of the Match: "+pom); }
+  lines.push("");
+  lines.push("Full scorecard 👉 "+ (typeof window!=="undefined" ? window.location.origin : ""));
+  return lines.join("\n");
+}
+
+// Compute a concise summary of a finished innings for the innings-break card: top scorer and best
+// bowler. Pure read-only derivation over the innings object — no state, safe to call in render.
+function inningsSummary(inn){
+  if(!inn) return null;
+  let topBat=null;
+  Object.values(inn.batsmen||{}).forEach(b=>{
+    if(!b) return;
+    if(!topBat || (b.runs||0)>(topBat.runs||0) || ((b.runs||0)===(topBat.runs||0)&&(b.balls||0)<(topBat.balls||0))) topBat=b;
+  });
+  let bestBowl=null;
+  Object.values(inn.bowlers||{}).forEach(w=>{
+    if(!w) return;
+    // Best = most wickets, then fewest runs conceded.
+    if(!bestBowl || (w.wickets||0)>(bestBowl.wickets||0) || ((w.wickets||0)===(bestBowl.wickets||0)&&(w.runs||0)<(bestBowl.runs||0))) bestBowl=w;
+  });
+  return {
+    topBat: topBat&&(topBat.runs||0)>0 ? {name:topBat.name, runs:topBat.runs||0, balls:topBat.balls||0} : null,
+    bestBowl: bestBowl&&(bestBowl.wickets||0)>0 ? {name:bestBowl.name, wickets:bestBowl.wickets||0, runs:bestBowl.runs||0, overs:ovStr((bestBowl.overs||0)*6+(bestBowl.ballsThisOver||0))} : null,
+  };
+}
+
+// Build a WhatsApp-ready live-score message from the current snapshot, and share it. Uses the native
+// Web Share sheet when available (iOS/Android Safari & Chrome both support it), which lets the person
+// pick WhatsApp directly; falls back to copying the text to the clipboard with a small confirmation
+// otherwise. Pure string building + a share call — no app state touched, safe to call anytime.
+function buildLiveShareText(snap){
+  if(!snap||!snap.inn) return "";
+  const inn=snap.inn, inn1=snap.inn1, match=snap.match;
+  const lines=[];
+  const title=[inn.format,match?.tournamentName].filter(Boolean).join(" · ");
+  lines.push("🏏 LIVE"+(title?" — "+title:"")+(inn.venue?" @ "+inn.venue:""));
+  lines.push("");
+  lines.push(`${inn.battingTeam} ${inn.totalRuns||0}/${inn.wickets||0} (${ovStr(inn.totalBalls||0)} ov)`);
+  if(inn1) lines.push(`${inn1.battingTeam} ${inn1.totalRuns||0}/${inn1.wickets||0} (${ovStr(inn1.totalBalls||0)} ov)`);
+  // Chase equation, when in the 2nd innings with a target. overs limit lives on inn, not match.
+  if(inn.target!=null && inn.inningsNum===2){
+    const need=inn.target-(inn.totalRuns||0);
+    const totalBalls=(inn.overs||0)*6;
+    const ballsLeft=Math.max(0,totalBalls-(inn.totalBalls||0));
+    if(need>0 && ballsLeft>0) lines.push(`Need ${need} off ${ballsLeft} balls to win`);
+  }
+  lines.push("");
+  lines.push("Watch live 👉 "+ (typeof window!=="undefined" ? window.location.origin+"/#live" : "#live"));
+  return lines.join("\n");
+}
+function shareLive(snap,onCopied){
+  const text=buildLiveShareText(snap);
+  if(!text) return;
+  try{
+    if(navigator.share){
+      navigator.share({text}).catch(()=>{}); // user cancelling the sheet is not an error
+      return;
+    }
+  }catch(e){}
+  // Fallback: copy to clipboard.
+  try{
+    navigator.clipboard.writeText(text).then(()=>{ onCopied&&onCopied(); }).catch(()=>{ onCopied&&onCopied(); });
+  }catch(e){ onCopied&&onCopied(); }
+}
+
 function ViewerLive({onExit}){
   const[snap,setSnap]=React.useState(undefined);
   const[potm,setPotm]=React.useState(null);
   const[tab,setTab]=React.useState("live");
+  const[shareToast,setShareToast]=React.useState(false);
   // MATCH SOUNDS for viewers — when the live score changes, play a matching sound so watching feels
   // alive: bat-crack for 1–3 runs, crowd cheer for a FOUR, big roar for a SIX or a WICKET. Defaults ON
   // (persisted per-device via localStorage) — browsers require a user tap before audio actually plays
@@ -5463,6 +5595,60 @@ function ViewerLive({onExit}){
       sub={`Match starting soon — ${inn.battingTeam} is setting their opening batsmen.`} onExit={onExit}/>;
   }
 
+  // ── Innings-break summary — shown to viewers between innings, while the 2nd-innings openers are
+  //    being set. `inn` here is the just-finished 1st innings. Read-only recap: total, top scorer,
+  //    best bowler, and the target the chasing side needs. Prime screenshot material for the group. ──
+  if(snap.ib){
+    const s=inningsSummary(inn);
+    const target=(inn.totalRuns||0)+1;
+    const chasingTeam=inn.bowlingTeam;
+    const rr=inn.overs?((inn.totalRuns||0)/(inn.overs)).toFixed(2):null;
+    return (
+      <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",padding:"20px 16px"}}>
+        <div className="flex items-center justify-between" style={{marginBottom:20}}>
+          <span style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".2em",fontWeight:700}}>⏸ INNINGS BREAK</span>
+          <div className="flex items-center" style={{gap:10}}>
+            <button onClick={()=>shareLive(snap,()=>{ setShareToast(true); setTimeout(()=>setShareToast(false),2200); })}
+              style={{background:"rgba(37,211,102,.15)",border:"1px solid rgba(37,211,102,.4)",color:"#25d366",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 10px",fontWeight:600}}>📤 Share</button>
+            <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+          </div>
+        </div>
+        {shareToast&&<div style={{marginBottom:12,fontSize:11,color:"#25d366",fontFamily:"'JetBrains Mono',monospace"}}>✓ Score copied — paste it into WhatsApp!</div>}
+
+        <div style={{textAlign:"center",marginBottom:8}}>
+          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700}}>{inn.battingTeam}</div>
+          <div className="score-number" style={{fontSize:56,lineHeight:1.1}}>{inn.totalRuns||0}<span className="score-wkt">/{inn.wickets||0}</span></div>
+          <div style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>({ovStr(inn.totalBalls||0)} ov{rr?` · RR ${rr}`:""})</div>
+        </div>
+
+        <div style={{background:"rgba(251,191,36,.08)",border:"1px solid rgba(251,191,36,.3)",borderRadius:16,padding:"16px",textAlign:"center",margin:"16px 0"}}>
+          <div style={{fontSize:13,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>🎯 TARGET</div>
+          <div style={{fontSize:32,fontWeight:700,fontFamily:"'Oswald',sans-serif"}}>{target}</div>
+          <div style={{fontSize:12,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{chasingTeam} need {target} to win{inn.overs?` · ${(target/inn.overs).toFixed(2)} req rate`:""}</div>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div style={{background:"rgba(52,211,153,.07)",border:"1px solid rgba(52,211,153,.25)",borderRadius:14,padding:"14px"}}>
+            <div style={{fontSize:10,color:"#34d399",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:6}}>🏏 TOP SCORER</div>
+            {s&&s.topBat
+              ?<><div style={{fontWeight:700,fontSize:15}}>{s.topBat.name}</div><div style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>{s.topBat.runs} ({s.topBat.balls})</div></>
+              :<div style={{color:"#6b7280",fontSize:12}}>—</div>}
+          </div>
+          <div style={{background:"rgba(167,139,250,.07)",border:"1px solid rgba(167,139,250,.25)",borderRadius:14,padding:"14px"}}>
+            <div style={{fontSize:10,color:"#a78bfa",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:6}}>🎯 BEST BOWLER</div>
+            {s&&s.bestBowl
+              ?<><div style={{fontWeight:700,fontSize:15}}>{s.bestBowl.name}</div><div style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>{s.bestBowl.wickets}/{s.bestBowl.runs} ({s.bestBowl.overs})</div></>
+              :<div style={{color:"#6b7280",fontSize:12}}>—</div>}
+          </div>
+        </div>
+
+        <div style={{textAlign:"center",marginTop:24,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>
+          ⏳ {chasingTeam} setting up their innings…
+        </div>
+      </div>
+    );
+  }
+
   if(mo){
     const i2=inn;
     return (
@@ -5478,7 +5664,14 @@ function ViewerLive({onExit}){
         <ScoreRow team={i2.battingTeam} runs={i2.totalRuns} wkts={i2.wickets} balls={i2.totalBalls}/>
         {/* POTM voting — same component, viewer role so no Close button */}
         <POTMVoting inn={inn} inn1={inn1} potm={potm} role="viewer"/>
-        <button className="btn btn-ghost w-full" style={{marginTop:16}} onClick={onExit}>← Back</button>
+        <button className="btn w-full" style={{marginTop:16,background:"rgba(37,211,102,.15)",border:"1px solid rgba(37,211,102,.4)",color:"#25d366",fontWeight:600}}
+          onClick={()=>{
+            const text=buildResultShareText(snap,potm);
+            try{ if(navigator.share){ navigator.share({text}).catch(()=>{}); return; } }catch(e){}
+            try{ navigator.clipboard.writeText(text).then(()=>{ setShareToast(true); setTimeout(()=>setShareToast(false),2200); }).catch(()=>{}); }catch(e){}
+          }}>📤 Share Result</button>
+        {shareToast&&<div style={{textAlign:"center",marginTop:8,fontSize:11,color:"#25d366",fontFamily:"'JetBrains Mono',monospace"}}>✓ Result copied — paste it into WhatsApp!</div>}
+        <button className="btn btn-ghost w-full" style={{marginTop:8}} onClick={onExit}>← Back</button>
       </div></div>
     );
   }
@@ -5500,8 +5693,15 @@ function ViewerLive({onExit}){
             <span style={{fontSize:10,background:"rgba(16,185,129,.18)",color:"#34d399",border:"1px solid rgba(16,185,129,.4)",borderRadius:6,padding:"3px 9px",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>● LIVE</span>
             <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".2em"}}>{inn.inningsNum===1?"1st":"2nd"} Innings</span>
           </div>
-          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+          <div className="flex items-center" style={{gap:10}}>
+            <button onClick={()=>shareLive(snap,()=>{ setShareToast(true); setTimeout(()=>setShareToast(false),2200); })}
+              style={{background:"rgba(37,211,102,.15)",border:"1px solid rgba(37,211,102,.4)",color:"#25d366",
+                fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 10px",fontWeight:600}}
+              title="Share the live score">📤 Share</button>
+            <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+          </div>
         </div>
+        {shareToast&&<div style={{marginBottom:8,fontSize:11,color:"#25d366",fontFamily:"'JetBrains Mono',monospace"}}>✓ Score copied — paste it into WhatsApp!</div>}
         {/* One clean matchup line — batting team leads (bold), bowling side in the same line rather
             than floating detached on the far right, so the header reads as a single statement. */}
         <div style={{marginBottom:2}}>
@@ -7194,17 +7394,30 @@ const SCORING_SLOT="scoring";
 function sessionPath(matchId,slot){ return matchId?`sessions/${matchId}/${slot}`:`sessions/_admin/${slot}`; }
 function claimSession(matchId,slot,sessionId,force){
   return new Promise(resolve=>{
-    if(!FB_OK||!DB||!slot){ resolve({ok:true}); return; } // fail OPEN — this feature must never itself block scoring
-    const ref=DB.ref(sessionPath(matchId,slot));
-    const now=Date.now();
-    ref.transaction(cur=>{
-      const activeElsewhere = cur&&cur.sessionId&&cur.sessionId!==sessionId&&(now-(cur.lastSeen||0))<SESSION_TIMEOUT_MS;
-      if(activeElsewhere&&!force) return; // abort the transaction — leave the existing claim untouched
-      return {sessionId,lastSeen:now};
-    },(err,committed,snap)=>{
-      if(err){ resolve({ok:true}); return; } // fail open on any Firebase error too
-      if(committed){ resolve({ok:true}); }
-      else { resolve({ok:false,heldSince:(snap&&snap.val()&&snap.val().lastSeen)||null}); }
+    if(!FB_OK||!DB||!slot){ resolve({ok:true}); return; } // no Firebase at all = local-only mode; nothing to race against
+    // MUST wait for anonymous auth to settle before transacting — every other Firebase read in this
+    // app does this via onAuthReady, and this one is no exception. On a FRESH page load (a refresh!)
+    // the transaction was firing before auth landed, getting permission-denied, and the old error
+    // handler failed OPEN — which let a freshly-refreshed second device sail straight past the lock
+    // and into the admin dashboard while another device was actively signed in.
+    onAuthReady(()=>{
+      const ref=DB.ref(sessionPath(matchId,slot));
+      const now=Date.now();
+      ref.transaction(cur=>{
+        const activeElsewhere = cur&&cur.sessionId&&cur.sessionId!==sessionId&&(now-(cur.lastSeen||0))<SESSION_TIMEOUT_MS;
+        if(activeElsewhere&&!force) return; // abort the transaction — leave the existing claim untouched
+        return {sessionId,lastSeen:now};
+      },(err,committed,snap)=>{
+        if(err){
+          // Fail CLOSED: an errored claim must not grant access — that's the exact hole that let a
+          // refreshed device bypass the lock. The 'error' flag lets the gate show "connection
+          // problem — try again" rather than the misleading "someone is already signed in".
+          resolve({ok:false,error:true});
+          return;
+        }
+        if(committed){ resolve({ok:true}); }
+        else { resolve({ok:false,heldSince:(snap&&snap.val()&&snap.val().lastSeen)||null}); }
+      });
     });
   });
 }
@@ -7214,11 +7427,16 @@ function claimSession(matchId,slot,sessionId,force){
 // does nothing rather than deleting the other device's now-rightful claim.
 function releaseSession(matchId,slot,sessionId){
   if(!FB_OK||!DB||!slot) return Promise.resolve();
-  const ref=DB.ref(sessionPath(matchId,slot));
-  return ref.transaction(cur=>{
-    if(cur&&cur.sessionId===sessionId) return null; // returning null deletes the node
-    return cur; // not ours anymore (or already gone) — leave it exactly as-is
-  }).catch(()=>{});
+  // Same onAuthReady discipline as claimSession — a release fired pre-auth (e.g. logout right after
+  // a refresh) would error out silently and leave the slot held until the 20s stale timeout.
+  return new Promise(resolve=>{
+    onAuthReady(()=>{
+      DB.ref(sessionPath(matchId,slot)).transaction(cur=>{
+        if(cur&&cur.sessionId===sessionId) return null; // returning null deletes the node
+        return cur; // not ours anymore (or already gone) — leave it exactly as-is
+      }).then(resolve).catch(resolve);
+    });
+  });
 }
 
 function ScorerGate({onOk,onCancel,mySessionId}){
@@ -7269,14 +7487,16 @@ function ScorerGate({onOk,onCancel,mySessionId}){
     claimSession(null,SCORING_SLOT,mySessionId,false).then(res=>{
       setClaiming(false);
       if(res.ok){ onOk({...r,sessionSlot:SCORING_SLOT}); }
-      else { setConflict({r,heldSince:res.heldSince}); }
+      else { setConflict({r,heldSince:res.heldSince,error:!!res.error}); }
     });
   };
 
   if(conflict){
     const secsAgo=conflict.heldSince?Math.max(0,Math.round((Date.now()-conflict.heldSince)/1000)):null;
-    return <Centered emoji="🔒" title="Someone is already signed in"
-      sub={`Another device is already signed in to score${secsAgo!=null?` (active ${secsAgo}s ago)`:""}. Only one device can score at a time — ask them to exit or log out first. If that device is dead or lost, just try again in about 20 seconds and you'll get straight in.`}
+    return <Centered emoji={conflict.error?"📶":"🔒"} title={conflict.error?"Connection problem":"Someone is already signed in"}
+      sub={conflict.error
+        ?"Couldn't verify the session lock — check your connection and try again. For safety, login is blocked until the check succeeds."
+        :`Another device is already signed in to score${secsAgo!=null?` (active ${secsAgo}s ago)`:""}. Only one device can score at a time — ask them to exit or log out first. If that device is dead or lost, just try again in about 20 seconds and you'll get straight in.`}
       onExit={onCancel}>
       <button className="btn btn-primary w-full" style={{marginBottom:10}} disabled={claiming}
         onClick={()=>attemptClaim(conflict.r)}>{claiming?"Checking…":"🔁 Try Again"}</button>
@@ -8437,16 +8657,16 @@ function StatsPage({onExit}){
           </div>
         ):(<>
           {/* Tabs */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:4,marginBottom:18,
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:4,marginBottom:18,
             background:"rgba(255,255,255,.04)",borderRadius:14,padding:4}}>
-            {[["leaders","🏆 Leaders"],["awards","👑 Awards"],["players","👤 Players"],["records","🌟 Records"]].map(([id,lbl])=>(
+            {[["leaders","🏆"],["awards","👑"],["players","👤"],["records","🌟"],["h2h","⚔️"]].map(([id,lbl])=>(
               <button key={id} onClick={()=>setView(id)} style={{
                 padding:"9px 2px",borderRadius:10,border:"none",cursor:"pointer",
-                fontSize:11,fontWeight:600,fontFamily:"'Inter',sans-serif",transition:"all .15s",
+                fontSize:15,fontWeight:600,fontFamily:"'Inter',sans-serif",transition:"all .15s",
                 background:view===id?"linear-gradient(135deg,rgba(99,102,241,.6),rgba(139,92,246,.6))":"transparent",
                 color:view===id?"#fff":"#6b7280",
                 boxShadow:view===id?"0 2px 8px rgba(99,102,241,.3)":""
-              }}>{lbl}</button>
+              }} title={id}>{lbl}</button>
             ))}
           </div>
 
@@ -8470,6 +8690,42 @@ function StatsPage({onExit}){
               ))}
             </div>
           )}
+
+          {/* ── HEAD-TO-HEAD ── */}
+          {view==="h2h"&&(()=>{
+            const h2h=computeHeadToHead(filteredHistory);
+            if(h2h.length===0) return <div style={{textAlign:"center",padding:"30px 0"}}><div style={{fontSize:36,marginBottom:8}}>⚔️</div><p style={{color:"#6b7280",fontSize:13}}>No completed matches between teams yet.</p></div>;
+            return (
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                  <div style={{width:3,height:16,borderRadius:2,background:"#818cf8"}}/>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,fontWeight:700,color:"#818cf8",letterSpacing:".15em"}}>TEAM RIVALRIES</span>
+                </div>
+                {h2h.map((r,i)=>{
+                  const aLead=r.aWins>r.bWins, bLead=r.bWins>r.aWins;
+                  return (
+                    <div key={i} style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:16,padding:"14px",marginBottom:10}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                        <div style={{flex:1,textAlign:"left"}}>
+                          <div style={{fontWeight:700,fontSize:14,color:aLead?"#34d399":"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.a}</div>
+                          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,color:aLead?"#34d399":"#9ca3af",lineHeight:1}}>{r.aWins}</div>
+                        </div>
+                        <div style={{textAlign:"center",flexShrink:0,padding:"0 6px"}}>
+                          <div style={{fontSize:10,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace"}}>vs</div>
+                          <div style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{r.played} played</div>
+                          {r.tied>0&&<div style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{r.tied} tied</div>}
+                        </div>
+                        <div style={{flex:1,textAlign:"right"}}>
+                          <div style={{fontWeight:700,fontSize:14,color:bLead?"#34d399":"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.b}</div>
+                          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,color:bLead?"#34d399":"#9ca3af",lineHeight:1}}>{r.bWins}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* ── LEADERS ── */}
           {view==="leaders"&&(
@@ -8849,6 +9105,59 @@ function AnnouncementPage({onExit}){
 }
 
 // ── Basic Admin: Player Tools — merge, link, bulk-add ─────────────────────────
+// ── AdminHome building blocks — defined at MODULE level, not inside AdminHome ─────────────────
+// These were previously declared inside the AdminHome function body. That meant every AdminHome
+// re-render created brand-new component types, so React UNMOUNTED and REMOUNTED every pill/tile/hero
+// instead of reconciling them — and since each has an entrance animation (fadeUp), the whole
+// dashboard visibly flickered/replayed its intro every time any of AdminHome's five Firebase
+// listeners (live/poll/votes/roster/history) delivered an update: several times in the first second
+// after login, and again on every ball while a match is live. Hoisting them to module scope makes
+// the element types stable, so re-renders reconcile in place and the animations play exactly once.
+const AdminPill=({label,color,dot})=>(
+  <div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:20,
+    background:`rgba(${color},.12)`,border:`1px solid rgba(${color},.35)`}}>
+    {dot&&<div style={{width:6,height:6,borderRadius:"50%",background:`rgb(${color})`,
+      boxShadow:`0 0 6px rgba(${color},.8)`,animation:"menuPulse 2s ease-in-out infinite"}}/>}
+    <span style={{fontSize:10,color:`rgb(${color})`,fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{label}</span>
+  </div>
+);
+const AdminHero=({em,title,sub,grad,onClick})=>(
+  <button onClick={onClick} style={{
+    width:"100%",display:"flex",alignItems:"center",gap:14,padding:"18px 18px",
+    borderRadius:20,cursor:"pointer",color:"#111",textAlign:"left",border:"none",
+    background:grad,boxShadow:"0 8px 24px rgba(0,0,0,.4)",
+    animation:"fadeUp .3s ease both",marginBottom:8
+  }}>
+    <span style={{fontSize:32,flexShrink:0}}>{em}</span>
+    <span style={{flex:1}}>
+      <span style={{display:"block",fontFamily:"'Oswald',sans-serif",fontWeight:700,fontSize:18,lineHeight:1}}>{title}</span>
+      <span style={{display:"block",fontSize:12,marginTop:3,opacity:.7}}>{sub}</span>
+    </span>
+    <span style={{fontSize:20,opacity:.6}}>→</span>
+  </button>
+);
+const AdminTile=({em,title,sub,col,badge,onClick,delay=0,full=false})=>(
+  <button onClick={onClick} style={{
+    display:"flex",flexDirection:full?"row":"column",
+    alignItems:full?"center":"flex-start",
+    gap:full?12:8,
+    padding:full?"13px 14px":"14px 14px",
+    borderRadius:16,cursor:"pointer",textAlign:"left",border:`1px solid rgba(${col},.3)`,
+    background:`rgba(${col},.08)`,color:"#fff",width:"100%",
+    animation:`fadeUp .3s ease ${delay}s both`,position:"relative"
+  }}>
+    {badge!=null&&<div style={{position:"absolute",top:8,right:8,minWidth:18,height:18,borderRadius:9,
+      background:`rgb(${col})`,display:"flex",alignItems:"center",justifyContent:"center",
+      fontSize:9,fontWeight:700,color:"#111",padding:"0 4px"}}>{badge}</div>}
+    <span style={{fontSize:full?22:24,flexShrink:0}}>{em}</span>
+    <span style={{flex:1}}>
+      <span style={{display:"block",fontWeight:700,fontSize:full?13:12,marginBottom:full?2:3}}>{title}</span>
+      <span style={{display:"block",fontSize:10,color:"rgba(255,255,255,.5)",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.4}}>{sub}</span>
+    </span>
+    {full&&<span style={{color:"rgba(255,255,255,.3)",fontSize:14,flexShrink:0}}>→</span>}
+  </button>
+);
+
 // ── AdminHome — beautiful shared home for both Super and Basic admin ──────────
 function AdminHome({tier,onPick,onExit,onLogout}){
   const isSuper=tier==="super";
@@ -8887,55 +9196,7 @@ function AdminHome({tier,onPick,onExit,onLogout}){
   const yesCount=Object.values(votes).filter(v=>v?.choice==="yes").length;
   const totalVotes=Object.values(votes).filter(v=>v?.choice).length;
 
-  // Status pill
-  const Pill=({label,color,dot})=>(
-    <div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:20,
-      background:`rgba(${color},.12)`,border:`1px solid rgba(${color},.35)`}}>
-      {dot&&<div style={{width:6,height:6,borderRadius:"50%",background:`rgb(${color})`,
-        boxShadow:`0 0 6px rgba(${color},.8)`,animation:"menuPulse 2s ease-in-out infinite"}}/>}
-      <span style={{fontSize:10,color:`rgb(${color})`,fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{label}</span>
-    </div>
-  );
 
-  // Feature tile — large (full width hero)
-  const Hero=({em,title,sub,grad,onClick})=>(
-    <button onClick={onClick} style={{
-      width:"100%",display:"flex",alignItems:"center",gap:14,padding:"18px 18px",
-      borderRadius:20,cursor:"pointer",color:"#111",textAlign:"left",border:"none",
-      background:grad,boxShadow:"0 8px 24px rgba(0,0,0,.4)",
-      animation:"fadeUp .3s ease both",marginBottom:8
-    }}>
-      <span style={{fontSize:32,flexShrink:0}}>{em}</span>
-      <span style={{flex:1}}>
-        <span style={{display:"block",fontFamily:"'Oswald',sans-serif",fontWeight:700,fontSize:18,lineHeight:1}}>{title}</span>
-        <span style={{display:"block",fontSize:12,marginTop:3,opacity:.7}}>{sub}</span>
-      </span>
-      <span style={{fontSize:20,opacity:.6}}>→</span>
-    </button>
-  );
-
-  // Feature tile — regular (half width or full)
-  const Tile=({em,title,sub,col,badge,onClick,delay=0,full=false})=>(
-    <button onClick={onClick} style={{
-      display:"flex",flexDirection:full?"row":"column",
-      alignItems:full?"center":"flex-start",
-      gap:full?12:8,
-      padding:full?"13px 14px":"14px 14px",
-      borderRadius:16,cursor:"pointer",textAlign:"left",border:`1px solid rgba(${col},.3)`,
-      background:`rgba(${col},.08)`,color:"#fff",width:"100%",
-      animation:`fadeUp .3s ease ${delay}s both`,position:"relative"
-    }}>
-      {badge!=null&&<div style={{position:"absolute",top:8,right:8,minWidth:18,height:18,borderRadius:9,
-        background:`rgb(${col})`,display:"flex",alignItems:"center",justifyContent:"center",
-        fontSize:9,fontWeight:700,color:"#111",padding:"0 4px"}}>{badge}</div>}
-      <span style={{fontSize:full?22:24,flexShrink:0}}>{em}</span>
-      <span style={{flex:1}}>
-        <span style={{display:"block",fontWeight:700,fontSize:full?13:12,marginBottom:full?2:3}}>{title}</span>
-        <span style={{display:"block",fontSize:10,color:"rgba(255,255,255,.5)",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.4}}>{sub}</span>
-      </span>
-      {full&&<span style={{color:"rgba(255,255,255,.3)",fontSize:14,flexShrink:0}}>→</span>}
-    </button>
-  );
 
   const now=new Date();
   const hour=now.getHours();
@@ -8995,13 +9256,13 @@ function AdminHome({tier,onPick,onExit,onLogout}){
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {hasLive
-            ?<Pill label={`LIVE · ${live.battingTeam} ${live.totalRuns||0}/${live.wickets||0}`} color="52,211,153" dot/>
-            :<Pill label="No active match" color="107,114,128"/>}
+            ?<AdminPill label={`LIVE · ${live.battingTeam} ${live.totalRuns||0}/${live.wickets||0}`} color="52,211,153" dot/>
+            :<AdminPill label="No active match" color="107,114,128"/>}
           {poll
-            ?<Pill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>
-            :<Pill label="No poll open" color="107,114,128"/>}
-          <Pill label={`${rosterCount} member${rosterCount===1?"":"s"}`} color="99,102,241"/>
-          <Pill label={`${histCount} match${histCount===1?"":"es"}`} color="245,158,11"/>
+            ?<AdminPill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>
+            :<AdminPill label="No poll open" color="107,114,128"/>}
+          <AdminPill label={`${rosterCount} member${rosterCount===1?"":"s"}`} color="99,102,241"/>
+          <AdminPill label={`${histCount} match${histCount===1?"":"es"}`} color="245,158,11"/>
         </div>
       </div>
 
@@ -9018,16 +9279,16 @@ function AdminHome({tier,onPick,onExit,onLogout}){
             <p style={{fontSize:9,color:"rgba(251,191,36,.85)",fontFamily:"'JetBrains Mono',monospace",
               letterSpacing:".2em",fontWeight:700,marginBottom:10}}>👑 SUPER ADMIN ONLY</p>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <Tile em="📢" title="Post Notice" sub="Home screen announcement" col="245,158,11"
+              <AdminTile em="📢" title="Post Notice" sub="Home screen announcement" col="245,158,11"
                 onClick={()=>onPick("announce")} delay={.02}/>
-              <Tile em="🔐" title="Manage PINs" sub="Change admin PINs" col="251,191,36"
+              <AdminTile em="🔐" title="Manage PINs" sub="Change admin PINs" col="251,191,36"
                 onClick={()=>onPick("pinMgmt")} delay={.04}/>
             </div>
           </div>
         )}
 
         {/* Primary hero — Score a Match */}
-        <Hero
+        <AdminHero
           em="🏏" title="Score a Match"
           sub={hasLive?"● Resume live match":"Start a new match · full scoring access"}
           grad={hasLive
@@ -9038,23 +9299,23 @@ function AdminHome({tier,onPick,onExit,onLogout}){
 
         {/* ── 2-column: Poll + Roster (each now includes tools inside) ── */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-          <Tile em="📋" title="Poll & Teams" sub="Manage · vote · build teams"
+          <AdminTile em="📋" title="Poll & Teams" sub="Manage · vote · build teams"
             col="167,139,250" badge={yesCount>0?yesCount:null}
             onClick={()=>onPick("poll")} delay={.05}/>
-          <Tile em="👤" title="Roster & Players" sub="Add · merge · bulk add"
+          <AdminTile em="👤" title="Roster & Players" sub="Add · merge · bulk add"
             col="245,158,11" badge={rosterCount}
             onClick={()=>onPick("roster")} delay={.08}/>
         </div>
 
         {/* ── Full-width: History & Stats ── */}
-        <Tile em="📚" title="Match History"
+        <AdminTile em="📚" title="Match History"
           sub={`${histCount} matches · scorecards`+(isSuper?" · edit & delete":"")}
           col="99,102,241" full onClick={()=>onPick("history")} delay={.11}/>
         <div style={{height:8}}/>
-        <Tile em="📊" title="Stats & Records" sub="Leaderboard · player profiles · venue filter"
+        <AdminTile em="📊" title="Stats & Records" sub="Leaderboard · player profiles · venue filter"
           col="245,158,11" full onClick={()=>onPick("stats")} delay={.14}/>
         <div style={{height:8}}/>
-        <Tile em="🏆" title="Tournaments" sub="Fixtures · start matches · scoped stats"
+        <AdminTile em="🏆" title="Tournaments" sub="Fixtures · start matches · scoped stats"
           col="56,189,248" full onClick={()=>onPick("tournaments")} delay={.17}/>
       </div>
     </div>
@@ -9252,13 +9513,15 @@ function Root(){
       setAdminClaiming(true);
       claimSession(null,SCORING_SLOT,mySessionId,false).then(res=>{
         setAdminClaiming(false);
-        if(res.ok){ finishAdminLogin(r); } else { setAdminConflict({r,heldSince:res.heldSince}); }
+        if(res.ok){ finishAdminLogin(r); } else { setAdminConflict({r,heldSince:res.heldSince,error:!!res.error}); }
       });
     };
     if(adminConflict){
       const secsAgo=adminConflict.heldSince?Math.max(0,Math.round((Date.now()-adminConflict.heldSince)/1000)):null;
-      return <Centered emoji="🔒" title="Someone is already signed in"
-        sub={`Another device is already signed in as admin or scorer${secsAgo!=null?` (active ${secsAgo}s ago)`:""}. Only one device can be signed in at a time — ask them to exit or log out first. If that device is dead or lost, just try again in about 20 seconds and you'll get straight in.`}
+      return <Centered emoji={adminConflict.error?"📶":"🔒"} title={adminConflict.error?"Connection problem":"Someone is already signed in"}
+        sub={adminConflict.error
+          ?"Couldn't verify the session lock — check your connection and try again. For safety, login is blocked until the check succeeds."
+          :`Another device is already signed in as admin or scorer${secsAgo!=null?` (active ${secsAgo}s ago)`:""}. Only one device can be signed in at a time — ask them to exit or log out first. If that device is dead or lost, just try again in about 20 seconds and you'll get straight in.`}
         onExit={home}>
         <button className="btn btn-primary w-full" style={{marginBottom:10}} disabled={adminClaiming}
           onClick={()=>adminOnOk(adminConflict.r)}>{adminClaiming?"Checking…":"🔁 Try Again"}</button>
