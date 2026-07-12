@@ -1982,7 +1982,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
       batsmen:{},battingOrder:[],
       bowlers:{},bowlingOrder:[],
       strikerName:null,nonStrikerName:null,bowlerName:null,
-      totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],overBowlers:[],partnerships:[],
+      totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],overBowlers:[],partnerships:[],partnership:0,partnershipBalls:0,
       extras:{wd:0,nb:0,b:0,lb:0},target:null});
   };
 
@@ -2342,6 +2342,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
       // "who actually built this innings" — not just the live current stand.
       i.partnerships=[...(i.partnerships||[]),{runs:i.partnership||0,pair:[i.strikerName,i.nonStrikerName],endWkt:i.wickets}];
       i.partnership=0;
+      i.partnershipBalls=0;
     }
     else if(ev.type==="DECL"){
       // Declared runs: admin/scorer manually credits runs when the ball can't be fielded normally
@@ -2365,6 +2366,10 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
     // (below). Every run (bat, extras, everything that adds to the team total) counts toward the stand,
     // which matches how cricket partnerships are recorded. Used for the 50/100 partnership celebration.
     i.partnership=(i.partnership||0)+rT;
+    // Balls faced BY THE PARTNERSHIP (not any one batsman) — only legal deliveries count (isL, same
+    // rule used for every other balls-faced stat in the app: wides don't count, no-balls don't count,
+    // everything else does). Powers the live "runs (balls)" display for the current stand.
+    i.partnershipBalls=(i.partnershipBalls||0)+(isL?1:0);
     // HAT-TRICK tracking — a per-bowler count of wickets on CONSECUTIVE deliveries they bowled. On a
     // wicket we increment their streak (handled in the wicket branch below via bw.streak); on any
     // legal delivery that ISN'T a wicket, the streak breaks. Wides/no-balls don't count as a delivery
@@ -2551,7 +2556,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
       battingOrder:p.single?[striker]:[striker,nonStriker],
       bowlers:{[bowler]:nw(bowler,resolvePid(bowler))},bowlingOrder:[bowler],
       strikerName:striker,nonStrikerName:p.single?null:nonStriker,bowlerName:bowler,
-      totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],overBowlers:[],partnerships:[],
+      totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],overBowlers:[],partnerships:[],partnership:0,partnershipBalls:0,
       extras:{wd:0,nb:0,b:0,lb:0},target:p.totalRuns+1}));
     setIB(false);
   };
@@ -2713,6 +2718,16 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                     borderRadius:9,padding:"4px 9px",whiteSpace:"nowrap"}}>Proj <span style={{color:"#fff",fontWeight:700}}>{Math.round(parseFloat(crr)*inn.overs)}</span></span>}
               </div>
             </div>
+            {/* CURRENT PARTNERSHIP — the run-up between the two batsmen at the crease right now. Shown
+                only when there IS a partnership to speak of: two-batsman mode with both ends occupied.
+                Hidden during single-batsman innings (no partnership concept there) and while a new
+                batsman is still being selected after a wicket (inn.nonStrikerName briefly absent). */}
+            {!inn.single&&inn.strikerName&&inn.nonStrikerName&&(
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#9ca3af"}}>
+                🤝 {inn.strikerName} & {inn.nonStrikerName}: <span style={{color:"#e5e7eb",fontWeight:700}}>{inn.partnership||0}</span>
+                <span style={{color:"#6b7280"}}> ({inn.partnershipBalls||0})</span>
+              </div>
+            )}
           </div>
           {/* CHASE STRIP — full-width match equation during the 2nd innings, with a progress bar
               that actually has room to breathe (the old narrow side panel cramped all of this). */}
@@ -5734,6 +5749,15 @@ function ViewerLive({onExit}){
           <span key={inn.totalRuns+"-"+inn.wickets} className="score-number score-pulse">{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
           <span style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:16,marginBottom:4}}>({ovStr(inn.totalBalls)} ov)</span>
         </div>
+        {/* CURRENT PARTNERSHIP — same idea as the scorer's own header: the run-up between the two
+            batsmen currently at the crease. Hidden for single-batsman innings and the brief moment a
+            new batsman is being selected after a wicket. */}
+        {!inn.single&&inn.strikerName&&inn.nonStrikerName&&(
+          <div style={{marginTop:4,fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#9ca3af"}}>
+            🤝 {inn.strikerName} & {inn.nonStrikerName}: <span style={{color:"#e5e7eb",fontWeight:700}}>{inn.partnership||0}</span>
+            <span style={{color:"#6b7280"}}> ({inn.partnershipBalls||0})</span>
+          </div>
+        )}
         {/* TICKER — one line describing the latest ball, refreshed per delivery */}
         {(()=>{
           const evs=inn.overEvents&&inn.overEvents.length?inn.overEvents:((inn.completedOvers||[]).slice(-1)[0]||[]);
