@@ -1480,6 +1480,20 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
         .filter(([wid,e])=>wid!==writerId.current && e && (now-(e.lastSeen||0))<15000)
         .map(([,e])=>e.role);
       setOtherScorers(others);
+      // Opportunistic cleanup: this node used to just accumulate forever — every device that ever
+      // opened the app left an entry behind, and if it didn't exit cleanly (crashed tab, dead phone,
+      // force-closed app), nothing ever removed it. The 15s freshness filter above already hides
+      // stale entries from the "other scorers active" badge, but the junk itself stayed in Firebase
+      // indefinitely. Reusing SESSION_TIMEOUT_MS (same 20s staleness threshold as the session lock)
+      // for consistency: any device that reads this node deletes OTHER devices' entries once they've
+      // gone stale. Safe for any device to do — deleting an already-gone key is a harmless no-op, and
+      // a still-active device's own entry never qualifies since it keeps renewing well within the
+      // window. Only ever touches other devices' keys, never this device's own.
+      Object.entries(v).forEach(([wid,e])=>{
+        if(wid!==writerId.current && e && (now-(e.lastSeen||0))>=SESSION_TIMEOUT_MS){
+          DB.ref(`${path}/${wid}`).remove().catch(()=>{});
+        }
+      });
     });
     return ()=>{
       clearInterval(interval);
@@ -1489,23 +1503,24 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
   },[isScorer,match?.matchId,role]);
 
   // ── Single-active-session lock: heartbeat + kick detection ─────────────────────────────────────
-  // The actual CLAIM — and any "someone else is already active, take over?" block — already happened
-  // at the PIN gate (ScorerGate for team scorers, Root's admin gate for admin) before this component
-  // ever mounted. From here on this device just needs to (a) keep renewing its claim so it never looks
-  // stale to anyone else's check, and (b) notice if another device hits "Take Over Anyway" and claims
-  // the slot out from under us mid-session, so we stop silently scoring into a session we no longer
-  // actually own — instead of the two-devices-editing-the-same-data problem just happening again one
-  // level up. mySlot mirrors exactly how the PIN gates computed it: "admin" is a single global slot
-  // (there's only ever one match live at a time), team slots are scoped to this specific match.
+  // The actual CLAIM — and the hard "someone is already signed in" block — already happened at the
+  // PIN gate before this component ever mounted. There is one global scoring slot for everyone
+  // (admin + both team PINs). Session lifecycle ownership is split by role to avoid two effects
+  // fighting over the same slot:
+  //   • role==="admin": Root's own heartbeat effect owns the claim for the WHOLE admin session
+  //     (dashboard, roster, history, scoring…), because an admin can be signed in without this App
+  //     component being mounted at all. App deliberately does NOTHING here for admins — renewing or
+  //     releasing from here too would fight Root's effect (e.g. App unmounting when the admin steps
+  //     back to the dashboard would release the slot Root still legitimately holds).
+  //   • role==="scorer": the scoring screen is the only place a team scorer exists, so App owns the
+  //     full lifecycle — renew while mounted, release on unmount, and sign out if the slot is ever
+  //     reclaimed after this device went stale (only possible if we were dead/offline 20s+).
   const mySessionIdSafe=mySessionId||writerId.current;
-  const mySlot=role==="admin"?"admin":(sessionSlot||null);
-  const sessionMatchId=role==="admin"?null:(match?.matchId||null);
-  const sessionReady=!!mySlot&&(role==="admin"||!!sessionMatchId);
   const[kickedOut,setKickedOut]=React.useState(false);
   const[retakingOver,setRetakingOver]=React.useState(false);
   React.useEffect(()=>{
-    if(!isScorer||!FB_OK||!DB||!sessionReady)return;
-    const ref=DB.ref(sessionPath(sessionMatchId,mySlot));
+    if(role!=="scorer"||!FB_OK||!DB)return;
+    const ref=DB.ref(sessionPath(null,SCORING_SLOT));
     const renew=()=>{ ref.set({sessionId:mySessionIdSafe,lastSeen:Date.now()}).catch(()=>{}); };
     renew();
     const hb=setInterval(renew,6000);
@@ -1516,12 +1531,12 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
     return ()=>{
       clearInterval(hb); ref.off("value",cb);
       // Release-on-exit: free the slot the instant this device stops actively scoring, rather than
-      // making the next device wait out the full heartbeat timeout or hit an unnecessary "Take Over
-      // Anyway" prompt. Safe even if we'd been kicked out already — releaseSession only clears the
-      // slot if it still holds exactly OUR sessionId, so a takeover elsewhere is never undone by this.
-      releaseSession(sessionMatchId,mySlot,mySessionIdSafe);
+      // making the next device wait out the full heartbeat timeout. Safe even if we'd already been
+      // reclaimed elsewhere — releaseSession only clears the slot if it still holds exactly OUR
+      // sessionId, so someone else's rightful claim is never undone by this.
+      releaseSession(null,SCORING_SLOT,mySessionIdSafe);
     };
-  },[isScorer,sessionReady,sessionMatchId,mySlot]);
+  },[role]);
 
   // Track whether a revert snapshot exists in Firebase, so the super-admin revert button
   // stays available even after a page refresh (when local preEnd state is lost).
@@ -2506,14 +2521,17 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
   };
 
   if(kickedOut){
-    const label=mySlot==="admin"?"Admin":mySlot==="teamA"?(match?.teamA||"Your team"):(match?.teamB||"Your team");
-    return <Centered emoji="🔓" title="Session taken over"
-      sub={`${label}'s session was taken over from another device. If that wasn't you, check with whoever else has this PIN before taking it back.`}
+    // Only reachable if THIS device went dead/offline for 20s+ and another device reclaimed the
+    // stale slot in the meantime — there is no manual take-over anymore. Reconnecting is a plain
+    // non-force claim: it succeeds only if the slot is free again (the other device exited or went
+    // stale itself), never by stealing it back from an actively-scoring device.
+    return <Centered emoji="🔒" title="Signed out"
+      sub="This device was offline too long and another device has signed in to score. Only one device can score at a time. Once they exit — or if their device dies — you can reconnect here."
       onExit={onExit}>
       <button className="btn btn-primary w-full" disabled={retakingOver} onClick={()=>{
         setRetakingOver(true);
-        claimSession(sessionMatchId,mySlot,mySessionIdSafe,true).then(()=>{ setRetakingOver(false); setKickedOut(false); });
-      }}>{retakingOver?"Taking back over…":"⚡ Take Back Over"}</button>
+        claimSession(null,SCORING_SLOT,mySessionIdSafe,false).then(res=>{ setRetakingOver(false); if(res.ok) setKickedOut(false); });
+      }}>{retakingOver?"Checking…":"🔁 Try to Reconnect"}</button>
     </Centered>;
   }
 
@@ -7156,18 +7174,23 @@ function Landing({onPick}){
 }
 
 // ── Single-active-session lock ────────────────────────────────────────────────────────────────────
-// Prevents two devices logging in under the SAME identity (the admin PIN, or one team's scorer PIN)
-// from being active at once — the exact scenario that let a whole 2nd innings get silently
-// overwritten (see the live-listener regression guard's "self-heal" comment above). Sessions are
-// scoped per matchId+slot, where slot is "admin", "teamA", or "teamB" — so the two TEAMS' scorers can
-// still legitimately be active at the same time (e.g. both entering their own openers during an
-// innings break); only a SECOND device using the SAME identity gets blocked.
+// ONE global slot — "scoring" — shared by EVERY scoring identity: the admin PINs and both teams'
+// scorer PINs all claim the same slot. Only one device can hold it, so only one device can be signed
+// in to score (or even reach the admin dashboard) at a time, full stop. This is deliberately stricter
+// than the earlier per-identity model (separate admin/teamA/teamB slots): Lokesh wants a hard
+// guarantee that two devices can never be scoring simultaneously in ANY combination — admin+admin,
+// scorer+scorer, or admin+scorer — since any of those combinations is the two-writers race that
+// wiped a 2nd innings. The cost is that both teams can no longer enter their openers at the same
+// moment during an innings break (second team waits for the first to exit); that friction was judged
+// acceptable versus the data-loss risk.
+// There is NO manual "take over" path — a second device is hard-blocked at the PIN gate, before it
+// reaches any dashboard or scoring screen. The ONLY way a slot changes hands is the stale timeout:
+// if the holder's heartbeat goes quiet for SESSION_TIMEOUT_MS (crashed tab, dead phone, closed app),
+// the next login reclaims it silently. So the worst case after losing a device is a ~20 second wait.
 // A Firebase transaction makes the claim atomic — if two devices submit a claim in the same instant,
 // exactly one wins, deterministically, rather than a last-write-wins race.
-// A session is "stale" (safe to silently reclaim without anyone hitting Take Over) once its heartbeat
-// hasn't renewed in SESSION_TIMEOUT_MS — this is what stops a crashed tab or dead phone from
-// permanently locking everyone else out with no way back in.
 const SESSION_TIMEOUT_MS=20000;
+const SCORING_SLOT="scoring";
 function sessionPath(matchId,slot){ return matchId?`sessions/${matchId}/${slot}`:`sessions/_admin/${slot}`; }
 function claimSession(matchId,slot,sessionId,force){
   return new Promise(resolve=>{
@@ -7227,37 +7250,36 @@ function ScorerGate({onOk,onCancel,mySessionId}){
   if(data.mo) return <Centered emoji="🏆" title="Match has ended" sub="Ask the admin to start a new match." onExit={onCancel}/>;
 
   const verify=(entered)=>{
-    if(entered===ADMIN_PIN||entered===BASIC_ADMIN_PIN) return {ok:true,slot:"admin"};
+    if(entered===ADMIN_PIN||entered===BASIC_ADMIN_PIN) return {ok:true,slot:SCORING_SLOT};
     const isTeamA=entered===data.pinA, isTeamB=entered===data.pinB;
     if(!isTeamA&&!isTeamB) return {ok:false,msg:"❌ Wrong PIN, try again"};
     const myTeam=isTeamA?data.teamA:data.teamB;
-    const slot=isTeamA?"teamA":"teamB";
-    if(data.awaitingOpeners||data.ib) return {ok:true,slot,team:myTeam};
-    if(myTeam===data.battingTeam) return {ok:true,slot,team:myTeam};
+    if(data.awaitingOpeners||data.ib) return {ok:true,slot:SCORING_SLOT,team:myTeam};
+    if(myTeam===data.battingTeam) return {ok:true,slot:SCORING_SLOT,team:myTeam};
     return {ok:false,msg:`🔒 ${myTeam} isn't batting yet — ${data.battingTeam} is batting now.`};
   };
 
-  // Between a successful PIN and actually letting the person in: claim the session slot. If another
-  // device already holds it (active within the last 20s), stop here and show the conflict screen
-  // instead of silently letting two devices score under the same identity at once — that's exactly
-  // what caused the 2nd-innings data loss.
-  const attemptClaim=(r,force)=>{
+  // Between a successful PIN and actually letting the person in: claim the ONE global scoring slot.
+  // Admin PINs and both team PINs all compete for the same slot — only one scoring device total,
+  // regardless of role. If someone else holds it (heartbeat within the last 20s), this is a HARD
+  // stop: no take-over button, no way through. The slot frees when the other device exits or logs
+  // out, or automatically ~20s after it dies/disconnects.
+  const attemptClaim=(r)=>{
     setClaiming(true);
-    claimSession(data.matchId,r.slot,mySessionId,force).then(res=>{
+    claimSession(null,SCORING_SLOT,mySessionId,false).then(res=>{
       setClaiming(false);
-      if(res.ok){ onOk({...r,sessionSlot:r.slot}); }
-      else { setConflict({slot:r.slot,r,heldSince:res.heldSince}); }
+      if(res.ok){ onOk({...r,sessionSlot:SCORING_SLOT}); }
+      else { setConflict({r,heldSince:res.heldSince}); }
     });
   };
 
   if(conflict){
-    const label=conflict.slot==="admin"?"Admin":conflict.slot==="teamA"?data.teamA:data.teamB;
     const secsAgo=conflict.heldSince?Math.max(0,Math.round((Date.now()-conflict.heldSince)/1000)):null;
-    return <Centered emoji="🔐" title="Already active elsewhere"
-      sub={`${label} is already signed in and active on another device${secsAgo!=null?` (last seen ${secsAgo}s ago)`:""}. Taking over will sign that device out.`}
+    return <Centered emoji="🔒" title="Someone is already signed in"
+      sub={`Another device is already signed in to score${secsAgo!=null?` (active ${secsAgo}s ago)`:""}. Only one device can score at a time — ask them to exit or log out first. If that device is dead or lost, just try again in about 20 seconds and you'll get straight in.`}
       onExit={onCancel}>
       <button className="btn btn-primary w-full" style={{marginBottom:10}} disabled={claiming}
-        onClick={()=>attemptClaim(conflict.r,true)}>{claiming?"Taking over…":"⚡ Take Over Anyway"}</button>
+        onClick={()=>attemptClaim(conflict.r)}>{claiming?"Checking…":"🔁 Try Again"}</button>
     </Centered>;
   }
   if(claiming) return <Centered emoji="🔑" title="Checking device…" sub="Making sure no one else is already active"/>;
@@ -7272,11 +7294,11 @@ function ScorerGate({onOk,onCancel,mySessionId}){
     let saved=null; try{saved=localStorage.getItem(rememberKey);}catch(e){}
     if(saved){
       const r=verify(saved);
-      if(r.ok){ setTimeout(()=>attemptClaim(r,false),0); return <Centered emoji="🔑" title="Welcome back…" sub="Remembered this device"/>; }
+      if(r.ok){ setTimeout(()=>attemptClaim(r),0); return <Centered emoji="🔑" title="Welcome back…" sub="Remembered this device"/>; }
     }
   }
 
-  return <PinGate title="Team Scorer Access" verify={verify} onOk={(r)=>attemptClaim(r,false)} onCancel={onCancel} rememberKey={rememberKey}
+  return <PinGate title="Team Scorer Access" verify={verify} onOk={(r)=>attemptClaim(r)} onCancel={onCancel} rememberKey={rememberKey}
     hint={data.awaitingOpeners?"Setting up openers":data.ib?"Innings break — new team sets up":`${data.battingTeam} batting`}/>;
 }
 
@@ -9116,6 +9138,34 @@ function Root(){
   const pendingFixtureRef=React.useRef(null);
   const adminAutoTriedRef=React.useRef(false);
 
+  // ── Root-level session heartbeat — the WHOLE admin session, not just the scoring screen ─────────
+  // The claim made at the PIN gate must stay alive for as long as this device is signed in ANYWHERE
+  // in the admin area (dashboard, roster, poll, history, PIN management…), not only while the App
+  // scoring component happens to be mounted. Without this, an admin idling on the dashboard had
+  // nothing renewing their claim, it went stale after 20s, and a second device could log straight
+  // in — which defeats the entire point of blocking at the gate. Runs whenever adminTier is set;
+  // team-scorer sessions are covered by App's own heartbeat since the scoring screen is the only
+  // place a team scorer can be. If the slot ever shows a DIFFERENT sessionId (only possible if this
+  // device itself went dead/offline for 20s+ and someone else reclaimed the stale slot), this device
+  // signs itself out to the landing page rather than carrying on with a session it no longer owns.
+  React.useEffect(()=>{
+    if(adminTier===null||!FB_OK||!DB) return;
+    const ref=DB.ref(sessionPath(null,SCORING_SLOT));
+    const renew=()=>{ ref.set({sessionId:mySessionId,lastSeen:Date.now()}).catch(()=>{}); };
+    renew();
+    const hb=setInterval(renew,6000);
+    const cb=ref.on("value",s=>{
+      const v=s.val();
+      if(v&&v.sessionId&&v.sessionId!==mySessionId){
+        try{alert("You were signed out: this device was offline too long and another device signed in.");}catch(e){}
+        navStack.current=["landing"];
+        window.history.replaceState({screen:"landing",depth:1},"");
+        setScreen("landing"); setGate(null); setAdminTier(null);
+      }
+    });
+    return ()=>{ clearInterval(hb); ref.off("value",cb); };
+  },[adminTier]);
+
   const go=(s)=>{
     navStack.current=[...navStack.current,s];
     window.history.pushState({screen:s,depth:navStack.current.length},"");
@@ -9155,7 +9205,7 @@ function Root(){
     // scoring would otherwise leave the lock held (nothing was heartbeating it, but nothing released
     // it either) until it naturally expired. The admin slot is global (not matchId-scoped), so this
     // needs no matchId to release correctly.
-    if(adminTier!==null) releaseSession(null,"admin",mySessionId);
+    if(adminTier!==null) releaseSession(null,SCORING_SLOT,mySessionId);
     setAdminTier(null); // Clear admin tier so stale tier never contaminates next login
   };
   // Explicit "Log Out" — distinct from "← home". Home just navigates away (this device stays
@@ -9163,7 +9213,7 @@ function Root(){
   // remembered PIN on THIS device — for handing the phone to someone else, or when it isn't your
   // device at all — so the next person who opens the app gets a real PIN prompt, not a free pass in.
   const logoutAdmin=()=>{
-    if(adminTier!==null) releaseSession(null,"admin",mySessionId);
+    if(adminTier!==null) releaseSession(null,SCORING_SLOT,mySessionId);
     try{localStorage.removeItem("lcc_pin_admin");}catch(e){}
     navStack.current=["landing"];
     window.history.replaceState({screen:"landing",depth:1},"");
@@ -9195,23 +9245,23 @@ function Root(){
       window.history.pushState({screen:dest,depth:2},"");
       setScreen(dest);
     };
-    // Same single-active-session lock as the team scorer gate, scoped globally to "admin" (there's
-    // only ever one match live at a time, so this doesn't need to be per-matchId). Blocks a second
-    // admin device from signing in while one is already active, with a manual Take Over override.
-    const adminOnOk=(r,force)=>{
+    // Admin login competes for the SAME single global scoring slot as team scorers — only one
+    // scoring/admin device total, any role. Hard stop on conflict: no take-over. The second device
+    // is blocked right here at the gate, before it ever reaches the admin dashboard.
+    const adminOnOk=(r)=>{
       setAdminClaiming(true);
-      claimSession(null,"admin",mySessionId,!!force).then(res=>{
+      claimSession(null,SCORING_SLOT,mySessionId,false).then(res=>{
         setAdminClaiming(false);
         if(res.ok){ finishAdminLogin(r); } else { setAdminConflict({r,heldSince:res.heldSince}); }
       });
     };
     if(adminConflict){
       const secsAgo=adminConflict.heldSince?Math.max(0,Math.round((Date.now()-adminConflict.heldSince)/1000)):null;
-      return <Centered emoji="🔐" title="Already active elsewhere"
-        sub={`Admin is already signed in and active on another device${secsAgo!=null?` (last seen ${secsAgo}s ago)`:""}. Taking over will sign that device out.`}
+      return <Centered emoji="🔒" title="Someone is already signed in"
+        sub={`Another device is already signed in as admin or scorer${secsAgo!=null?` (active ${secsAgo}s ago)`:""}. Only one device can be signed in at a time — ask them to exit or log out first. If that device is dead or lost, just try again in about 20 seconds and you'll get straight in.`}
         onExit={home}>
         <button className="btn btn-primary w-full" style={{marginBottom:10}} disabled={adminClaiming}
-          onClick={()=>adminOnOk(adminConflict.r,true)}>{adminClaiming?"Taking over…":"⚡ Take Over Anyway"}</button>
+          onClick={()=>adminOnOk(adminConflict.r)}>{adminClaiming?"Checking…":"🔁 Try Again"}</button>
       </Centered>;
     }
     if(adminClaiming) return <Centered emoji="🔑" title="Checking device…" sub="Making sure no one else is already active"/>;
@@ -9222,10 +9272,10 @@ function Root(){
       let saved=null; try{saved=localStorage.getItem("lcc_pin_admin");}catch(e){}
       if(saved){
         const r=adminVerify(saved);
-        if(r.ok){ setTimeout(()=>adminOnOk(r,false),0); return <Centered emoji="🔑" title="Welcome back…" sub="Remembered this device"/>; }
+        if(r.ok){ setTimeout(()=>adminOnOk(r),0); return <Centered emoji="🔑" title="Welcome back…" sub="Remembered this device"/>; }
       }
     }
-    return <PinGate title="Admin Access" hint="Super or Basic admin PIN" verify={adminVerify} onOk={(r)=>adminOnOk(r,false)} onCancel={home} rememberKey="lcc_pin_admin"/>;
+    return <PinGate title="Admin Access" hint="Super or Basic admin PIN" verify={adminVerify} onOk={(r)=>adminOnOk(r)} onCancel={home} rememberKey="lcc_pin_admin"/>;
   }
 
   const isAdmin=adminTier!==null;
