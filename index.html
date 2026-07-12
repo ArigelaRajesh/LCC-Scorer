@@ -222,8 +222,8 @@ body.hc{--bg-1:#000000;--bg-2:#01050f;--bg-3:#020a1a;--bg-4:#01050f;--bg-5:#0000
   --surface:#0d1b3e;         /* card background */
   --surface-2:#122550;       /* raised card / header */
   --surface-3:#0a1530;       /* inputs, deep panels */
-  --border:#1e3a6e;          /* standard border (navy) */
-  --border-soft:rgba(56,132,224,.25);
+  --border:#2b4d8a;          /* standard border (navy) — lifted for sunlight visibility */
+  --border-soft:rgba(56,132,224,.4);
   --primary:#22d3ee;         /* cyan accent */
   --primary-2:#0891b2;       /* deep cyan */
   --primary-glow:rgba(34,211,238,.35);
@@ -231,7 +231,7 @@ body.hc{--bg-1:#000000;--bg-2:#01050f;--bg-3:#020a1a;--bg-4:#01050f;--bg-5:#0000
   --amber:#f59e0b; --amber-2:#fbbf24;   /* runs / four */
   --green:#10b981; --green-2:#34d399;   /* six / positive */
   --red:#ef4444; --red-2:#f87171;       /* wicket / danger */
-  --text:#eaf2ff; --text-dim:#93a4c8; --text-mute:#5f7099;
+  --text:#f2f7ff; --text-dim:#b3c3e8; --text-mute:#8194c0;   /* lifted 2 steps for sunlight */
   --admin:#f43f5e;           /* distinct admin accent (rose) */
   --admin-glow:rgba(244,63,94,.4);
 }
@@ -300,13 +300,13 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#04121a;padding:13px 20px;box-shadow:0 0 20px var(--primary-glow)}
 .btn-primary:hover{filter:brightness(1.1);transform:scale(1.02)}
 .btn-primary:active{transform:scale(.97)}
-.btn-ghost{background:transparent;border:1.5px solid #374151;color:#9ca3af;padding:13px 20px}
+.btn-ghost{background:transparent;border:1.5px solid #526480;color:#bcc7d8;padding:13px 20px}
 .btn-ghost:hover{border-color:#ef4444;color:#f87171}
 .btn-danger{background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;padding:13px 20px}
 .btn-danger:hover{filter:brightness(1.1)}
 .btn-outline-amber{background:transparent;border:1.5px solid #d97706;color:#fbbf24;padding:13px 14px}
 .btn-outline-amber:hover{background:rgba(217,119,6,.15)}
-.btn-outline-gray{background:transparent;border:1.5px solid #374151;color:#6b7280;padding:13px 14px}
+.btn-outline-gray{background:transparent;border:1.5px solid #526480;color:#9aa8bf;padding:13px 14px}
 .btn-outline-gray:hover{border-color:#6366f1;color:#818cf8}
 .btn-run{background:var(--surface-2);border:1.5px solid var(--border);color:#fff;padding:10px 8px;font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;border-radius:14px;width:100%;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .08s ease,box-shadow .08s ease,background .08s ease;cursor:pointer;user-select:none}
 .btn-run:active{transform:scale(.9);background:rgba(99,102,241,.45);border-color:#818cf8;box-shadow:0 0 20px rgba(99,102,241,.5)}
@@ -317,7 +317,7 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .btn-run.green:active{transform:scale(.9);box-shadow:0 0 32px rgba(16,185,129,.7);filter:brightness(1.15)}
 .btn-undo{background:transparent;border:1.5px solid #4338ca;color:#818cf8;padding:6px 12px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s}
 .btn-undo:hover{background:rgba(99,102,241,.15)}
-.btn-undo:disabled{border-color:#1f2937;color:#374151;cursor:not-allowed}
+.btn-undo:disabled{border-color:#1f2937;color:#526480;cursor:not-allowed}
 
 /* Score header */
 .score-header{background:linear-gradient(135deg,rgba(34,211,238,.12),rgba(14,33,72,.55),rgba(56,189,248,.08));border-bottom:1px solid var(--border);padding:6px 14px 6px;position:sticky;top:0;z-index:40;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
@@ -326,7 +326,7 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 
 /* Tabs */
 .tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:var(--surface-2);border-radius:16px;padding:4px;margin:6px 14px}
-.tab{background:transparent;border:none;color:#6b7280;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.08em;padding:10px;border-radius:12px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s}
+.tab{background:transparent;border:none;color:#9aa8bf;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.08em;padding:10px;border-radius:12px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s}
 .tab.active{background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#04121a}
 
 /* Over ticker */
@@ -335,7 +335,7 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .chip-4{background:#f59e0b;color:#111;border-color:#fbbf24;box-shadow:0 0 12px rgba(245,158,11,.4)}
 .chip-6{background:#10b981;color:#111;border-color:#34d399;box-shadow:0 0 12px rgba(16,185,129,.35)}
 .chip-WD,.chip-NB{background:transparent;color:#fbbf24;border-color:#f59e0b;border-style:dashed}
-.chip-0{background:transparent;color:#4b5563;border-color:#374151}
+.chip-0{background:rgba(148,163,184,.14);color:#dbe4f0;border-color:#8fa3bf}
 .chip-run{background:rgba(99,102,241,.2);color:#a5b4fc;border-color:#6366f1}
 
 /* Mini cards */
@@ -983,7 +983,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
       fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",
       border:cur===val?"none":"1.5px solid rgba(99,102,241,.3)",
       background:cur===val?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",
-      color:cur===val?"#111":"#9ca3af"
+      color:cur===val?"#111":"#bcc7d8"
     }}>{val}{suffix||""}</button>
   );
 
@@ -1004,7 +1004,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
             <span style={{fontSize:11,background:"rgba(239,68,68,.18)",color:"#f87171",border:"1px solid rgba(239,68,68,.4)",borderRadius:8,padding:"4px 10px",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>👑 ADMIN</span>
             <span style={{fontSize:10,color:FB_OK?"#34d399":"#f87171",fontFamily:"'JetBrains Mono',monospace"}} title={FB_OK?"Live sync connected":"Offline — live sync unavailable"}>{FB_OK?"● online":"⚠️ offline"}</span>
           </div>
-          {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
+          {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
         </div>
         <div style={{display:"flex",gap:8,marginBottom:8}}>
           {onHistory&&<button onClick={onHistory} style={{flex:1,background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.35)",color:"#a5b4fc",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}}>📚 History</button>}
@@ -1012,7 +1012,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
           {onPoll&&<button onClick={onPoll} style={{flex:1,background:"rgba(167,139,250,.12)",border:"1px solid rgba(167,139,250,.35)",color:"#c4b5fd",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}}>📋 Poll</button>}
         </div>
         <div style={{display:"flex",gap:8,marginBottom:18}}>
-          {FB_OK&&DB&&<button onClick={()=>{ if(confirm("Clear any stuck/corrupted live match data? This won't affect saved history.")){ DB.ref("live").remove().then(()=>alert("Live data cleared. You can start a fresh match now.")); } }} style={{flex:1,background:"transparent",border:"1px solid rgba(99,102,241,.25)",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}} title="Use this if scorers see a blank screen">🧹 Reset Live Data</button>}
+          {FB_OK&&DB&&<button onClick={()=>{ if(confirm("Clear any stuck/corrupted live match data? This won't affect saved history.")){ DB.ref("live").remove().then(()=>alert("Live data cleared. You can start a fresh match now.")); } }} style={{flex:1,background:"transparent",border:"1px solid rgba(99,102,241,.25)",color:"#9aa8bf",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}} title="Use this if scorers see a blank screen">🧹 Reset Live Data</button>}
         </div>
         <div className="text-center mb-6 animate-fade">
           <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:76,height:76,borderRadius:22,background:"linear-gradient(135deg,var(--primary),var(--primary-2),#0369a1)",fontSize:38,marginBottom:14,boxShadow:"0 8px 32px var(--primary-glow)",animation:"pulseGlow 3s ease-in-out infinite"}}>🏏</div>
@@ -1045,26 +1045,26 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
               <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>Overs per side</p>
               <div style={{display:"flex",gap:6,marginBottom:customOv?6:12}}>
                 {[6,7,8].map(o=>(
-                  <button key={o} onClick={()=>{setCustomOv(false);setOvers(o)}} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customOv&&overs===o)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customOv&&overs===o)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customOv&&overs===o)?"#111":"#9ca3af"}}>{o}</button>
+                  <button key={o} onClick={()=>{setCustomOv(false);setOvers(o)}} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customOv&&overs===o)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customOv&&overs===o)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customOv&&overs===o)?"#111":"#bcc7d8"}}>{o}</button>
                 ))}
-                <button onClick={()=>{setCustomOv(true);setOvers("")}} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customOv?"none":"1.5px solid rgba(99,102,241,.3)",background:customOv?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customOv?"#fff":"#9ca3af"}}>Custom</button>
+                <button onClick={()=>{setCustomOv(true);setOvers("")}} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customOv?"none":"1.5px solid rgba(99,102,241,.3)",background:customOv?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customOv?"#fff":"#bcc7d8"}}>Custom</button>
               </div>
               {customOv&&<input type="number" min="1" max="50" value={overs} onChange={e=>setOvers(e.target.value)} placeholder="Type overs (e.g. 10, 12, 15)" style={{width:"100%",marginBottom:12,background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(139,92,246,.5)",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>}
 
               <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>Wickets per side</p>
               <div style={{display:"flex",gap:6,marginBottom:customWk?6:0}}>
                 {[4,5,6,7].map(w=>(
-                  <button key={w} onClick={()=>{setCustomWk(false);setWkts(w)}} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customWk&&wkts===w)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customWk&&wkts===w)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customWk&&wkts===w)?"#111":"#9ca3af"}}>{w}</button>
+                  <button key={w} onClick={()=>{setCustomWk(false);setWkts(w)}} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customWk&&wkts===w)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customWk&&wkts===w)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customWk&&wkts===w)?"#111":"#bcc7d8"}}>{w}</button>
                 ))}
-                <button onClick={()=>{setCustomWk(true);setWkts("")}} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customWk?"none":"1.5px solid rgba(99,102,241,.3)",background:customWk?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customWk?"#fff":"#9ca3af"}}>Custom</button>
+                <button onClick={()=>{setCustomWk(true);setWkts("")}} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customWk?"none":"1.5px solid rgba(99,102,241,.3)",background:customWk?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customWk?"#fff":"#bcc7d8"}}>Custom</button>
               </div>
               {customWk&&<input type="number" min="1" max="11" value={wkts} onChange={e=>setWkts(e.target.value)} placeholder="Type wickets (e.g. 9, 10)" style={{width:"100%",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(139,92,246,.5)",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>}
 
               <div className="divider" style={{margin:"12px 0"}}/>
               <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>Batting style</p>
               <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>setSingle(false)} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:!single?"none":"1.5px solid rgba(99,102,241,.3)",background:!single?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:!single?"#111":"#9ca3af"}}>👥 Pair (2 batsmen)</button>
-                <button onClick={()=>setSingle(true)} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:single?"none":"1.5px solid rgba(99,102,241,.3)",background:single?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:single?"#fff":"#9ca3af"}}>🧍 Single batsman</button>
+                <button onClick={()=>setSingle(false)} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:!single?"none":"1.5px solid rgba(99,102,241,.3)",background:!single?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:!single?"#111":"#bcc7d8"}}>👥 Pair (2 batsmen)</button>
+                <button onClick={()=>setSingle(true)} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:single?"none":"1.5px solid rgba(99,102,241,.3)",background:single?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:single?"#fff":"#bcc7d8"}}>🧍 Single batsman</button>
               </div>
               {single&&<p style={{color:"#a78bfa",fontFamily:"'JetBrains Mono',monospace",fontSize:10,marginTop:8,textAlign:"center"}}>One batsman bats alone · always on strike · can retire &amp; return</p>}
               <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginTop:12,textAlign:"center"}}>{overs||"?"} overs · {wkts||"?"} wickets · {single?"single":"pair"}</p>
@@ -1077,18 +1077,18 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
               <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>Overs per side</p>
               <div style={{display:"flex",gap:6,marginBottom:customMOv?6:12,flexWrap:"wrap"}}>
                 {[15,20,25].map(o=>(
-                  <button key={o} onClick={()=>{setCustomMOv(false);setMOvers(o)}} style={{flex:1,minWidth:44,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customMOv&&mOvers===o)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customMOv&&mOvers===o)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customMOv&&mOvers===o)?"#111":"#9ca3af"}}>{o}</button>
+                  <button key={o} onClick={()=>{setCustomMOv(false);setMOvers(o)}} style={{flex:1,minWidth:44,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customMOv&&mOvers===o)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customMOv&&mOvers===o)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customMOv&&mOvers===o)?"#111":"#bcc7d8"}}>{o}</button>
                 ))}
-                <button onClick={()=>{setCustomMOv(true);setMOvers("")}} style={{flex:1,minWidth:64,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customMOv?"none":"1.5px solid rgba(99,102,241,.3)",background:customMOv?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customMOv?"#fff":"#9ca3af"}}>Custom</button>
+                <button onClick={()=>{setCustomMOv(true);setMOvers("")}} style={{flex:1,minWidth:64,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customMOv?"none":"1.5px solid rgba(99,102,241,.3)",background:customMOv?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customMOv?"#fff":"#bcc7d8"}}>Custom</button>
               </div>
               {customMOv&&<input type="number" min="1" max="50" value={mOvers} onChange={e=>setMOvers(e.target.value)} placeholder="Type overs (e.g. 30)" style={{width:"100%",marginBottom:12,background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(139,92,246,.5)",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>}
 
               <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>Wickets per side</p>
               <div style={{display:"flex",gap:6,marginBottom:customMWk?6:0,flexWrap:"wrap"}}>
                 {[10,11,12,13].map(w=>(
-                  <button key={w} onClick={()=>{setCustomMWk(false);setMWkts(w)}} style={{flex:1,minWidth:44,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customMWk&&mWkts===w)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customMWk&&mWkts===w)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customMWk&&mWkts===w)?"#111":"#9ca3af"}}>{w}</button>
+                  <button key={w} onClick={()=>{setCustomMWk(false);setMWkts(w)}} style={{flex:1,minWidth:44,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customMWk&&mWkts===w)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customMWk&&mWkts===w)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customMWk&&mWkts===w)?"#111":"#bcc7d8"}}>{w}</button>
                 ))}
-                <button onClick={()=>{setCustomMWk(true);setMWkts("")}} style={{flex:1,minWidth:64,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customMWk?"none":"1.5px solid rgba(99,102,241,.3)",background:customMWk?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customMWk?"#fff":"#9ca3af"}}>Custom</button>
+                <button onClick={()=>{setCustomMWk(true);setMWkts("")}} style={{flex:1,minWidth:64,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customMWk?"none":"1.5px solid rgba(99,102,241,.3)",background:customMWk?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customMWk?"#fff":"#bcc7d8"}}>Custom</button>
               </div>
               {customMWk&&<input type="number" min="1" max="20" value={mWkts} onChange={e=>setMWkts(e.target.value)} placeholder="Type wickets (e.g. 14)" style={{width:"100%",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(139,92,246,.5)",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>}
               <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,marginTop:10,textAlign:"center"}}>Defaults: 20 overs, 10 wickets (standard T20). Adjust either if needed.</p>
@@ -1104,25 +1104,25 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
 
               <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>Match style</p>
               <div style={{display:"flex",gap:6,marginBottom:12}}>
-                <button onClick={()=>setCustomVenueStyle("lakes")} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customVenueStyle==="lakes"?"none":"1.5px solid rgba(99,102,241,.3)",background:customVenueStyle==="lakes"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:customVenueStyle==="lakes"?"#111":"#9ca3af"}}>🎾 Casual (like Lakes)</button>
-                <button onClick={()=>setCustomVenueStyle("millennium")} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customVenueStyle==="millennium"?"none":"1.5px solid rgba(99,102,241,.3)",background:customVenueStyle==="millennium"?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customVenueStyle==="millennium"?"#fff":"#9ca3af"}}>🏟️ Full Match (like Millennium)</button>
+                <button onClick={()=>setCustomVenueStyle("lakes")} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customVenueStyle==="lakes"?"none":"1.5px solid rgba(99,102,241,.3)",background:customVenueStyle==="lakes"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:customVenueStyle==="lakes"?"#111":"#bcc7d8"}}>🎾 Casual (like Lakes)</button>
+                <button onClick={()=>setCustomVenueStyle("millennium")} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customVenueStyle==="millennium"?"none":"1.5px solid rgba(99,102,241,.3)",background:customVenueStyle==="millennium"?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customVenueStyle==="millennium"?"#fff":"#bcc7d8"}}>🏟️ Full Match (like Millennium)</button>
               </div>
 
               <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>Overs per side</p>
               <div style={{display:"flex",gap:6,marginBottom:customCvOv?6:12,flexWrap:"wrap"}}>
                 {(customVenueStyle==="lakes"?[6,7,8]:[15,20,25]).map(o=>(
-                  <button key={o} onClick={()=>{setCustomCvOv(false);setCvOvers(o)}} style={{flex:1,minWidth:44,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customCvOv&&cvOvers===o)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customCvOv&&cvOvers===o)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customCvOv&&cvOvers===o)?"#111":"#9ca3af"}}>{o}</button>
+                  <button key={o} onClick={()=>{setCustomCvOv(false);setCvOvers(o)}} style={{flex:1,minWidth:44,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customCvOv&&cvOvers===o)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customCvOv&&cvOvers===o)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customCvOv&&cvOvers===o)?"#111":"#bcc7d8"}}>{o}</button>
                 ))}
-                <button onClick={()=>{setCustomCvOv(true);setCvOvers("")}} style={{flex:1,minWidth:64,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customCvOv?"none":"1.5px solid rgba(99,102,241,.3)",background:customCvOv?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customCvOv?"#fff":"#9ca3af"}}>Custom</button>
+                <button onClick={()=>{setCustomCvOv(true);setCvOvers("")}} style={{flex:1,minWidth:64,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customCvOv?"none":"1.5px solid rgba(99,102,241,.3)",background:customCvOv?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customCvOv?"#fff":"#bcc7d8"}}>Custom</button>
               </div>
               {customCvOv&&<input type="number" min="1" max="50" value={cvOvers} onChange={e=>setCvOvers(e.target.value)} placeholder="Type overs" style={{width:"100%",marginBottom:12,background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(139,92,246,.5)",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>}
 
               <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>Wickets per side</p>
               <div style={{display:"flex",gap:6,marginBottom:customCvWk?6:0,flexWrap:"wrap"}}>
                 {(customVenueStyle==="lakes"?[4,5,6,7]:[10,11,12,13]).map(w=>(
-                  <button key={w} onClick={()=>{setCustomCvWk(false);setCvWkts(w)}} style={{flex:1,minWidth:44,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customCvWk&&cvWkts===w)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customCvWk&&cvWkts===w)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customCvWk&&cvWkts===w)?"#111":"#9ca3af"}}>{w}</button>
+                  <button key={w} onClick={()=>{setCustomCvWk(false);setCvWkts(w)}} style={{flex:1,minWidth:44,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:15,transition:"all .15s",border:(!customCvWk&&cvWkts===w)?"none":"1.5px solid rgba(99,102,241,.3)",background:(!customCvWk&&cvWkts===w)?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:(!customCvWk&&cvWkts===w)?"#111":"#bcc7d8"}}>{w}</button>
                 ))}
-                <button onClick={()=>{setCustomCvWk(true);setCvWkts("")}} style={{flex:1,minWidth:64,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customCvWk?"none":"1.5px solid rgba(99,102,241,.3)",background:customCvWk?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customCvWk?"#fff":"#9ca3af"}}>Custom</button>
+                <button onClick={()=>{setCustomCvWk(true);setCvWkts("")}} style={{flex:1,minWidth:64,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:customCvWk?"none":"1.5px solid rgba(99,102,241,.3)",background:customCvWk?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:customCvWk?"#fff":"#bcc7d8"}}>Custom</button>
               </div>
               {customCvWk&&<input type="number" min="1" max="20" value={cvWkts} onChange={e=>setCvWkts(e.target.value)} placeholder="Type wickets" style={{width:"100%",marginBottom:12,background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(139,92,246,.5)",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>}
 
@@ -1130,8 +1130,8 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
                 <div className="divider" style={{margin:"12px 0"}}/>
                 <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>Batting style</p>
                 <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>setCvSingle(false)} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:!cvSingle?"none":"1.5px solid rgba(99,102,241,.3)",background:!cvSingle?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:!cvSingle?"#111":"#9ca3af"}}>👥 Pair (2 batsmen)</button>
-                  <button onClick={()=>setCvSingle(true)} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:cvSingle?"none":"1.5px solid rgba(99,102,241,.3)",background:cvSingle?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:cvSingle?"#fff":"#9ca3af"}}>🧍 Single batsman</button>
+                  <button onClick={()=>setCvSingle(false)} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:!cvSingle?"none":"1.5px solid rgba(99,102,241,.3)",background:!cvSingle?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:!cvSingle?"#111":"#bcc7d8"}}>👥 Pair (2 batsmen)</button>
+                  <button onClick={()=>setCvSingle(true)} style={{flex:1,padding:"11px 6px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",border:cvSingle?"none":"1.5px solid rgba(99,102,241,.3)",background:cvSingle?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:cvSingle?"#fff":"#bcc7d8"}}>🧍 Single batsman</button>
                 </div>
               </>}
               <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:10,marginTop:10,textAlign:"center"}}>{customVenueName||"This venue"} · {cvOvers||"?"} overs · {cvWkts||"?"} wickets{customVenueStyle==="lakes"?` · ${cvSingle?"single":"pair"}`:""}</p>
@@ -1150,7 +1150,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
                   {imported&&<button onClick={()=>{setImported(false);setSelectedPub(null);if(rA.current)rA.current.value="";if(rB.current)rB.current.value="";}}
                     style={{background:"none",border:"none",color:"#f87171",fontSize:10,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",textDecoration:"underline"}}>✕ clear / start fresh</button>}
                 </div>
-                <p style={{fontSize:10,color:"#4b5563",marginBottom:8,lineHeight:1.5}}>Leave untouched to start a new match with no preset teams (add players before &amp; during the match). Only tap a set below if you want to reuse it.</p>
+                <p style={{fontSize:10,color:"#8291ab",marginBottom:8,lineHeight:1.5}}>Leave untouched to start a new match with no preset teams (add players before &amp; during the match). Only tap a set below if you want to reuse it.</p>
                 <div style={{display:"flex",flexDirection:"column",gap:6}}>
                   {pubTeamsList.map(pub=>{
                     const isSel=selectedPub?.id===pub.id;
@@ -1164,12 +1164,12 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
                           background:isSel?"rgba(99,102,241,.15)":"rgba(255,255,255,.03)",color:"#fff"
                         }}>
                           <div>
-                            <p style={{fontWeight:700,fontSize:13}}>{pub.captainA||"Team A"} <span style={{color:"#6b7280",fontWeight:400}}>vs</span> {pub.captainB||"Team B"}</p>
-                            <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>
+                            <p style={{fontWeight:700,fontSize:13}}>{pub.captainA||"Team A"} <span style={{color:"#9aa8bf",fontWeight:400}}>vs</span> {pub.captainB||"Team B"}</p>
+                            <p style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>
                               {teamNames(pub.teamA).length}+{teamNames(pub.teamB).length} players · {ago}
                             </p>
                           </div>
-                          <span style={{fontSize:isSel?14:12,color:isSel?"#a5b4fc":"#4b5563"}}>{isSel?"✓ selected":"→"}</span>
+                          <span style={{fontSize:isSel?14:12,color:isSel?"#a5b4fc":"#8291ab"}}>{isSel?"✓ selected":"→"}</span>
                         </button>
                         {/* Delete this saved lineup — admin only. These accumulate forever otherwise
                             (every published poll team-set gets saved and never cleaned up), which is
@@ -1194,7 +1194,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                       {[["🟡",selectedPub.captainA,selectedPub.teamA],["⚡",selectedPub.captainB,selectedPub.teamB]].map(([em,cap,pids])=>(
                         <div key={cap} style={{background:"rgba(0,0,0,.2)",borderRadius:8,padding:"6px 10px"}}>
-                          <p style={{fontSize:10,color:"#9ca3af",marginBottom:3}}>{em} {cap}</p>
+                          <p style={{fontSize:10,color:"#bcc7d8",marginBottom:3}}>{em} {cap}</p>
                           {teamNames(pids).map(n=><p key={n} style={{fontSize:11,color:"#e2e8f0",lineHeight:1.5}}>{n}</p>)}
                         </div>
                       ))}
@@ -1234,18 +1234,18 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
                     {coinResult==="heads"?"HEADS!":"TAILS!"}
                   </p>
                 )}
-                <p style={{color:"#4b5563",fontSize:9,marginTop:6,fontFamily:"'JetBrains Mono',monospace",textAlign:"center"}}>Flip the coin, then select below who called it correctly.</p>
+                <p style={{color:"#8291ab",fontSize:9,marginTop:6,fontFamily:"'JetBrains Mono',monospace",textAlign:"center"}}>Flip the coin, then select below who called it correctly.</p>
               </div>
 
-              <p style={{color:"#9ca3af",fontSize:11,marginBottom:6}}>Who won the toss?</p>
+              <p style={{color:"#bcc7d8",fontSize:11,marginBottom:6}}>Who won the toss?</p>
               <div style={{display:"flex",gap:6,marginBottom:10}}>
-                <button onClick={()=>setTossWinner("A")} style={{flex:1,padding:"9px 6px",borderRadius:10,cursor:"pointer",fontWeight:600,fontFamily:"'Inter',sans-serif",fontSize:12,border:tossWinner==="A"?"none":"1.5px solid rgba(99,102,241,.3)",background:tossWinner==="A"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:tossWinner==="A"?"#111":"#9ca3af"}}>{teamAName}</button>
-                <button onClick={()=>setTossWinner("B")} style={{flex:1,padding:"9px 6px",borderRadius:10,cursor:"pointer",fontWeight:600,fontFamily:"'Inter',sans-serif",fontSize:12,border:tossWinner==="B"?"none":"1.5px solid rgba(99,102,241,.3)",background:tossWinner==="B"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:tossWinner==="B"?"#111":"#9ca3af"}}>{teamBName}</button>
+                <button onClick={()=>setTossWinner("A")} style={{flex:1,padding:"9px 6px",borderRadius:10,cursor:"pointer",fontWeight:600,fontFamily:"'Inter',sans-serif",fontSize:12,border:tossWinner==="A"?"none":"1.5px solid rgba(99,102,241,.3)",background:tossWinner==="A"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:tossWinner==="A"?"#111":"#bcc7d8"}}>{teamAName}</button>
+                <button onClick={()=>setTossWinner("B")} style={{flex:1,padding:"9px 6px",borderRadius:10,cursor:"pointer",fontWeight:600,fontFamily:"'Inter',sans-serif",fontSize:12,border:tossWinner==="B"?"none":"1.5px solid rgba(99,102,241,.3)",background:tossWinner==="B"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:tossWinner==="B"?"#111":"#bcc7d8"}}>{teamBName}</button>
               </div>
-              <p style={{color:"#9ca3af",fontSize:11,marginBottom:6}}>Elected to:</p>
+              <p style={{color:"#bcc7d8",fontSize:11,marginBottom:6}}>Elected to:</p>
               <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>setTossChoice("bat")} style={{flex:1,padding:"9px 6px",borderRadius:10,cursor:"pointer",fontWeight:600,fontFamily:"'Inter',sans-serif",fontSize:12,border:tossChoice==="bat"?"none":"1.5px solid rgba(99,102,241,.3)",background:tossChoice==="bat"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:tossChoice==="bat"?"#111":"#9ca3af"}}>🏏 Bat First</button>
-                <button onClick={()=>setTossChoice("bowl")} style={{flex:1,padding:"9px 6px",borderRadius:10,cursor:"pointer",fontWeight:600,fontFamily:"'Inter',sans-serif",fontSize:12,border:tossChoice==="bowl"?"none":"1.5px solid rgba(99,102,241,.3)",background:tossChoice==="bowl"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:tossChoice==="bowl"?"#111":"#9ca3af"}}>🎯 Bowl First</button>
+                <button onClick={()=>setTossChoice("bat")} style={{flex:1,padding:"9px 6px",borderRadius:10,cursor:"pointer",fontWeight:600,fontFamily:"'Inter',sans-serif",fontSize:12,border:tossChoice==="bat"?"none":"1.5px solid rgba(99,102,241,.3)",background:tossChoice==="bat"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:tossChoice==="bat"?"#111":"#bcc7d8"}}>🏏 Bat First</button>
+                <button onClick={()=>setTossChoice("bowl")} style={{flex:1,padding:"9px 6px",borderRadius:10,cursor:"pointer",fontWeight:600,fontFamily:"'Inter',sans-serif",fontSize:12,border:tossChoice==="bowl"?"none":"1.5px solid rgba(99,102,241,.3)",background:tossChoice==="bowl"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:tossChoice==="bowl"?"#111":"#bcc7d8"}}>🎯 Bowl First</button>
               </div>
               {tossWinner&&tossChoice&&(
                 <p style={{color:"#34d399",fontSize:11,marginTop:10,textAlign:"center",fontFamily:"'JetBrains Mono',monospace"}}>
@@ -1293,7 +1293,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
                           border:`1.5px solid ${on?color:"rgba(148,163,184,.25)"}`,background:on?color+"22":"rgba(255,255,255,.03)",
                           color:on?"#fff":"#94a3b8",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:on?600:400
                         }}>
-                          <span style={{width:16,height:16,borderRadius:5,border:`1.5px solid ${on?color:"#4b5563"}`,background:on?color:"transparent",
+                          <span style={{width:16,height:16,borderRadius:5,border:`1.5px solid ${on?color:"#8291ab"}`,background:on?color:"transparent",
                             display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,color:"#111"}}>{on?"✓":""}</span>
                           {n}
                         </button>
@@ -2599,7 +2599,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
           <div style={{fontSize:44,marginBottom:10}}>🔑</div>
           <h2 style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:700,marginBottom:6}}>2nd Innings</h2>
           <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:4}}>{newBattingTeam} now batting</p>
-          <p style={{color:"#6b7280",fontSize:12,marginBottom:18,lineHeight:1.5}}>You're scoring as admin. Confirm to continue into the second innings.</p>
+          <p style={{color:"#9aa8bf",fontSize:12,marginBottom:18,lineHeight:1.5}}>You're scoring as admin. Confirm to continue into the second innings.</p>
           <div className="grid-2">
             <button className="btn btn-ghost w-full" onClick={onExit}>← Home</button>
             <button className="btn btn-primary w-full" onClick={()=>setSecondInningsAuthed(true)}>Continue →</button>
@@ -2668,7 +2668,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                 <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:9,textTransform:"uppercase",letterSpacing:".2em"}}>{inn.inningsNum===1?"1st":"2nd"} Inn</span>
                 <span style={{width:3,height:3,borderRadius:"50%",background:"#4338ca",display:"inline-block"}}/>
                 <span style={{fontWeight:700,fontSize:13}}>{inn.battingTeam}</span>
-                <span style={{color:"#4b5563",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
+                <span style={{color:"#8291ab",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
               </div>
               {/* Controls moved to the top-right so they no longer occupy their own row. Fix Players
                   now lives INSIDE the ⚙️ menu, reclaiming the vertical space that used to push the
@@ -2698,18 +2698,18 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                     }
                   }}
                 />}
-                {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap"}}>← home</button>}
+                {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap"}}>← home</button>}
               </div>
             </div>
             <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:8,flexWrap:"wrap",minWidth:0,marginTop:"auto"}}>
               <div style={{display:"flex",alignItems:"baseline",gap:8,minWidth:0}}>
                 <span key={inn.totalRuns+"-"+inn.wickets} className={`score-big score-pulse${flash?" flash":""}`}>{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
-                <span style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>({ovStr(inn.totalBalls)} ov)</span>
+                <span style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>({ovStr(inn.totalBalls)} ov)</span>
               </div>
               {/* Compact stat chips on the score line — CRR always; Proj only in the 1st innings
                   (extrapolated final at the current rate, the standard broadcast stat). */}
               <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#9ca3af",
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#bcc7d8",
                   background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",
                   borderRadius:9,padding:"4px 9px",whiteSpace:"nowrap"}}>CRR <span style={{color:"#fbbf24",fontWeight:700}}>{crr}</span></span>
                 {!inn.target&&inn.totalBalls>0&&inn.overs>0&&
@@ -2723,9 +2723,9 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                 Hidden during single-batsman innings (no partnership concept there) and while a new
                 batsman is still being selected after a wicket (inn.nonStrikerName briefly absent). */}
             {!inn.single&&inn.strikerName&&inn.nonStrikerName&&(
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#9ca3af"}}>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#bcc7d8"}}>
                 🤝 {inn.strikerName} & {inn.nonStrikerName}: <span style={{color:"#e5e7eb",fontWeight:700}}>{inn.partnership||0}</span>
-                <span style={{color:"#6b7280"}}> ({inn.partnershipBalls||0})</span>
+                <span style={{color:"#9aa8bf"}}> ({inn.partnershipBalls||0})</span>
               </div>
             )}
           </div>
@@ -2742,7 +2742,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                     Target <span style={{color:"#fff",fontWeight:700}}>{inn.target}</span> · Need <span style={{color:"#fff",fontWeight:700}}>{Math.max(req,0)}</span> off <span style={{color:"#fff",fontWeight:700}}>{bLeft}</span>b
                   </span>
                   <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap",
-                    color:rrr&&parseFloat(rrr)>12?"#f87171":"#9ca3af"}}>
+                    color:rrr&&parseFloat(rrr)>12?"#f87171":"#bcc7d8"}}>
                     {rrr&&<>RRR <span style={{fontWeight:700,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span> · </>}
                     <span style={{fontWeight:700,color:ahead?"#34d399":"#f87171"}}>{ahead?"▲ ON TRACK":"▼ BEHIND"}</span>
                   </span>
@@ -2984,9 +2984,9 @@ function QuickAddPlayer({onAdded,onCancel}){
           background:"linear-gradient(135deg,#10b981,#059669)",color:"#111",whiteSpace:"nowrap",
           opacity:saving?.6:1
         }}>{saving?"Saving…":"Add ✓"}</button>
-        <button onClick={onCancel} style={{padding:"8px 10px",borderRadius:10,border:"1px solid rgba(107,114,128,.3)",background:"transparent",color:"#6b7280",cursor:"pointer",fontSize:13}}>✕</button>
+        <button onClick={onCancel} style={{padding:"8px 10px",borderRadius:10,border:"1px solid rgba(107,114,128,.3)",background:"transparent",color:"#9aa8bf",cursor:"pointer",fontSize:13}}>✕</button>
       </div>
-      <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>Saved to club roster · they can add details later from Join the Club</p>
+      <p style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>Saved to club roster · they can add details later from Join the Club</p>
     </div>
   );
 }
@@ -3134,7 +3134,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
                     🟡 {inn.battingTeam} squad:
                   </p>
                   {teamAvail.length===0
-                    ?<p style={{fontSize:12,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>All squad members have batted</p>
+                    ?<p style={{fontSize:12,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace"}}>All squad members have batted</p>
                     :<div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                       {teamAvail.map(n=>(
                         <button key={n} onClick={()=>confBatsman(n)} style={{
@@ -3261,14 +3261,14 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
                   )}
                   {prev.length>0&&(
                     <>
-                      <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Bowled before:</p>
+                      <p style={{fontSize:10,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Bowled before:</p>
                       <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                         {prev.map(n=><BowlBtn key={n} n={n}/>)}
                       </div>
                     </>
                   )}
                   {fresh.length===0&&prev.length===0&&(
-                    <p style={{fontSize:12,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>No available bowlers from team</p>
+                    <p style={{fontSize:12,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace"}}>No available bowlers from team</p>
                   )}
                 </div>
               );
@@ -3281,7 +3281,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
               return(
                 <div style={{marginBottom:10}}>
                   {prev.length>0&&<>
-                    <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Bowled before — tap to re-pick:</p>
+                    <p style={{fontSize:10,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Bowled before — tap to re-pick:</p>
                     <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                       {prev.map(n=><BowlBtn key={n} n={n}/>)}
                     </div>
@@ -3334,10 +3334,10 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           </div>
           {(inn.single?[{p:SK,a:true}]:[{p:SK,a:true},{p:NS,a:false}]).map(({p,a},i)=>p?(
             <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"3px 0",gap:6}}>
-              <span style={{fontSize:13,fontWeight:a?700:400,color:a?"#fff":"#9ca3af",overflow:"hidden",flex:1,minWidth:0}} className="truncate">
+              <span style={{fontSize:13,fontWeight:a?700:400,color:a?"#fff":"#bcc7d8",overflow:"hidden",flex:1,minWidth:0}} className="truncate">
                 {firstName(p.name)}{a&&<span style={{color:"#fbbf24",fontWeight:700}}> *</span>}
               </span>
-              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0,marginLeft:8}}>{p.runs} ({p.balls})</span>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#9aa8bf",flexShrink:0,marginLeft:8}}>{p.runs} ({p.balls})</span>
             </div>
           ):null)}
           {retiredList.length>0&&<p style={{fontSize:9,color:"#7c6aa8",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{retiredList.length} retired</p>}
@@ -3346,7 +3346,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           <p className="section-title" style={{marginBottom:8}}>🎯 Bowling</p>
           {BW&&<div className="flex items-center justify-between" style={{gap:8}}>
             <span style={{fontSize:13,fontWeight:700,color:"#fff",flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{shortName(BW.name)}</span>
-            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0}}>{BW.overs}.{BW.ballsThisOver}-{BW.runs}-{BW.wickets}</span>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#9aa8bf",flexShrink:0}}>{BW.overs}.{BW.ballsThisOver}-{BW.runs}-{BW.wickets}</span>
           </div>}
         </div>
       </div>
@@ -3375,11 +3375,11 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           const wktsInOver=last.filter(ev=>ev.type==="W").length;
           return(
             <div style={{marginTop:5,display:"flex",alignItems:"center",gap:6,flexWrap:"nowrap",overflow:"hidden"}}>
-              <span style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".08em",flexShrink:0}}>Ov {co.length} →</span>
+              <span style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".08em",flexShrink:0}}>Ov {co.length} →</span>
               <div style={{display:"flex",gap:4,overflowX:"auto",flex:1,minWidth:0}}>
                 {last.map((ev,i)=><div key={i} className={chipClass(ev)} style={{transform:"scale(.8)",transformOrigin:"left center",opacity:.85}}>{chipLbl(ev)}</div>)}
               </div>
-              <span style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",flexShrink:0}}>
+              <span style={{fontSize:10,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",flexShrink:0}}>
                 {runsInOver}r{wktsInOver>0?` ${wktsInOver}w`:""}
               </span>
             </div>
@@ -3442,7 +3442,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
       {showMore&&(<>
       <div className="grid-2" style={{marginTop:8}}>
         <button className="btn w-full" onClick={onEndInnings} style={{borderRadius:14,fontSize:12,padding:"11px",background:"transparent",border:"1.5px solid rgba(239,68,68,.4)",color:"#f87171"}}>⏹ End {inn.inningsNum===1?"Innings":"Match"}</button>
-        {onRevert&&<button className="btn w-full" onClick={onRevert} disabled={!canRevert} style={{borderRadius:14,fontSize:12,padding:"11px",background:"transparent",border:`1.5px solid ${canRevert?"rgba(52,211,153,.5)":"rgba(55,65,129,.3)"}`,color:canRevert?"#34d399":"#374151",cursor:canRevert?"pointer":"not-allowed"}}>↩️ Revert to Live</button>}
+        {onRevert&&<button className="btn w-full" onClick={onRevert} disabled={!canRevert} style={{borderRadius:14,fontSize:12,padding:"11px",background:"transparent",border:`1.5px solid ${canRevert?"rgba(52,211,153,.5)":"rgba(55,65,129,.3)"}`,color:canRevert?"#34d399":"#526480",cursor:canRevert?"pointer":"not-allowed"}}>↩️ Revert to Live</button>}
       </div>
       {onEditOvers&&(
         <button className="btn w-full" onClick={()=>{const v=prompt(`Change match overs (currently ${inn.overs}). Enter new total overs:`,String(inn.overs));if(v!==null)onEditOvers(v);}}
@@ -3450,7 +3450,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
       )}
       {role==="admin"&&onRestore&&(
         <button className="btn w-full" onClick={onRestore}
-          style={{marginTop:8,borderRadius:14,fontSize:11,padding:"10px",background:"transparent",border:"1px solid rgba(99,102,241,.3)",color:"#6b7280"}}
+          style={{marginTop:8,borderRadius:14,fontSize:11,padding:"10px",background:"transparent",border:"1px solid rgba(99,102,241,.3)",color:"#9aa8bf"}}
           title="Disaster recovery: restore the match from an automatic backup or checkpoint">🛟 Restore from backup</button>
       )}
       </>)}
@@ -3461,9 +3461,9 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           snapshot is visually obvious (its score won't match what actually happened at that time). */}
       {restoreChoices&&<Modal onClose={onCloseRestore} title="🛟 Restore from backup">
         {restoreChoices.length===0
-          ?<p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12,lineHeight:1.6}}>No backups found yet. Backups are taken automatically a few seconds into a live match, plus a durable checkpoint at every wicket and completed over.</p>
+          ?<p style={{color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",fontSize:12,lineHeight:1.6}}>No backups found yet. Backups are taken automatically a few seconds into a live match, plus a durable checkpoint at every wicket and completed over.</p>
           :<>
-            <p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:12,lineHeight:1.5}}>Pick the point to go back to. If the newest ones look wrong, choose an older checkpoint — checkpoints can never be overwritten after they're captured.</p>
+            <p style={{color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:12,lineHeight:1.5}}>Pick the point to go back to. If the newest ones look wrong, choose an older checkpoint — checkpoints can never be overwritten after they're captured.</p>
             <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:"50vh",overflowY:"auto"}}>
               {restoreChoices.map((c,i)=>{
                 const t=c.when?new Date(c.when).toLocaleTimeString():"unknown time";
@@ -3479,7 +3479,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
                       <span style={{color:"#e5e7eb",fontFamily:"'JetBrains Mono',monospace",fontSize:13,fontWeight:600}}>{c.label}</span>
                       <span style={{color:kindColor,fontFamily:"'JetBrains Mono',monospace",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",whiteSpace:"nowrap"}}>{kindLbl}</span>
                     </div>
-                    <div style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:10,marginTop:3}}>saved {t}</div>
+                    <div style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:10,marginTop:3}}>saved {t}</div>
                   </button>
                 );
               })}
@@ -3497,7 +3497,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
         )}
         <div className="grid-2 mb-4">
           {(isFreeHit?["Run Out"]:["Bowled","Caught","Run Out","Stumped"]).map(w=>(
-            <button key={w} onClick={()=>setWT(w)} style={{padding:"10px 8px",borderRadius:12,border:`1.5px solid ${wt===w?"transparent":"#374151"}`,background:wt===w?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:wt===w?"#fff":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:13,fontFamily:"'Inter',sans-serif",marginBottom:4}}>{w}</button>
+            <button key={w} onClick={()=>setWT(w)} style={{padding:"10px 8px",borderRadius:12,border:`1.5px solid ${wt===w?"transparent":"#526480"}`,background:wt===w?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:wt===w?"#fff":"#bcc7d8",cursor:"pointer",fontWeight:600,fontSize:13,fontFamily:"'Inter',sans-serif",marginBottom:4}}>{w}</button>
           ))}
         </div>
         {wt==="Caught"&&!isFreeHit&&(
@@ -3511,18 +3511,18 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
             <label>Runs completed before the run-out</label>
             <div className="grid-4" style={{gridTemplateColumns:"repeat(4,1fr)"}}>
               {[0,1,2,3].map(r=>(
-                <button key={r} onClick={()=>setRoRuns(r)} style={{padding:"10px",borderRadius:12,border:`1.5px solid ${roRuns===r?"transparent":"#374151"}`,background:roRuns===r?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:roRuns===r?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>{r}</button>
+                <button key={r} onClick={()=>setRoRuns(r)} style={{padding:"10px",borderRadius:12,border:`1.5px solid ${roRuns===r?"transparent":"#526480"}`,background:roRuns===r?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:roRuns===r?"#111":"#bcc7d8",cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>{r}</button>
               ))}
             </div>
           </div>
           {!inn.single&&(
             <div style={{marginBottom:14}}>
               <label>Who got run out?</label>
-              <p style={{color:"#6b7280",fontSize:11,marginTop:-4,marginBottom:8}}>Pick the batsman who was actually run out. With 0 runs it can be either one — choose whoever was caught short.</p>
+              <p style={{color:"#9aa8bf",fontSize:11,marginTop:-4,marginBottom:8}}>Pick the batsman who was actually run out. With 0 runs it can be either one — choose whoever was caught short.</p>
               <div className="grid-2">
                 {[{nm:inn.strikerName,lbl:"🏏 "+(inn.strikerName||"Striker"),sub:"on strike"},
                   {nm:inn.nonStrikerName,lbl:"⚪ "+(inn.nonStrikerName||"Non-striker"),sub:"non-striker"}].map(o=>(
-                  <button key={o.sub} onClick={()=>setRoOut(o.nm)} style={{padding:"11px 8px",borderRadius:12,border:`1.5px solid ${roOut===o.nm?"transparent":"#374151"}`,background:roOut===o.nm?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:roOut===o.nm?"#fff":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif",textAlign:"center",lineHeight:1.3}}>
+                  <button key={o.sub} onClick={()=>setRoOut(o.nm)} style={{padding:"11px 8px",borderRadius:12,border:`1.5px solid ${roOut===o.nm?"transparent":"#526480"}`,background:roOut===o.nm?"linear-gradient(135deg,#dc2626,#991b1b)":"transparent",color:roOut===o.nm?"#fff":"#bcc7d8",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif",textAlign:"center",lineHeight:1.3}}>
                     {o.lbl}
                     <span style={{display:"block",fontSize:9,opacity:.7,marginTop:2,fontFamily:"'JetBrains Mono',monospace"}}>{o.sub}</span>
                   </button>
@@ -3531,13 +3531,13 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
             </div>
           )}
           <div style={{marginBottom:14}}>
-            <label>Run out by <span style={{color:"#6b7280",fontWeight:400,fontFamily:"'JetBrains Mono',monospace",fontSize:10}}>(optional)</span></label>
+            <label>Run out by <span style={{color:"#9aa8bf",fontWeight:400,fontFamily:"'JetBrains Mono',monospace",fontSize:10}}>(optional)</span></label>
             <FielderSelect placeholder="— Select fielder —"/>
           </div>
         </>)}
         {wt==="Stumped"&&(
           <div style={{marginBottom:14}}>
-            <label>Stumped by <span style={{color:"#6b7280",fontWeight:400,fontFamily:"'JetBrains Mono',monospace",fontSize:10}}>(wicketkeeper)</span></label>
+            <label>Stumped by <span style={{color:"#9aa8bf",fontWeight:400,fontFamily:"'JetBrains Mono',monospace",fontSize:10}}>(wicketkeeper)</span></label>
             <FielderSelect placeholder="— Select wicketkeeper —"/>
           </div>
         )}
@@ -3546,14 +3546,14 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
 
       {/* Extra modal */}
       {em&&<Modal onClose={()=>{setEM(null);setER(0);setNbDecl(false);}} title={em==="WD"?"Wide":em==="NB"?"No Ball":em==="B"?"Byes":em==="DECL"?"📍 Declare Runs":"Leg Byes"}>
-        <p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:12}}>{em==="NB"?"Runs off the bat:":em==="DECL"?"Runs to credit the striker (strike will NOT rotate):":"Additional runs:"}</p>
+        <p style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:12}}>{em==="NB"?"Runs off the bat:":em==="DECL"?"Runs to credit the striker (strike will NOT rotate):":"Additional runs:"}</p>
         <div className="grid-4 mb-4" style={{gridTemplateColumns:"repeat(3,1fr)"}}>
           {[0,1,2,3,4,6].map(r=>(
-            <button key={r} onClick={()=>{setER(r);setNbDecl(false);}} style={{padding:"10px",borderRadius:12,border:`1.5px solid ${er===r&&!nbDecl?"transparent":"#374151"}`,background:er===r&&!nbDecl?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:er===r&&!nbDecl?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:14,marginBottom:6}}>{r}</button>
+            <button key={r} onClick={()=>{setER(r);setNbDecl(false);}} style={{padding:"10px",borderRadius:12,border:`1.5px solid ${er===r&&!nbDecl?"transparent":"#526480"}`,background:er===r&&!nbDecl?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:er===r&&!nbDecl?"#111":"#bcc7d8",cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:14,marginBottom:6}}>{r}</button>
           ))}
         </div>
         {em==="NB"&&(<>
-          <p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:4}}>
+          <p style={{color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:4}}>
             Ball stuck? Declared <span style={{color:"#a78bfa"}}>(1D/2D — credited, strike won't rotate):</span>
           </p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
@@ -3571,31 +3571,31 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
 
       {/* Overthrow modal */}
       {showOT&&<Modal onClose={()=>setShowOT(false)} title="🔄 Overthrow">
-        <p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:4}}>Runs batters completed before the overthrow:</p>
+        <p style={{color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:4}}>Runs batters completed before the overthrow:</p>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14}}>
           {[0,1,2,3].map(r=>(
             <button key={r} onClick={()=>setOTBase(r)} style={{padding:"10px",borderRadius:12,
-              border:`1.5px solid ${otBase===r?"transparent":"#374151"}`,
+              border:`1.5px solid ${otBase===r?"transparent":"#526480"}`,
               background:otBase===r?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",
-              color:otBase===r?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,
+              color:otBase===r?"#111":"#bcc7d8",cursor:"pointer",fontWeight:700,
               fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>{r}</button>
           ))}
         </div>
 
-        <p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:4}}>
+        <p style={{color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginBottom:4}}>
           Overthrow runs <span style={{color:"#fb923c"}}>(normal: 1-4)</span>:
         </p>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:8}}>
           {[1,2,3,4].map(r=>(
             <button key={r} onClick={()=>setOTThrow(r)} style={{padding:"10px",borderRadius:12,
-              border:`1.5px solid ${otThrow===r?"transparent":"#374151"}`,
+              border:`1.5px solid ${otThrow===r?"transparent":"#526480"}`,
               background:otThrow===r?"linear-gradient(135deg,#fb923c,#ea580c)":"transparent",
-              color:otThrow===r?"#111":"#9ca3af",cursor:"pointer",fontWeight:700,
+              color:otThrow===r?"#111":"#bcc7d8",cursor:"pointer",fontWeight:700,
               fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>{r}</button>
           ))}
         </div>
 
-        <p style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:4}}>
+        <p style={{color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:4}}>
           Declared overthrow <span style={{color:"#a78bfa"}}>(1D/2D — strike based on batter runs only):</span>
         </p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
@@ -3622,7 +3622,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
               </p>
               <p style={{color:strikeChanges?"#34d399":"#a5b4fc",fontSize:11,fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>
                 {strikeChanges?"⇄ Strike CHANGES":"→ Strike STAYS"}
-                {isDeclOT&&<span style={{color:"#6b7280"}}> (declared — only bat runs count)</span>}
+                {isDeclOT&&<span style={{color:"#9aa8bf"}}> (declared — only bat runs count)</span>}
               </p>
             </div>
           );
@@ -3646,7 +3646,7 @@ function Modal({children,onClose,title}){
       <div className="modal" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 style={{fontWeight:700,fontSize:17}}>{title}</h3>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"#6b7280",fontSize:22,cursor:"pointer",lineHeight:1,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:8}}>×</button>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:22,cursor:"pointer",lineHeight:1,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:8}}>×</button>
         </div>
         {children}
       </div>
@@ -3682,7 +3682,7 @@ function PinManagementButton(){
   return(<>
     <button onClick={openModal} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.35)",color:"#f87171",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>🔐 PINs</button>
     {open&&<Modal onClose={()=>setOpen(false)} title="🔐 Manage Admin PINs">
-      <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Leave a field blank to keep the current PIN unchanged. Changes take effect for the next login — anyone already logged in stays active until they leave.</p>
+      <p style={{color:"#bcc7d8",fontSize:12,marginBottom:14}}>Leave a field blank to keep the current PIN unchanged. Changes take effect for the next login — anyone already logged in stays active until they leave.</p>
       <label>New Basic Admin PIN (4 digits)</label>
       <input value={basicPin} onChange={e=>{setBasicPin(e.target.value.replace(/\D/g,"").slice(0,4));setSaved(false);setErr("");}} placeholder="Leave blank to keep current" inputMode="numeric" maxLength={4} style={{marginBottom:12,letterSpacing:"0.3em",textAlign:"center"}}/>
       <label>New Super Admin PIN (4 digits)</label>
@@ -3866,26 +3866,26 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
             {onAbandonMatch&&cell("🆕","New Match","#fbbf24",()=>{close();onAbandonMatch();})}
           </div>
           <div style={{borderTop:"1px solid #1e1b4b",marginTop:8,paddingTop:6,textAlign:"center"}}>
-            <span style={{fontSize:9,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace"}}>build 2026-07-07</span>
+            <span style={{fontSize:9,color:"#8291ab",fontFamily:"'JetBrains Mono',monospace"}}>build 2026-07-07</span>
           </div>
         </div>
       </>,document.body)}
 
       {/* Edit Match modal */}
       {editOpen&&<Modal onClose={()=>setEditOpen(false)} title="✏️ Edit Match Settings">
-        <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Correct overs or wickets if they were set wrong at the start.</p>
+        <p style={{color:"#bcc7d8",fontSize:12,marginBottom:14}}>Correct overs or wickets if they were set wrong at the start.</p>
         <label>Overs per side</label>
         <input type="number" min={minOv} value={ov} onChange={e=>setOv(e.target.value)} style={{marginBottom:6}}/>
-        <p style={{color:"#4b5563",fontSize:10,marginBottom:12}}>{Math.ceil((inn?.totalBalls||0)/6)} overs already bowled</p>
+        <p style={{color:"#8291ab",fontSize:10,marginBottom:12}}>{Math.ceil((inn?.totalBalls||0)/6)} overs already bowled</p>
         <label>Wickets per side</label>
         <input type="number" min={minWk} value={wk} onChange={e=>setWk(e.target.value)} style={{marginBottom:6}}/>
-        <p style={{color:"#4b5563",fontSize:10,marginBottom:14}}>{inn?.wickets||0} wicket{inn?.wickets===1?"":"s"} already fallen</p>
+        <p style={{color:"#8291ab",fontSize:10,marginBottom:14}}>{inn?.wickets||0} wicket{inn?.wickets===1?"":"s"} already fallen</p>
         <button className="btn btn-primary w-full" onClick={saveEdit}>Save Changes</button>
       </Modal>}
 
       {/* Fix Players modal (moved here from the header) */}
       {fixOpen&&<Modal onClose={()=>setFixOpen(false)} title="🔧 Correct Striker / Bowler">
-        <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Use this if a name was entered wrong (e.g. wrong bowler typed in) or strike rotation needs a manual correction. Scores already recorded are not affected — this only changes who's currently at the crease/bowling.</p>
+        <p style={{color:"#bcc7d8",fontSize:12,marginBottom:14}}>Use this if a name was entered wrong (e.g. wrong bowler typed in) or strike rotation needs a manual correction. Scores already recorded are not affected — this only changes who's currently at the crease/bowling.</p>
         <label>{inn?.single?"Batsman":"Striker (on strike now)"}</label>
         <div style={{marginBottom:12}}><PlayerSelectControlled value={fixSk} onChange={setFixSk} options={squadOptions(match, inn?.battingTeam, rosterNames)} placeholder="Choose striker"/></div>
         {!inn?.single&&(<>
@@ -3900,7 +3900,7 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
       {/* Manage PINs modal */}
       {teamEditOpen&&(
         <Modal onClose={()=>setTeamEditOpen(false)} title="👥 Edit Match Teams">
-          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Add or remove players from each team. Changes take effect immediately for everyone.</p>
+          <p style={{color:"#bcc7d8",fontSize:12,marginBottom:14}}>Add or remove players from each team. Changes take effect immediately for everyone.</p>
           {[["🟡",match?.teamA||"Team A",editPubA,setEditPubA,newNameA,setNewNameA,"A",setEditPubB],
             ["⚡",match?.teamB||"Team B",editPubB,setEditPubB,newNameB,setNewNameB,"B",setEditPubA]
           ].map(([em,teamName,list,setList,newName,setNewName,side,setOther])=>(
@@ -3939,10 +3939,10 @@ function AdminActionsMenu({onHistory,onAnnounce,inn,onEditMatchSave,match,role,o
                 // OTHER team are shown but visually flagged and require a confirm to move — a playing
                 // member can't be silently added to both sides.
                 const available=(rosterNames||[]).filter(n=>!onThis.has(n.toLowerCase())).sort((a,b)=>a.localeCompare(b));
-                if(available.length===0) return <p style={{color:"#4b5563",fontSize:10,marginTop:8}}>All club players are on this team.</p>;
+                if(available.length===0) return <p style={{color:"#8291ab",fontSize:10,marginTop:8}}>All club players are on this team.</p>;
                 return(
                   <div style={{marginTop:10}}>
-                    <p style={{color:"#6b7280",fontSize:10,marginBottom:6,textTransform:"uppercase",letterSpacing:".08em"}}>Add a club member (A–Z):</p>
+                    <p style={{color:"#9aa8bf",fontSize:10,marginBottom:6,textTransform:"uppercase",letterSpacing:".08em"}}>Add a club member (A–Z):</p>
                     <div style={{display:"flex",flexWrap:"wrap",gap:6,maxHeight:132,overflowY:"auto"}}>
                       {available.map(n=>{
                         const elsewhere=onOther.has(n.toLowerCase());
@@ -4048,7 +4048,7 @@ function EditPlayersButton({inn,match,rosterNames,onSwap,onSave}){
       fontFamily:"'JetBrains Mono',monospace"
     }}>✏️</button>
     {open&&<Modal onClose={()=>setOpen(false)} title="🏏 Edit Players">
-      <p style={{color:"#6b7280",fontSize:11,fontFamily:"'JetBrains Mono',monospace",marginBottom:16}}>Fix names or swap strike · scores already recorded are not affected</p>
+      <p style={{color:"#9aa8bf",fontSize:11,fontFamily:"'JetBrains Mono',monospace",marginBottom:16}}>Fix names or swap strike · scores already recorded are not affected</p>
 
       {/* AT THE CREASE section */}
       <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".15em",marginBottom:10}}>At the Crease</p>
@@ -4122,7 +4122,7 @@ function ManualFixButton({inn,match,onSave,rosterNames}){
     <button onClick={openModal} style={{background:"rgba(52,211,153,.12)",border:"1px solid rgba(52,211,153,.35)",color:"#6ee7b7",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>🔧 Fix Players</button>
     {open&&(
       <Modal onClose={()=>setOpen(false)} title="🔧 Correct Striker / Bowler">
-        <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Use this if a name was entered wrong (e.g. wrong bowler typed in) or strike rotation needs a manual correction. Scores already recorded are not affected — this only changes who's currently at the crease/bowling.</p>
+        <p style={{color:"#bcc7d8",fontSize:12,marginBottom:14}}>Use this if a name was entered wrong (e.g. wrong bowler typed in) or strike rotation needs a manual correction. Scores already recorded are not affected — this only changes who's currently at the crease/bowling.</p>
         <label>{inn.single?"Batsman":"Striker (on strike now)"}</label>
         <div style={{marginBottom:12}}><PlayerSelectControlled value={sk} onChange={setSk} options={batOpts} placeholder="Choose striker"/></div>
         {!inn.single&&(<>
@@ -4156,13 +4156,13 @@ function EditMatchButton({inn,onSave}){
     <button onClick={openModal} style={{background:"rgba(139,92,246,.12)",border:"1px solid rgba(139,92,246,.35)",color:"#c4b5fd",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 9px",fontWeight:600}}>✏️ Edit Match</button>
     {open&&(
       <Modal onClose={()=>setOpen(false)} title="✏️ Edit Match Settings">
-        <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Correct overs or wickets if they were set wrong at the start. Can't go below what's already happened in this innings.</p>
+        <p style={{color:"#bcc7d8",fontSize:12,marginBottom:14}}>Correct overs or wickets if they were set wrong at the start. Can't go below what's already happened in this innings.</p>
         <label>Overs per side</label>
         <input type="number" min={minOv} value={ov} onChange={e=>setOv(e.target.value)} style={{marginBottom:12}}/>
-        <p style={{color:"#4b5563",fontSize:10,marginTop:-8,marginBottom:12}}>{Math.ceil((inn.totalBalls||0)/6)} overs already bowled this innings</p>
+        <p style={{color:"#8291ab",fontSize:10,marginTop:-8,marginBottom:12}}>{Math.ceil((inn.totalBalls||0)/6)} overs already bowled this innings</p>
         <label>Wickets per side</label>
         <input type="number" min={minWk} value={wk} onChange={e=>setWk(e.target.value)} style={{marginBottom:12}}/>
-        <p style={{color:"#4b5563",fontSize:10,marginTop:-8,marginBottom:14}}>{inn.wickets||0} wicket{inn.wickets===1?"":"s"} already fallen</p>
+        <p style={{color:"#8291ab",fontSize:10,marginTop:-8,marginBottom:14}}>{inn.wickets||0} wicket{inn.wickets===1?"":"s"} already fallen</p>
         <button className="btn btn-primary w-full" onClick={save}>Save Changes</button>
       </Modal>
     )}
@@ -4213,10 +4213,10 @@ function BattingTab({inn}){
                   <div style={{color:b.retired?"#a78bfa":(!b.out&&bat)?"var(--primary-2)":"#5f7099",fontSize:11,fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{b.out?b.howOut:b.retired?"retired":bat?"not out ✦":"yet to bat"}</div>
                 </td>
                 <td style={{fontWeight:700,color:"#fff"}}>{b.runs}</td>
-                <td style={{color:"#6b7280"}}>{b.balls}</td>
+                <td style={{color:"#9aa8bf"}}>{b.balls}</td>
                 <td style={{color:"#fbbf24"}}>{b.fours}</td>
                 <td style={{color:"#34d399"}}>{b.sixes}</td>
-                <td style={{color:"#6b7280"}}>{sr}</td>
+                <td style={{color:"#9aa8bf"}}>{sr}</td>
               </tr>
             );
           })}
@@ -4278,10 +4278,10 @@ function BowlingTab({inn}){
                     {hasMultiOverSpell&&<span style={{color:"var(--text-mute)",fontSize:10,marginLeft:6}}>{isOpen?"▲":"▾"}</span>}
                   </td>
                   <td>{b.overs}.{b.ballsThisOver}</td>
-                  <td style={{color:"#6b7280"}}>{b.maidens}</td>
-                  <td style={{color:"#6b7280"}}>{b.runs}</td>
+                  <td style={{color:"#9aa8bf"}}>{b.maidens}</td>
+                  <td style={{color:"#9aa8bf"}}>{b.runs}</td>
                   <td style={{color:"#f87171",fontWeight:700}}>{b.wickets}</td>
-                  <td style={{color:"#6b7280"}}>{econ}</td>
+                  <td style={{color:"#9aa8bf"}}>{econ}</td>
                 </tr>
                 {isOpen&&(
                   <tr>
@@ -4345,7 +4345,7 @@ function PlayerSelect({inputRef,options,placeholder}){
   }
   return(
     <select value={val} onChange={e=>{ if(e.target.value==="__add__"){setAdding(true);holder.current.value="";} else set(e.target.value); }}
-      style={{width:"100%",fontSize:13,padding:"10px",borderRadius:10,background:"#1e1b4b",color:val?"#e5e7eb":"#6b7280",border:"1px solid rgba(99,102,241,.3)"}}>
+      style={{width:"100%",fontSize:13,padding:"10px",borderRadius:10,background:"#1e1b4b",color:val?"#e5e7eb":"#9aa8bf",border:"1px solid rgba(99,102,241,.3)"}}>
       <option value="">{placeholder||"Choose player…"}</option>
       {(options||[]).map(n=><option key={n} value={n} style={{color:"#e5e7eb"}}>{n}</option>)}
       <option value="__add__" style={{color:"#6ee7b7"}}>➕ Add new player…</option>
@@ -4375,7 +4375,7 @@ function PlayerSelectControlled({value,onChange,options,placeholder,accent}){
   }
   return(
     <select value={opts.includes(value)?value:""} onChange={e=>{ if(e.target.value==="__add__"){onChange("");setAdding(true);} else onChange(e.target.value); }}
-      style={{...base,color:value?"#fff":"#6b7280"}}>
+      style={{...base,color:value?"#fff":"#9aa8bf"}}>
       <option value="">{placeholder||"Choose player…"}</option>
       {opts.map(n=><option key={n} value={n} style={{color:"#e5e7eb"}}>{n}</option>)}
       <option value="__add__" style={{color:"#6ee7b7"}}>➕ Add new player…</option>
@@ -4409,15 +4409,15 @@ function OpenersForm({inn,match,onSubmit,role,onExit,rosterNames}){
       <div style={{width:"100%",maxWidth:"min(460px,100%)"}}>
         {(onExit||role==="admin")&&<div style={{display:"flex",justifyContent:"flex-end",gap:10,marginBottom:8}}>
           {role==="admin"&&<PinButton match={match}/>}
-          {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
+          {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
         </div>}
         <div className="text-center mb-6">
           <div style={{fontSize:44,marginBottom:10}}>🏏</div>
           <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:11,textTransform:"uppercase",letterSpacing:".25em",marginBottom:8}}>
             {inn.inningsNum===1?"Match Ready — Set Openers":"2nd Innings — Set Openers"}
           </p>
-          <h1 style={{fontSize:30,fontFamily:"'Oswald',sans-serif",fontWeight:700}}>{inn.battingTeam} <span style={{color:"#6b7280",fontSize:18}}>vs</span> {inn.bowlingTeam}</h1>
-          {match?.tossSummary&&<p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginTop:6}}>🪙 {match.tossSummary}</p>}
+          <h1 style={{fontSize:30,fontFamily:"'Oswald',sans-serif",fontWeight:700}}>{inn.battingTeam} <span style={{color:"#9aa8bf",fontSize:18}}>vs</span> {inn.bowlingTeam}</h1>
+          {match?.tossSummary&&<p style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:12,marginTop:6}}>🪙 {match.tossSummary}</p>}
         </div>
         <div className="card space-y-4">
           <div style={{background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.25)",borderRadius:14,padding:"10px 14px",textAlign:"center"}}>
@@ -4473,13 +4473,13 @@ function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onEditOvers,onE
       <div style={{width:"100%",maxWidth:"min(460px,100%)"}}>
         {(onExit||role==="admin")&&<div style={{display:"flex",justifyContent:"flex-end",gap:10,marginBottom:8}}>
           {role==="admin"&&<PinButton match={match}/>}
-          {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
+          {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
         </div>}
         <div className="text-center mb-6">
           <span style={{display:"inline-block",marginBottom:8,color:role==="admin"?"#fbbf24":"#34d399",fontFamily:"'JetBrains Mono',monospace",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".15em",border:`1px solid ${role==="admin"?"rgba(251,191,36,.5)":"rgba(52,211,153,.5)"}`,borderRadius:6,padding:"3px 8px"}}>{role==="admin"?"🔑 Admin mode":"✏️ Scorer mode"}</span>
           <p style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:11,textTransform:"uppercase",letterSpacing:".25em",marginBottom:8}}>Innings Break</p>
           <h1 style={{fontSize:56,fontFamily:"'Oswald',sans-serif",fontWeight:700}}>{inn.totalRuns}/{inn.wickets}</h1>
-          <p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:13,marginTop:4}}>{inn.battingTeam} · {ovStr(inn.totalBalls)} overs{single?" · single batsman":""}</p>
+          <p style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:13,marginTop:4}}>{inn.battingTeam} · {ovStr(inn.totalBalls)} overs{single?" · single batsman":""}</p>
         </div>
         <div className="card space-y-4">
           <div className="tag-amber">🎯 {inn.bowlingTeam} need {inn.totalRuns+1} to win in {inn.overs} overs</div>
@@ -4502,7 +4502,7 @@ function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onEditOvers,onE
             <button className="btn w-full" onClick={onUndoLastBall}
               style={{marginTop:4,borderRadius:14,fontSize:13,padding:"12px",background:"transparent",border:"1.5px solid rgba(96,165,250,.5)",color:"#60a5fa"}}>
               ↩ Undo Last Ball
-              <span style={{display:"block",fontSize:10,color:"#6b7280",fontWeight:400,marginTop:2}}>Just this delivery — e.g. if it wrongly ended the innings again</span>
+              <span style={{display:"block",fontSize:10,color:"#9aa8bf",fontWeight:400,marginTop:2}}>Just this delivery — e.g. if it wrongly ended the innings again</span>
             </button>
           )}
           {canRevert&&(
@@ -4590,7 +4590,7 @@ function buildScorecardCanvas(i1,i2,result,match){
     ctx.fillStyle=even?"rgba(30,27,75,.4)":"transparent";ctx.fillRect(0,y,W,rowH);
     let x=pad;
     cells.forEach((c,i)=>{
-      ctx.fillStyle=i===2?"#fbbf24":i===1?"#6b7280":"#e0e7ff";
+      ctx.fillStyle=i===2?"#fbbf24":i===1?"#9aa8bf":"#e0e7ff";
       ctx.font=i===0?"bold 11px 'Inter',sans-serif":"11px 'JetBrains Mono',monospace";
       ctx.textAlign=i===0?"left":"right";
       const txt=String(c);
@@ -4602,7 +4602,7 @@ function buildScorecardCanvas(i1,i2,result,match){
   const drawExtras=(ext)=>{
     if(!ext)return;
     ctx.fillStyle="rgba(30,27,75,.3)";ctx.fillRect(0,y,W,extraH);
-    ctx.fillStyle="#6b7280";ctx.font="11px 'JetBrains Mono',monospace";ctx.textAlign="left";
+    ctx.fillStyle="#9aa8bf";ctx.font="11px 'JetBrains Mono',monospace";ctx.textAlign="left";
     ctx.fillText(`Extras: WD ${ext.wd||0}  NB ${ext.nb||0}  B ${ext.b||0}  LB ${ext.lb||0}  Total ${(ext.wd||0)+(ext.nb||0)+(ext.b||0)+(ext.lb||0)}`,pad,y+extraH/2+4);
     y+=extraH;
   };
@@ -4722,7 +4722,7 @@ function POTMVoting({inn,inn1,potm,role}){
         <div style={{fontSize:42,marginBottom:6}}>🏆</div>
         <p style={{fontSize:10,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".2em",marginBottom:6}}>PLAYER OF THE MATCH</p>
         <p style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700,color:"#fbbf24",marginBottom:4}}>{potm.winner}</p>
-        <p style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>{winnerVotes} vote{winnerVotes===1?"":"s"} · {totalVotes} total</p>
+        <p style={{fontSize:11,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace"}}>{winnerVotes} vote{winnerVotes===1?"":"s"} · {totalVotes} total</p>
       </div>
     );
   }
@@ -4734,7 +4734,7 @@ function POTMVoting({inn,inn1,potm,role}){
     return(
       <div style={{background:"rgba(99,102,241,.08)",border:"1.5px solid rgba(99,102,241,.3)",borderRadius:20,padding:"18px 16px",marginTop:20}}>
         <p style={{fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:700,marginBottom:4}}>🏆 Player of the Match</p>
-        <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Who are you? Pick your name to cast your vote.</p>
+        <p style={{color:"#bcc7d8",fontSize:12,marginBottom:14}}>Who are you? Pick your name to cast your vote.</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
           {participants.map(n=>(
             <button key={n} onClick={()=>{setMyName(n);try{localStorage.setItem("lcc_potm_voter",n);}catch(e){}}}
@@ -4759,12 +4759,12 @@ function POTMVoting({inn,inn1,potm,role}){
           <p style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>Voting as {myName}{myVote?` · voted for ${myVote}`:""}</p>
         </div>
         <button onClick={()=>{setMyName(null);try{localStorage.removeItem("lcc_potm_voter");}catch(e){}}}
-          style={{background:"none",border:"none",color:"#6b7280",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Not you?</button>
+          style={{background:"none",border:"none",color:"#9aa8bf",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Not you?</button>
       </div>
       {suggested&&!myVote&&(
         <p style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginBottom:10}}>⭐ Standout performance: {suggested} — but vote for whoever you think earned it.</p>
       )}
-      <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:10}}>{myVote?"Tap a different name to change your vote, or tap your pick again to remove it.":"Tap a name to vote — you can change your mind anytime before voting closes."}</p>
+      <p style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",marginBottom:10}}>{myVote?"Tap a different name to change your vote, or tap your pick again to remove it.":"Tap a name to vote — you can change your mind anytime before voting closes."}</p>
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
         {sorted.filter(n=>n!==myName).map(n=>{
           const c=counts[n]||0;
@@ -4781,7 +4781,7 @@ function POTMVoting({inn,inn1,potm,role}){
               {/* vote bar */}
               <div style={{position:"absolute",left:0,top:0,bottom:0,width:pct+"%",background:"rgba(245,158,11,.08)",transition:"width .4s ease"}}/>
               <span style={{fontWeight:isMyVote?700:500,fontSize:14,position:"relative"}}>{n}{n===suggested&&<span style={{marginLeft:6,fontSize:11}}>⭐</span>}{isMyVote&&<span style={{color:"#fbbf24",marginLeft:6,fontSize:11}}>✓ your vote</span>}</span>
-              <span style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",position:"relative"}}>{c} vote{c===1?"":"s"}</span>
+              <span style={{fontSize:11,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",position:"relative"}}>{c} vote{c===1?"":"s"}</span>
             </button>
           );
         })}
@@ -4935,18 +4935,18 @@ function MatchOver({result,inn,inn1,match,potm,role,onRevert,canRevert,onNew,onU
           </div>
           <div style={{textAlign:"right"}}>
             <p style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,lineHeight:1,color:isWinner?"#34d399":"#a5b4fc"}}>{I.totalRuns}/{I.wickets}</p>
-            <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>({ovStr(I.totalBalls)} ov)</p>
+            <p style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace"}}>({ovStr(I.totalBalls)} ov)</p>
           </div>
         </div>
         {(h?.top||h?.bestBowl)&&(
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,borderTop:"1px solid rgba(99,102,241,.15)",paddingTop:10}}>
             {h?.top&&<div>
-              <p style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:3}}>🏏 TOP SCORE</p>
+              <p style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:3}}>🏏 TOP SCORE</p>
               <p style={{fontSize:13,fontWeight:700}}>{h.top[0]}</p>
-              <p style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace"}}>{h.top[1].runs} <span style={{color:"#6b7280"}}>({h.top[1].balls}b)</span></p>
+              <p style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace"}}>{h.top[1].runs} <span style={{color:"#9aa8bf"}}>({h.top[1].balls}b)</span></p>
             </div>}
             {h?.bestBowl&&<div>
-              <p style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:3}}>🎯 BEST BOWL</p>
+              <p style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:3}}>🎯 BEST BOWL</p>
               <p style={{fontSize:13,fontWeight:700}}>{h.bestBowl[0]}</p>
               <p style={{fontSize:11,color:"#fb923c",fontFamily:"'JetBrains Mono',monospace"}}>{h.bestBowl[1].wickets}/{h.bestBowl[1].runs}</p>
             </div>}
@@ -4979,7 +4979,7 @@ function MatchOver({result,inn,inn1,match,potm,role,onRevert,canRevert,onNew,onU
         <div style={{flex:1,overflow:"auto",padding:16,display:"flex",justifyContent:"center"}}>
           <img src={scorecardUrl} style={{width:"100%",maxWidth:800,borderRadius:10,display:"block"}} alt="Scorecard"/>
         </div>
-        <p style={{padding:"10px 16px",color:"#4b5563",fontSize:10,textAlign:"center",fontFamily:"'JetBrains Mono',monospace",flexShrink:0}}>
+        <p style={{padding:"10px 16px",color:"#8291ab",fontSize:10,textAlign:"center",fontFamily:"'JetBrains Mono',monospace",flexShrink:0}}>
           iOS: long-press image → Save to Photos · Android/Desktop: tap Save above
         </p>
       </div>
@@ -5004,7 +5004,7 @@ function MatchOver({result,inn,inn1,match,potm,role,onRevert,canRevert,onNew,onU
           </button>
           {canUndoLastBall&&(
             <button className="btn" onClick={onUndoLastBall} style={{padding:"13px 20px",fontSize:14,background:"transparent",border:"1.5px solid rgba(96,165,250,.5)",color:"#60a5fa",borderRadius:14}}>
-              ↩ Undo Last Ball <span style={{display:"block",fontSize:10,color:"#6b7280",fontWeight:400,marginTop:2}}>Just this delivery — e.g. if it wrongly ended the match again</span>
+              ↩ Undo Last Ball <span style={{display:"block",fontSize:10,color:"#9aa8bf",fontWeight:400,marginTop:2}}>Just this delivery — e.g. if it wrongly ended the match again</span>
             </button>
           )}
           {canRevert&&(
@@ -5392,7 +5392,7 @@ function describeBall(ev,inn){
 function PartnershipChart({inn}){
   const done=(inn.partnerships||[]).filter(p=>p&&p.pair&&p.pair[0]&&p.pair[1]);
   const live=(inn.strikerName&&inn.nonStrikerName&&!inn.single)
-    ? [{runs:inn.partnership||0,pair:[inn.strikerName,inn.nonStrikerName],live:true}] : [];
+    ? [{runs:inn.partnership||0,balls:inn.partnershipBalls||0,pair:[inn.strikerName,inn.nonStrikerName],live:true}] : [];
   const all=[...done,...live];
   if(all.length===0) return null;
   const max=Math.max(1,...all.map(p=>p.runs));
@@ -5404,7 +5404,7 @@ function PartnershipChart({inn}){
           <div key={i}>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:2}}>
               <span style={{color:"var(--text-dim)"}}>{p.pair[0]} & {p.pair[1]}{p.live&&<span style={{color:"var(--primary)",marginLeft:5}}>● current</span>}</span>
-              <span style={{color:"var(--text)",fontWeight:700}}>{p.runs}</span>
+              <span style={{color:"var(--text)",fontWeight:700}}>{p.runs}{p.live&&p.balls!=null?<span style={{color:"var(--text-mute)",fontWeight:400}}> ({p.balls})</span>:null}</span>
             </div>
             <div style={{height:6,borderRadius:3,background:"var(--surface-3)",overflow:"hidden"}}>
               <div style={{height:"100%",width:(p.runs/max*100)+"%",background:p.live?"var(--primary)":"var(--amber)",borderRadius:3,transition:"width .3s ease"}}/>
@@ -5440,9 +5440,9 @@ function ViewerTeams({match,inn}){
   };
   const col=(em,name,list,accent)=>(
     <div style={{flex:1,minWidth:0}}>
-      <p style={{fontWeight:700,fontSize:13,marginBottom:8,color:accent}}>{em} {name} <span style={{color:"#6b7280",fontWeight:400}}>({list.length})</span></p>
+      <p style={{fontWeight:700,fontSize:13,marginBottom:8,color:accent}}>{em} {name} <span style={{color:"#9aa8bf",fontWeight:400}}>({list.length})</span></p>
       {list.length===0
-        ? <p style={{fontSize:12,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>No players yet</p>
+        ? <p style={{fontSize:12,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace"}}>No players yet</p>
         : <div style={{display:"flex",flexDirection:"column",gap:5}}>
             {list.map(n=>{const t=tag(n);return(
               <div key={n} style={{display:"flex",alignItems:"center",gap:7,background:"rgba(255,255,255,.04)",borderRadius:8,padding:"6px 9px"}}>
@@ -5643,7 +5643,7 @@ function ViewerLive({onExit}){
           <div className="flex items-center" style={{gap:10}}>
             <button onClick={()=>shareLive(snap,()=>{ setShareToast(true); setTimeout(()=>setShareToast(false),2200); })}
               style={{background:"rgba(37,211,102,.15)",border:"1px solid rgba(37,211,102,.4)",color:"#25d366",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 10px",fontWeight:600}}>📤 Share</button>
-            <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+            <button onClick={onExit} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
           </div>
         </div>
         {shareToast&&<div style={{marginBottom:12,fontSize:11,color:"#25d366",fontFamily:"'JetBrains Mono',monospace"}}>✓ Score copied — paste it into WhatsApp!</div>}
@@ -5651,31 +5651,31 @@ function ViewerLive({onExit}){
         <div style={{textAlign:"center",marginBottom:8}}>
           <div style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700}}>{inn.battingTeam}</div>
           <div className="score-number" style={{fontSize:56,lineHeight:1.1}}>{inn.totalRuns||0}<span className="score-wkt">/{inn.wickets||0}</span></div>
-          <div style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>({ovStr(inn.totalBalls||0)} ov{rr?` · RR ${rr}`:""})</div>
+          <div style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>({ovStr(inn.totalBalls||0)} ov{rr?` · RR ${rr}`:""})</div>
         </div>
 
         <div style={{background:"rgba(251,191,36,.08)",border:"1px solid rgba(251,191,36,.3)",borderRadius:16,padding:"16px",textAlign:"center",margin:"16px 0"}}>
           <div style={{fontSize:13,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>🎯 TARGET</div>
           <div style={{fontSize:32,fontWeight:700,fontFamily:"'Oswald',sans-serif"}}>{target}</div>
-          <div style={{fontSize:12,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{chasingTeam} need {target} to win{inn.overs?` · ${(target/inn.overs).toFixed(2)} req rate`:""}</div>
+          <div style={{fontSize:12,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{chasingTeam} need {target} to win{inn.overs?` · ${(target/inn.overs).toFixed(2)} req rate`:""}</div>
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div style={{background:"rgba(52,211,153,.07)",border:"1px solid rgba(52,211,153,.25)",borderRadius:14,padding:"14px"}}>
             <div style={{fontSize:10,color:"#34d399",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:6}}>🏏 TOP SCORER</div>
             {s&&s.topBat
-              ?<><div style={{fontWeight:700,fontSize:15}}>{s.topBat.name}</div><div style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>{s.topBat.runs} ({s.topBat.balls})</div></>
-              :<div style={{color:"#6b7280",fontSize:12}}>—</div>}
+              ?<><div style={{fontWeight:700,fontSize:15}}>{s.topBat.name}</div><div style={{color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>{s.topBat.runs} ({s.topBat.balls})</div></>
+              :<div style={{color:"#9aa8bf",fontSize:12}}>—</div>}
           </div>
           <div style={{background:"rgba(167,139,250,.07)",border:"1px solid rgba(167,139,250,.25)",borderRadius:14,padding:"14px"}}>
             <div style={{fontSize:10,color:"#a78bfa",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:6}}>🎯 BEST BOWLER</div>
             {s&&s.bestBowl
-              ?<><div style={{fontWeight:700,fontSize:15}}>{s.bestBowl.name}</div><div style={{color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>{s.bestBowl.wickets}/{s.bestBowl.runs} ({s.bestBowl.overs})</div></>
-              :<div style={{color:"#6b7280",fontSize:12}}>—</div>}
+              ?<><div style={{fontWeight:700,fontSize:15}}>{s.bestBowl.name}</div><div style={{color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>{s.bestBowl.wickets}/{s.bestBowl.runs} ({s.bestBowl.overs})</div></>
+              :<div style={{color:"#9aa8bf",fontSize:12}}>—</div>}
           </div>
         </div>
 
-        <div style={{textAlign:"center",marginTop:24,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>
+        <div style={{textAlign:"center",marginTop:24,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>
           ⏳ {chasingTeam} setting up their innings…
         </div>
       </div>
@@ -5733,7 +5733,7 @@ function ViewerLive({onExit}){
               style={{background:"rgba(37,211,102,.15)",border:"1px solid rgba(37,211,102,.4)",color:"#25d366",
                 fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 10px",fontWeight:600}}
               title="Share the live score">📤 Share</button>
-            <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+            <button onClick={onExit} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
           </div>
         </div>
         {shareToast&&<div style={{marginBottom:8,fontSize:11,color:"#25d366",fontFamily:"'JetBrains Mono',monospace"}}>✓ Score copied — paste it into WhatsApp!</div>}
@@ -5741,23 +5741,17 @@ function ViewerLive({onExit}){
             than floating detached on the far right, so the header reads as a single statement. */}
         <div style={{marginBottom:2}}>
           <span style={{fontWeight:700,fontSize:16}}>{inn.battingTeam}</span>
-          <span style={{color:"#6b7280",fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}> vs {inn.bowlingTeam}</span>
+          <span style={{color:"#9aa8bf",fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}> vs {inn.bowlingTeam}</span>
         </div>
         {match?.tossSummary&&<div style={{marginBottom:6}}><span style={{fontSize:10,color:"rgba(52,211,153,.75)",fontFamily:"'JetBrains Mono',monospace"}}>🪙 {match.tossSummary}</span></div>}
         <MilestoneCelebration inn={inn} resetKey={(match?.matchId||"m")+":"+(inn.inningsNum||1)} playSound={soundOn}/>
         <div className="flex items-center" style={{gap:10}}>
           <span key={inn.totalRuns+"-"+inn.wickets} className="score-number score-pulse">{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
-          <span style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:16,marginBottom:4}}>({ovStr(inn.totalBalls)} ov)</span>
+          <span style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:16,marginBottom:4}}>({ovStr(inn.totalBalls)} ov)</span>
         </div>
-        {/* CURRENT PARTNERSHIP — same idea as the scorer's own header: the run-up between the two
-            batsmen currently at the crease. Hidden for single-batsman innings and the brief moment a
-            new batsman is being selected after a wicket. */}
-        {!inn.single&&inn.strikerName&&inn.nonStrikerName&&(
-          <div style={{marginTop:4,fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#9ca3af"}}>
-            🤝 {inn.strikerName} & {inn.nonStrikerName}: <span style={{color:"#e5e7eb",fontWeight:700}}>{inn.partnership||0}</span>
-            <span style={{color:"#6b7280"}}> ({inn.partnershipBalls||0})</span>
-          </div>
-        )}
+        {/* The plain-text partnership line that briefly lived here moved into the Live tab body as the
+            full Partnerships card (same component the scorer's Batting tab uses, with the progress
+            bars) — Lokesh explicitly preferred that richer card over a bare text line. */}
         {/* TICKER — one line describing the latest ball, refreshed per delivery */}
         {(()=>{
           const evs=inn.overEvents&&inn.overEvents.length?inn.overEvents:((inn.completedOvers||[]).slice(-1)[0]||[]);
@@ -5795,7 +5789,7 @@ function ViewerLive({onExit}){
             duplication and made the header read as cluttered. One home for each piece of info. */}
         {!(inn.target!=null&&bLeft>0&&req>0)&&(
           <div className="flex" style={{gap:16,marginTop:8,flexWrap:"wrap"}}>
-            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280"}}>CRR <span style={{color:"#fbbf24",fontWeight:600}}>{crr}</span></span>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#9aa8bf"}}>CRR <span style={{color:"#fbbf24",fontWeight:600}}>{crr}</span></span>
             {inn.target&&<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#818cf8"}}>Target <span style={{color:"#fff",fontWeight:600}}>{inn.target}</span></span>}
           </div>
         )}
@@ -5813,7 +5807,7 @@ function ViewerLive({onExit}){
             title={soundOn?"Match sounds on — tap to mute":"Match sounds off — tap to enable"}
             style={{display:"flex",alignItems:"center",gap:5,background:soundOn?"rgba(52,211,153,.15)":"#1e1b4b",
               border:soundOn?"1px solid rgba(52,211,153,.5)":"1px solid transparent",borderRadius:14,
-              padding:"9px 12px",cursor:"pointer",color:soundOn?"#6ee7b7":"#6b7280",fontSize:16,lineHeight:1,flexShrink:0}}>
+              padding:"9px 12px",cursor:"pointer",color:soundOn?"#6ee7b7":"#9aa8bf",fontSize:16,lineHeight:1,flexShrink:0}}>
             {soundOn?"🔊":"🔇"}
           </button>
         </div>
@@ -5839,7 +5833,7 @@ function ViewerLive({onExit}){
         {inn.inningsNum===2&&inn1&&(
           <div style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",borderRadius:14,padding:"10px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span style={{fontSize:12,color:"#a5b4fc",fontFamily:"'Inter',sans-serif"}}><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"#818cf8"}}>1ST INN</span>  {inn1.battingTeam}</span>
-            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:700,color:"#c7d2fe"}}>{inn1.totalRuns}/{inn1.wickets} <span style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>({ovStr(inn1.totalBalls)})</span></span>
+            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:700,color:"#c7d2fe"}}>{inn1.totalRuns}/{inn1.wickets} <span style={{fontSize:11,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace"}}>({ovStr(inn1.totalBalls)})</span></span>
           </div>
         )}
         <div className="grid-2" style={{marginBottom:16}}>
@@ -5847,8 +5841,8 @@ function ViewerLive({onExit}){
             <p className="section-title">🟡 {inn.single?"Batsman":"Batting"}</p>
             {(inn.single?[SK]:[SK,NS]).filter(Boolean).map((p,i)=>(
               <div key={i} className="flex items-center justify-between" style={{padding:"3px 0",gap:8}}>
-                <span style={{fontSize:13,fontWeight:p===SK?700:400,color:p===SK?"#fff":"#9ca3af",flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{firstName(p.name)}{p===SK&&<span style={{color:"#fbbf24",fontWeight:700}}> *</span>}</span>
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0}}>{p.runs} ({p.balls})</span>
+                <span style={{fontSize:13,fontWeight:p===SK?700:400,color:p===SK?"#fff":"#bcc7d8",flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{firstName(p.name)}{p===SK&&<span style={{color:"#fbbf24",fontWeight:700}}> *</span>}</span>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#9aa8bf",flexShrink:0}}>{p.runs} ({p.balls})</span>
               </div>
             ))}
           </div>
@@ -5856,10 +5850,14 @@ function ViewerLive({onExit}){
             <p className="section-title">🎯 Bowling</p>
             {BW&&<div className="flex items-center justify-between" style={{gap:8}}>
               <span style={{fontSize:13,fontWeight:700,flex:1,minWidth:0,overflow:"hidden"}} className="truncate">{shortName(BW.name)}</span>
-              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280",flexShrink:0}}>{BW.overs}.{BW.ballsThisOver}-{BW.runs}-{BW.wickets}</span>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#9aa8bf",flexShrink:0}}>{BW.overs}.{BW.ballsThisOver}-{BW.runs}-{BW.wickets}</span>
             </div>}
           </div>
         </div>
+        {/* Partnerships — the same rich card (progress bars, "● current", runs + balls) that the
+            scorer's Batting tab shows, now on the viewer Live tab too. Lokesh explicitly preferred
+            this card over the bare "A & B: 6 (0)" header text line it replaces. */}
+        <PartnershipChart inn={inn}/>
         {/* This over — now the ONE home for ball chips (the header's duplicate mini-strip was
             removed). Between overs, rather than an empty "— new over —" box, show the over that
             just finished, dimmed and labelled, so the recent rhythm of play is never off-screen. */}
@@ -5888,7 +5886,7 @@ function ScoreRow({team,runs,wkts,balls}){
   return(
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid rgba(99,102,241,.2)"}}>
       <span style={{fontWeight:700,fontSize:15}}>{team}</span>
-      <span style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:700}}>{runs}<span style={{color:"#f87171"}}>/{wkts}</span> <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#6b7280"}}>({ovStr(balls)})</span></span>
+      <span style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:700}}>{runs}<span style={{color:"#f87171"}}>/{wkts}</span> <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#9aa8bf"}}>({ovStr(balls)})</span></span>
     </div>
   );
 }
@@ -5898,7 +5896,7 @@ function Centered({emoji,title,sub,onExit,children}){
     <div className="result-screen"><div className="text-center result-card" style={{padding:"16px"}}>
       <div style={{fontSize:56,marginBottom:14}}>{emoji}</div>
       <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:30,fontWeight:700,marginBottom:8}}>{title}</h1>
-      {sub&&<p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:13,marginBottom:20,lineHeight:1.5}}>{sub}</p>}
+      {sub&&<p style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:13,marginBottom:20,lineHeight:1.5}}>{sub}</p>}
       {children}
       {onExit&&<button className="btn btn-ghost" style={{padding:"12px 28px",marginTop:8}} onClick={onExit}>← Back</button>}
     </div></div>
@@ -5982,11 +5980,11 @@ function HistoryPage({role,onExit}){
               onMouseLeave={e=>e.currentTarget.style.borderColor=""}>
               <div className="flex items-center justify-between" style={{marginBottom:6}}>
                 <span style={{fontSize:10,background:m.format==="T20"?"rgba(245,158,11,.18)":"rgba(99,102,241,.18)",color:m.format==="T20"?"#fbbf24":"#a5b4fc",borderRadius:6,padding:"2px 8px",fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{m.format==="T20"?"🏟️ T20":`🎾 ${m.overs}ov`}</span>
-                <span style={{fontSize:10,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace"}}>{d.toLocaleDateString()} {d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</span>
+                <span style={{fontSize:10,color:"#8291ab",fontFamily:"'JetBrains Mono',monospace"}}>{d.toLocaleDateString()} {d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</span>
               </div>
               <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>{r.winner?`🏆 ${r.winner} won${r.margin?" by "+r.margin:""}`:"Match Tied"}</div>
-              {m.inn1&&<div style={{fontSize:12,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn1.battingTeam}: {m.inn1.totalRuns}/{m.inn1.wickets} ({ovStr(m.inn1.totalBalls)})</div>}
-              {m.inn2&&<div style={{fontSize:12,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn2.battingTeam}: {m.inn2.totalRuns}/{m.inn2.wickets} ({ovStr(m.inn2.totalBalls)})</div>}
+              {m.inn1&&<div style={{fontSize:12,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn1.battingTeam}: {m.inn1.totalRuns}/{m.inn1.wickets} ({ovStr(m.inn1.totalBalls)})</div>}
+              {m.inn2&&<div style={{fontSize:12,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn2.battingTeam}: {m.inn2.totalRuns}/{m.inn2.wickets} ({ovStr(m.inn2.totalBalls)})</div>}
               <div className="flex items-center justify-between" style={{marginTop:6}}>
                 <span style={{fontSize:10,color:"#4338ca",fontFamily:"'JetBrains Mono',monospace"}}>{m.venue}</span>
                 {m.potm&&<span style={{fontSize:10,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace"}}>🏆 {m.potm}</span>}
@@ -6061,7 +6059,7 @@ function MatchHighlights({m}){
         {highlights.map(h=>(
           <div key={h.title} style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(99,102,241,.2)",borderRadius:14,padding:"12px 12px"}}>
             <p style={{fontSize:18,marginBottom:4}}>{h.em}</p>
-            <p style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:2}}>{h.title}</p>
+            <p style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:2}}>{h.title}</p>
             <p style={{fontWeight:700,fontSize:13}}>{h.name}</p>
             <p style={{fontSize:11,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace"}}>{h.val}</p>
           </div>
@@ -6103,7 +6101,7 @@ function MatchHistoryPOTM({m,role}){
     return[...s].sort();
   },[m.inn1,m.inn2]);
 
-  if(!voting)return <p style={{fontSize:11,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace",marginTop:16}}>Loading POTM voting…</p>;
+  if(!voting)return <p style={{fontSize:11,color:"#8291ab",fontFamily:"'JetBrains Mono',monospace",marginTop:16}}>Loading POTM voting…</p>;
 
   const votes=voting.votes||{};
   const counts={};
@@ -6137,7 +6135,7 @@ function MatchHistoryPOTM({m,role}){
         <div style={{fontSize:36,marginBottom:6}}>🏆</div>
         <p style={{fontSize:9,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".2em",marginBottom:4}}>PLAYER OF THE MATCH</p>
         <p style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,color:"#fbbf24"}}>{voting.winner}</p>
-        <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{totalVotes} vote{totalVotes===1?"":"s"}</p>
+        <p style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{totalVotes} vote{totalVotes===1?"":"s"}</p>
       </div>
     );
   }
@@ -6149,7 +6147,7 @@ function MatchHistoryPOTM({m,role}){
     return(
       <div style={{background:"rgba(99,102,241,.08)",border:"1.5px solid rgba(99,102,241,.3)",borderRadius:20,padding:"16px",marginTop:16}}>
         <p style={{fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,marginBottom:4}}>🏆 Vote · Player of the Match</p>
-        <p style={{color:"#9ca3af",fontSize:11,marginBottom:12}}>Only players who participated can vote. Pick your name:</p>
+        <p style={{color:"#bcc7d8",fontSize:11,marginBottom:12}}>Only players who participated can vote. Pick your name:</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
           {participants.map(n=>(
             <button key={n} onClick={()=>{setMyName(n);try{localStorage.setItem("lcc_potm_voter_"+m.id,n);}catch(e){}}}
@@ -6172,9 +6170,9 @@ function MatchHistoryPOTM({m,role}){
           <p style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>Voting as {myName}{myVote?` · voted for ${myVote}`:""}</p>
         </div>
         <button onClick={()=>{setMyName(null);try{localStorage.removeItem("lcc_potm_voter_"+m.id);}catch(e){}}}
-          style={{background:"none",border:"none",color:"#6b7280",fontSize:10,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Not you?</button>
+          style={{background:"none",border:"none",color:"#9aa8bf",fontSize:10,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Not you?</button>
       </div>
-      <p style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:8}}>{myVote?"Tap a different name to change your vote, or tap your pick again to remove it.":"Tap a name to vote — you can change your mind anytime before voting closes."}</p>
+      <p style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",marginBottom:8}}>{myVote?"Tap a different name to change your vote, or tap your pick again to remove it.":"Tap a name to vote — you can change your mind anytime before voting closes."}</p>
       <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>
         {sorted.filter(n=>n!==myName).map(n=>{
           const c=counts[n]||0;
@@ -6189,7 +6187,7 @@ function MatchHistoryPOTM({m,role}){
             }}>
               <div style={{position:"absolute",left:0,top:0,bottom:0,width:pct+"%",background:"rgba(245,158,11,.08)",transition:"width .4s ease"}}/>
               <span style={{fontWeight:isMyVote?700:400,fontSize:13,position:"relative"}}>{n}{isMyVote&&<span style={{color:"#fbbf24",marginLeft:6,fontSize:10}}>✓ your vote</span>}</span>
-              <span style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",position:"relative"}}>{c} vote{c===1?"":"s"}</span>
+              <span style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",position:"relative"}}>{c} vote{c===1?"":"s"}</span>
             </button>
           );
         })}
@@ -6257,7 +6255,7 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
         <div style={{flex:1,overflow:"auto",padding:16,display:"flex",justifyContent:"center"}}>
           <img src={histScorecardUrl} style={{width:"100%",maxWidth:800,borderRadius:10,display:"block"}} alt="Scorecard"/>
         </div>
-        <p style={{padding:"10px 16px",color:"#4b5563",fontSize:10,textAlign:"center",fontFamily:"'JetBrains Mono',monospace",flexShrink:0}}>
+        <p style={{padding:"10px 16px",color:"#8291ab",fontSize:10,textAlign:"center",fontFamily:"'JetBrains Mono',monospace",flexShrink:0}}>
           iOS: long-press image → Save to Photos · Android/Desktop: tap Save above
         </p>
       </div>
@@ -6265,7 +6263,7 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",padding:"20px 16px"}}>
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:14}}>
-          <button onClick={onBack} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← all matches</button>
+          <button onClick={onBack} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← all matches</button>
           <div style={{display:"flex",gap:6}}>
             <button onClick={downloadHistory} disabled={dlSaving} style={{background:"rgba(52,211,153,.12)",border:"1px solid rgba(52,211,153,.4)",color:"#34d399",borderRadius:10,padding:"6px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>
               {dlSaving?"Generating…":"📋 Scorecard"}
@@ -6275,7 +6273,7 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
           </div>
         </div>
         {editOpen&&<Modal onClose={()=>setEditOpen(false)} title="✏️ Edit Match Result">
-          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Correct the result, margin, or toss summary if something was recorded wrongly.</p>
+          <p style={{color:"#bcc7d8",fontSize:12,marginBottom:14}}>Correct the result, margin, or toss summary if something was recorded wrongly.</p>
           <label>Winner (leave blank for a tie)</label>
           <input value={eWinner} onChange={e=>setEWinner(e.target.value)} placeholder="e.g. Team A" style={{marginBottom:12}}/>
           <label>Margin</label>
@@ -6307,8 +6305,8 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
           <div className="divider" style={{margin:"14px 0"}}/>
           <MatchHighlights m={m}/>
           <MatchHistoryPOTM m={m} role={role}/>
-          {m.inn1&&<div className="score-summary-row"><span style={{fontWeight:600,fontSize:14}}>{m.inn1.battingTeam}</span><span style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:"#a5b4fc"}}>{m.inn1.totalRuns}/{m.inn1.wickets} <span style={{fontSize:12,color:"#6b7280"}}>({ovStr(m.inn1.totalBalls)})</span></span></div>}
-          {m.inn2&&<div className="score-summary-row"><span style={{fontWeight:600,fontSize:14}}>{m.inn2.battingTeam}</span><span style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:"#a5b4fc"}}>{m.inn2.totalRuns}/{m.inn2.wickets} <span style={{fontSize:12,color:"#6b7280"}}>({ovStr(m.inn2.totalBalls)})</span></span></div>}
+          {m.inn1&&<div className="score-summary-row"><span style={{fontWeight:600,fontSize:14}}>{m.inn1.battingTeam}</span><span style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:"#a5b4fc"}}>{m.inn1.totalRuns}/{m.inn1.wickets} <span style={{fontSize:12,color:"#9aa8bf"}}>({ovStr(m.inn1.totalBalls)})</span></span></div>}
+          {m.inn2&&<div className="score-summary-row"><span style={{fontWeight:600,fontSize:14}}>{m.inn2.battingTeam}</span><span style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:"#a5b4fc"}}>{m.inn2.totalRuns}/{m.inn2.wickets} <span style={{fontSize:12,color:"#9aa8bf"}}>({ovStr(m.inn2.totalBalls)})</span></span></div>}
         </div>
 
         {/* Innings tabs */}
@@ -6361,7 +6359,7 @@ function PinGate({title,pin,altPin,verify,hint,onOk,onCancel,rememberKey}){
     <div className="result-screen"><div className="result-card" style={{maxWidth:360,textAlign:"center"}}>
       <div style={{fontSize:44,marginBottom:10}}>🔒</div>
       <h2 style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:700,marginBottom:4}}>{title}</h2>
-      <p style={{color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:hint?6:18}}>Enter PIN to continue</p>
+      <p style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:hint?6:18}}>Enter PIN to continue</p>
       {hint&&<p style={{color:"#34d399",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginBottom:16}}>● {hint}</p>}
       <input type="password" inputMode="numeric" value={val} autoFocus
         onChange={e=>{setVal(e.target.value);setErr(false);}}
@@ -7200,7 +7198,7 @@ function FindYourself(){
         <div style={{marginTop:8,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:14,padding:"14px 16px",position:"relative"}}>
           <button onClick={clearSearch} aria-label="Close results" style={{
             position:"absolute",top:10,right:10,width:24,height:24,borderRadius:"50%",border:"none",cursor:"pointer",
-            background:"rgba(255,255,255,.08)",color:"#9ca3af",fontSize:13,lineHeight:1,
+            background:"rgba(255,255,255,.08)",color:"#bcc7d8",fontSize:13,lineHeight:1,
             display:"flex",alignItems:"center",justifyContent:"center"
           }}>✕</button>
           {data==="loading"&&<p style={{fontSize:12,color:"var(--text-mute)",textAlign:"center"}}>Searching…</p>}
@@ -7300,7 +7298,7 @@ function Landing({onPick}){
         <span style={{display:"block",fontWeight:700,fontSize:14}}>{title}</span>
         <span style={{display:"block",fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginTop:1}}>{sub}</span>
       </span>
-      <span style={{color:"#6b7280",fontSize:13}}>→</span>
+      <span style={{color:"#9aa8bf",fontSize:13}}>→</span>
     </button>
   );
   // Compact quick-action tile — 2-up grid so all four actions read as one dashboard instead of a
@@ -7397,7 +7395,7 @@ function Landing({onPick}){
             <span style={{display:"inline-block",animation:"marquee 18s linear infinite",fontSize:13,color:"#fff",fontFamily:"'Inter',sans-serif"}}>
               <span style={{color:"#fbbf24",fontWeight:700,marginRight:10}}>📢</span>
               {announcement.text}
-              {announcement.by&&<span style={{color:"#6b7280",fontSize:11,marginLeft:12}}>— {announcement.by}</span>}
+              {announcement.by&&<span style={{color:"#9aa8bf",fontSize:11,marginLeft:12}}>— {announcement.by}</span>}
               <span style={{margin:"0 40px",color:"rgba(245,158,11,.3)"}}>◆</span>
             </span>
           </div>
@@ -7713,7 +7711,7 @@ function PlayerToolsInline({roster,history}){
         .catch(e=>{setSaving(false);alert("Failed: "+e.message);});
     };
     return(<div>
-      <p style={{color:"#9ca3af",fontSize:12,marginBottom:14,lineHeight:1.5}}>Pick the profile to KEEP as Primary, and the one to REMOVE as Duplicate (e.g. "Raj" vs "Rajesh").</p>
+      <p style={{color:"#bcc7d8",fontSize:12,marginBottom:14,lineHeight:1.5}}>Pick the profile to KEEP as Primary, and the one to REMOVE as Duplicate (e.g. "Raj" vs "Rajesh").</p>
       <label>Primary profile (KEEP)</label>
       <select value={primary} onChange={e=>setPrimary(e.target.value)} style={{width:"100%",background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,marginBottom:12,outline:"none"}}>
         <option value="">Select profile to keep…</option>
@@ -7736,7 +7734,7 @@ function PlayerToolsInline({roster,history}){
       {orphanedNames.length>0&&(<>
         <div style={{borderTop:"1px solid #1e1b4b",margin:"22px 0 16px"}}/>
         <p style={{fontWeight:700,fontSize:14,marginBottom:6}}>🔗 Link an Unlinked Name</p>
-        <p style={{color:"#9ca3af",fontSize:12,marginBottom:14,lineHeight:1.5}}>
+        <p style={{color:"#bcc7d8",fontSize:12,marginBottom:14,lineHeight:1.5}}>
           These names appeared in a match but were never added to the roster — they show as "unlinked" on the Stats page. Pick one and link it to the real profile it belongs to.
         </p>
         <label>Unlinked name</label>
@@ -7771,7 +7769,7 @@ function PlayerToolsInline({roster,history}){
       Promise.all(promises).then(()=>{setSaving(false);setText("");alert(`Added ${names.length} player${names.length>1?"s":""}!`);}).catch(e=>{setSaving(false);alert("Failed: "+e.message);});
     };
     return(<div>
-      <p style={{color:"#9ca3af",fontSize:12,marginBottom:12,lineHeight:1.5}}>Enter one player name per line. They'll all be added as All-rounders — players can edit their own details after.</p>
+      <p style={{color:"#bcc7d8",fontSize:12,marginBottom:12,lineHeight:1.5}}>Enter one player name per line. They'll all be added as All-rounders — players can edit their own details after.</p>
       <label>Player names (one per line)</label>
       <textarea value={text} onChange={e=>setText(e.target.value)} placeholder={"Rajesh Arigela\nKiran Kumar\nPraveen Singh"} style={{width:"100%",minHeight:140,background:"#0f0c29",border:"1.5px solid #3730a3",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:13,outline:"none",resize:"vertical",marginBottom:12,fontFamily:"'Inter',sans-serif",boxSizing:"border-box"}}/>
       <button className="btn btn-primary w-full" onClick={doAdd} disabled={saving||!text.trim()}>
@@ -7791,7 +7789,7 @@ function PlayerToolsInline({roster,history}){
       const cb=ref.on("value",s=>setSquads(s.val()||{}));
       return ()=>ref.off("value",cb);
     },[]);
-    if(squads===undefined) return <p style={{color:"#6b7280",fontSize:13}}>Loading squads…</p>;
+    if(squads===undefined) return <p style={{color:"#9aa8bf",fontSize:13}}>Loading squads…</p>;
     const squadKey=(name)=>normName(formatTeamName(name)).replace(/[.#$\[\]\/]/g,"_");
     const teamKeys=Object.keys(squads).sort((a,b)=>(squads[a].name||"").localeCompare(squads[b].name||""));
     const rosterNames=Object.values(roster||{}).map(p=>p&&p.name).filter(Boolean).sort((a,b)=>a.localeCompare(b));
@@ -7824,7 +7822,7 @@ function PlayerToolsInline({roster,history}){
     };
 
     return(<div>
-      <p style={{color:"#9ca3af",fontSize:12,marginBottom:14,lineHeight:1.5}}>
+      <p style={{color:"#bcc7d8",fontSize:12,marginBottom:14,lineHeight:1.5}}>
         Save each team's registered players once (~15-16 per team), then pick who's actually playing from that list every match — no retyping the same names each time.
       </p>
       <div style={{marginBottom:16}}>
@@ -7841,14 +7839,14 @@ function PlayerToolsInline({roster,history}){
         <button className="btn btn-primary w-full" onClick={createSquad} style={{padding:"10px 16px"}}>+ Add Team</button>
       </div>
       {teamKeys.length===0?(
-        <p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No team squads saved yet.</p>
+        <p style={{color:"#9aa8bf",fontSize:13,textAlign:"center",padding:"20px 0"}}>No team squads saved yet.</p>
       ):(<>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
           {teamKeys.map(k=>(
             <button key={k} onClick={()=>setSelectedTeam(k)} style={{
               padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:"none",
               background:selectedTeam===k?"linear-gradient(135deg,#6366f1,#8b5cf6)":"rgba(255,255,255,.07)",
-              color:selectedTeam===k?"#fff":"#9ca3af"
+              color:selectedTeam===k?"#fff":"#bcc7d8"
             }}>{squads[k].name} <span style={{opacity:.6}}>({(squads[k].players||[]).length})</span></button>
           ))}
         </div>
@@ -7875,11 +7873,11 @@ function PlayerToolsInline({roster,history}){
               )}
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {(squads[selectedTeam].players||[]).length===0&&<p style={{color:"#6b7280",fontSize:12}}>No players added yet.</p>}
+              {(squads[selectedTeam].players||[]).length===0&&<p style={{color:"#9aa8bf",fontSize:12}}>No players added yet.</p>}
               {(squads[selectedTeam].players||[]).map(n=>(
                 <div key={n} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",background:"rgba(255,255,255,.03)",borderRadius:9}}>
                   <span style={{fontSize:13}}>{n}</span>
-                  <button onClick={()=>removePlayer(n)} style={{background:"none",border:"none",color:"#6b7280",fontSize:14,cursor:"pointer"}}>✕</button>
+                  <button onClick={()=>removePlayer(n)} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:14,cursor:"pointer"}}>✕</button>
                 </div>
               ))}
             </div>
@@ -7925,7 +7923,7 @@ function ClubPassphraseAdmin({current}){
       <div className="flex items-center justify-between">
         <div>
           <p className="section-title" style={{marginBottom:2}}>🔑 Club Passphrase</p>
-          <p style={{fontSize:12,color:"#9ca3af"}}>{current?`Currently set: "${current}"`:"Not set yet — anyone can edit/vote freely until you set one."}</p>
+          <p style={{fontSize:12,color:"#bcc7d8"}}>{current?`Currently set: "${current}"`:"Not set yet — anyone can edit/vote freely until you set one."}</p>
         </div>
         <button onClick={()=>{setVal(current||"");setOpen(!open);}} style={{background:"rgba(245,158,11,.12)",border:"1px solid rgba(245,158,11,.35)",color:"#fbbf24",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>{current?"Change":"Set"}</button>
       </div>
@@ -7963,7 +7961,7 @@ function PollResultsList({poll}){
     <div className="mini-card" style={{marginBottom:10}}>
       <p style={{color,fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,marginBottom:names.length?8:0}}>{emoji} {label} ({names.length})</p>
       {names.length===0
-        ? <p style={{color:"#4b5563",fontSize:12}}>No one yet</p>
+        ? <p style={{color:"#8291ab",fontSize:12}}>No one yet</p>
         : names.map(n=><div key={n} style={{fontSize:13,padding:"3px 0",color:"#d1d5db"}}>{n}</div>)}
     </div>
   );
@@ -8040,12 +8038,12 @@ function PollRosterTab({roster,canDelete}){
         <input value={name} onChange={e=>{setName(e.target.value);if(nameError)setNameError("");}} placeholder="e.g. Rajesh Arigela" style={{marginBottom:nameError?4:4,borderColor:nameError?"rgba(239,68,68,.6)":undefined}}/>
         {nameError
           ? <p style={{fontSize:11,color:"#f87171",fontFamily:"'Inter',sans-serif",marginBottom:12,lineHeight:1.4}}>⚠️ {nameError}</p>
-          : <p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:12,lineHeight:1.4}}>💡 Enter your full name (first & last) — used to track your stats across matches.</p>
+          : <p style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",marginBottom:12,lineHeight:1.4}}>💡 Enter your full name (first & last) — used to track your stats across matches.</p>
         }
         <label>Role</label>
         <div className="grid-3" style={{marginBottom:12}}>
           {["Batsman","Bowler","All-rounder"].map(r=>(
-            <button key={r} onClick={()=>setProle(r)} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${prole===r?"transparent":"#374151"}`,background:prole===r?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:prole===r?"#111":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:11,fontFamily:"'Inter',sans-serif"}}>{r}</button>
+            <button key={r} onClick={()=>setProle(r)} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${prole===r?"transparent":"#526480"}`,background:prole===r?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:prole===r?"#111":"#bcc7d8",cursor:"pointer",fontWeight:600,fontSize:11,fontFamily:"'Inter',sans-serif"}}>{r}</button>
           ))}
         </div>
         <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",marginBottom:12,textTransform:"none",letterSpacing:0,fontFamily:"'Inter',sans-serif",fontSize:13,color:"#d1d5db"}}>
@@ -8054,24 +8052,24 @@ function PollRosterTab({roster,canDelete}){
         </label>
         <label>Batting style</label>
         <div className="grid-2" style={{marginBottom:12}}>
-          <button onClick={()=>setBat("Left")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bat==="Left"?"transparent":"#374151"}`,background:bat==="Left"?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:bat==="Left"?"#fff":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Left-handed</button>
-          <button onClick={()=>setBat("Right")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bat==="Right"?"transparent":"#374151"}`,background:bat==="Right"?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:bat==="Right"?"#fff":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Right-handed</button>
+          <button onClick={()=>setBat("Left")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bat==="Left"?"transparent":"#526480"}`,background:bat==="Left"?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:bat==="Left"?"#fff":"#bcc7d8",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Left-handed</button>
+          <button onClick={()=>setBat("Right")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bat==="Right"?"transparent":"#526480"}`,background:bat==="Right"?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",color:bat==="Right"?"#fff":"#bcc7d8",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Right-handed</button>
         </div>
         {needsBowlStyle&&(<>
           <label>Bowling style</label>
           <div className="grid-2" style={{marginBottom:12}}>
-            <button onClick={()=>setBowl("Spin")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bowl==="Spin"?"transparent":"#374151"}`,background:bowl==="Spin"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:bowl==="Spin"?"#111":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Spin</button>
-            <button onClick={()=>setBowl("Seam")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bowl==="Seam"?"transparent":"#374151"}`,background:bowl==="Seam"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:bowl==="Seam"?"#111":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Seam</button>
+            <button onClick={()=>setBowl("Spin")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bowl==="Spin"?"transparent":"#526480"}`,background:bowl==="Spin"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:bowl==="Spin"?"#111":"#bcc7d8",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Spin</button>
+            <button onClick={()=>setBowl("Seam")} style={{padding:"9px 4px",borderRadius:10,border:`1.5px solid ${bowl==="Seam"?"transparent":"#526480"}`,background:bowl==="Seam"?"linear-gradient(135deg,#34d399,#10b981)":"transparent",color:bowl==="Seam"?"#111":"#bcc7d8",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>Seam</button>
           </div>
         </>)}
         <div style={{display:"flex",gap:8}}>
           <button className="btn btn-primary" style={{flex:1}} onClick={save}>{editingId?"Save Changes":"➕ Add Me"}</button>
-          {editingId&&<button className="btn" onClick={resetForm} style={{background:"transparent",border:"1px solid #374151",color:"#9ca3af"}}>Cancel</button>}
+          {editingId&&<button className="btn" onClick={resetForm} style={{background:"transparent",border:"1px solid #526480",color:"#bcc7d8"}}>Cancel</button>}
         </div>
       </div>
 
       <p className="section-title">Who's in ({entries.length})</p>
-      {entries.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No one's added themselves yet — be the first!</p>}
+      {entries.length===0&&<p style={{color:"#9aa8bf",fontSize:13,textAlign:"center",padding:"20px 0"}}>No one's added themselves yet — be the first!</p>}
       {entries.map(([id,p])=>(
         <div key={id} className="mini-card" style={{marginBottom:8,display:"flex",alignItems:"center",gap:10,justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
@@ -8082,7 +8080,7 @@ function PollRosterTab({roster,canDelete}){
                 {p.role==="Batsman"?"🏏":p.role==="Bowler"?"🎯":"⭐"} {p.role} · {p.bat==="Left"?"LH":"RH"}{p.bowl?` · ${p.bowl}`:""}
               </div>
               {p.aliases&&p.aliases.length>0&&
-                <div style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:2}} title="Past matches recorded under these names are counted as this profile">also: {p.aliases.join(", ")}</div>}
+                <div style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",marginTop:2}} title="Past matches recorded under these names are counted as this profile">also: {p.aliases.join(", ")}</div>}
             </div>
           </div>
           <div style={{display:"flex",gap:6,flexShrink:0}}>
@@ -8122,10 +8120,10 @@ function PollCreateForm({poll}){
       <p className="section-title">{poll?"📋 Update This Week's Poll":"📋 Create This Week's Poll"}</p>
       <label>Venue</label>
       <div className="grid-2" style={{marginBottom:isCustom?8:12}}>
-        <button onClick={()=>{setIsCustom(false);setVenue("Lakes High School")}} style={{padding:"10px 4px",borderRadius:10,border:`1.5px solid ${!isCustom&&venue==="Lakes High School"?"transparent":"#374151"}`,background:!isCustom&&venue==="Lakes High School"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:!isCustom&&venue==="Lakes High School"?"#111":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>🎾 Lakes High School</button>
-        <button onClick={()=>{setIsCustom(false);setVenue("Millennium Park")}} style={{padding:"10px 4px",borderRadius:10,border:`1.5px solid ${!isCustom&&venue==="Millennium Park"?"transparent":"#374151"}`,background:!isCustom&&venue==="Millennium Park"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:!isCustom&&venue==="Millennium Park"?"#111":"#9ca3af",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>🏟️ Millennium Park</button>
+        <button onClick={()=>{setIsCustom(false);setVenue("Lakes High School")}} style={{padding:"10px 4px",borderRadius:10,border:`1.5px solid ${!isCustom&&venue==="Lakes High School"?"transparent":"#526480"}`,background:!isCustom&&venue==="Lakes High School"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:!isCustom&&venue==="Lakes High School"?"#111":"#bcc7d8",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>🎾 Lakes High School</button>
+        <button onClick={()=>{setIsCustom(false);setVenue("Millennium Park")}} style={{padding:"10px 4px",borderRadius:10,border:`1.5px solid ${!isCustom&&venue==="Millennium Park"?"transparent":"#526480"}`,background:!isCustom&&venue==="Millennium Park"?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",color:!isCustom&&venue==="Millennium Park"?"#111":"#bcc7d8",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif"}}>🏟️ Millennium Park</button>
       </div>
-      <button onClick={()=>setIsCustom(true)} style={{width:"100%",padding:"9px",borderRadius:10,border:`1.5px dashed ${isCustom?"#f59e0b":"#374151"}`,background:isCustom?"rgba(245,158,11,.1)":"transparent",color:isCustom?"#fbbf24":"#6b7280",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif",marginBottom:isCustom?8:12}}>📍✨ Other venue</button>
+      <button onClick={()=>setIsCustom(true)} style={{width:"100%",padding:"9px",borderRadius:10,border:`1.5px dashed ${isCustom?"#f59e0b":"#526480"}`,background:isCustom?"rgba(245,158,11,.1)":"transparent",color:isCustom?"#fbbf24":"#9aa8bf",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"'Inter',sans-serif",marginBottom:isCustom?8:12}}>📍✨ Other venue</button>
       {isCustom&&<input value={customVenue} onChange={e=>setCustomVenue(e.target.value)} placeholder="Ground name" style={{marginBottom:12}}/>}
       <label>Date</label>
       <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{marginBottom:12}}/>
@@ -8182,7 +8180,7 @@ function PollVoteTab({roster,poll,votes,passphrase,role}){
     <div style={{textAlign:"center",padding:"40px 0"}}>
       <div style={{fontSize:40,marginBottom:10}}>📋</div>
       <p style={{fontWeight:600,marginBottom:4}}>No poll open right now</p>
-      <p style={{color:"#6b7280",fontSize:13}}>Ask the admin to publish this week's match poll.</p>
+      <p style={{color:"#9aa8bf",fontSize:13}}>Ask the admin to publish this week's match poll.</p>
     </div>
   );
 
@@ -8252,7 +8250,7 @@ function PollVoteTab({roster,poll,votes,passphrase,role}){
       </div>
 
       <p className="section-title">Tap your name to vote</p>
-      {entries.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No players in the roster yet — ask admin to add the team.</p>}
+      {entries.length===0&&<p style={{color:"#9aa8bf",fontSize:13,textAlign:"center",padding:"20px 0"}}>No players in the roster yet — ask admin to add the team.</p>}
       {entries.map(([id,p])=>{
         const v=votes?.[id]||{};
         const isMe=myVote===id;
@@ -8305,7 +8303,7 @@ function PollVoteTab({roster,poll,votes,passphrase,role}){
                     borderRadius:20,padding:"3px 10px"}}>
                     <span style={{fontSize:11,color:"#fbbf24"}}>👶 {k}</span>
                     <button onClick={()=>removeKid(id,k)} style={{background:"none",border:"none",
-                      color:"#6b7280",cursor:"pointer",fontSize:13,lineHeight:1,padding:0}}>×</button>
+                      color:"#9aa8bf",cursor:"pointer",fontSize:13,lineHeight:1,padding:0}}>×</button>
                   </div>
                 ))}
               </div>
@@ -8321,7 +8319,7 @@ function PollVoteTab({roster,poll,votes,passphrase,role}){
                   border:"1.5px solid rgba(245,158,11,.4)",background:"transparent",
                   color:"#fbbf24",cursor:"pointer",fontWeight:700,fontSize:12}}>Add</button>
                 <button onClick={()=>setPlus1Open(null)} style={{padding:"7px",borderRadius:10,
-                  border:"none",background:"rgba(107,114,128,.15)",color:"#6b7280",cursor:"pointer",fontSize:13}}>✕</button>
+                  border:"none",background:"rgba(107,114,128,.15)",color:"#9aa8bf",cursor:"pointer",fontSize:13}}>✕</button>
               </div>
             )}
           </div>
@@ -8331,7 +8329,7 @@ function PollVoteTab({roster,poll,votes,passphrase,role}){
 
       {passModal&&(
         <Modal onClose={()=>setPassModal(null)} title="🔑 Club Passphrase">
-          <p style={{color:"#9ca3af",fontSize:12,marginBottom:14}}>Enter the shared club passphrase to vote. Only needed once on this device.</p>
+          <p style={{color:"#bcc7d8",fontSize:12,marginBottom:14}}>Enter the shared club passphrase to vote. Only needed once on this device.</p>
           <input value={passTry} onChange={e=>{setPassTry(e.target.value);setPassErr("");}} placeholder="Passphrase" autoFocus onKeyDown={e=>e.key==="Enter"&&confirmPass()} style={{marginBottom:8}}/>
           {passErr&&<p style={{color:"#f87171",fontSize:12,marginBottom:10}}>{passErr}</p>}
           <button className="btn btn-primary w-full" onClick={confirmPass}>Confirm</button>
@@ -8385,14 +8383,14 @@ function PollTeamsTab({roster,poll,votes,teams,role}){
         <span style={{fontSize:16}}>✅</span>
         <div>
           <p style={{fontWeight:700,fontSize:13,color:"#34d399"}}>Teams Announced!</p>
-          {teams.publishedAt&&<p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>{new Date(teams.publishedAt).toLocaleString()}</p>}
+          {teams.publishedAt&&<p style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace"}}>{new Date(teams.publishedAt).toLocaleString()}</p>}
         </div>
       </div>
       <div className="grid-2" style={{gap:12,marginBottom:16}}>
         {[["A","#fbbf24","🟡",teams.captainA,teamA],["B","#6ee7b7","⚡",teams.captainB,teamB]].map(([t,col,em,cap,list])=>(
           <div key={t} style={{background:"rgba(255,255,255,.04)",border:`1.5px solid ${t==="A"?"rgba(245,158,11,.3)":"rgba(52,211,153,.3)"}`,borderRadius:16,padding:"14px 12px"}}>
             <p style={{fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,color:col,marginBottom:2}}>{em} Team {t}</p>
-            {cap&&<p style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginBottom:10}}>Captain: {cap}</p>}
+            {cap&&<p style={{fontSize:11,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",marginBottom:10}}>Captain: {cap}</p>}
             {(list||[]).map(id=>(
               <div key={id} style={{fontSize:12,padding:"5px 0",borderBottom:"1px solid rgba(255,255,255,.05)",display:"flex",alignItems:"center",gap:6}}>
                 <span style={{width:5,height:5,borderRadius:"50%",background:col,flexShrink:0,display:"inline-block"}}/>
@@ -8413,7 +8411,7 @@ function PollTeamsTab({roster,poll,votes,teams,role}){
   // ── Team builder — admin only ──────────────────────────────────────────────
   const BuilderView=()=>(
     <div>
-      {teams?.published&&<button onClick={()=>setShowBuilder(false)} style={{background:"none",border:"none",color:"#6b7280",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",marginBottom:12}}>← Back to published teams</button>}
+      {teams?.published&&<button onClick={()=>setShowBuilder(false)} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",marginBottom:12}}>← Back to published teams</button>}
       <div className="mini-card" style={{marginBottom:14}}>
         <p className="section-title">👑 Captains</p>
         <div className="grid-2">
@@ -8422,7 +8420,7 @@ function PollTeamsTab({roster,poll,votes,teams,role}){
         </div>
       </div>
       <p className="section-title">Available — {unassigned.length} unassigned</p>
-      {unassigned.length===0&&yesPlayers.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"12px 0"}}>No Yes votes yet.</p>}
+      {unassigned.length===0&&yesPlayers.length===0&&<p style={{color:"#9aa8bf",fontSize:13,textAlign:"center",padding:"12px 0"}}>No Yes votes yet.</p>}
       {unassigned.map(p=>(
         <div key={p.id} className="mini-card" style={{marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <span style={{fontSize:13,fontWeight:600}}>{p.name}{p.keeper&&" 🧤"} <span style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>{p.role}</span></span>
@@ -8440,7 +8438,7 @@ function PollTeamsTab({roster,poll,votes,teams,role}){
             {list.map(id=>(
               <div key={id} className="mini-card" style={{marginBottom:6,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <span style={{fontSize:12}}>{nameOf(id)}</span>
-                <button onClick={()=>remove(id)} style={{background:"none",border:"none",color:"#6b7280",cursor:"pointer",fontSize:14}}>×</button>
+                <button onClick={()=>remove(id)} style={{background:"none",border:"none",color:"#9aa8bf",cursor:"pointer",fontSize:14}}>×</button>
               </div>
             ))}
           </div>
@@ -8455,7 +8453,7 @@ function PollTeamsTab({roster,poll,votes,teams,role}){
     <div style={{textAlign:"center",padding:"40px 0"}}>
       <div style={{fontSize:40,marginBottom:10}}>🏏</div>
       <p style={{fontWeight:600,marginBottom:4}}>No poll open</p>
-      <p style={{color:"#6b7280",fontSize:13}}>Teams are built from this week's poll responses.</p>
+      <p style={{color:"#9aa8bf",fontSize:13}}>Teams are built from this week's poll responses.</p>
     </div>
   );
   if(teams?.published&&!showBuilder) return <PublishedView/>;
@@ -8464,7 +8462,7 @@ function PollTeamsTab({roster,poll,votes,teams,role}){
     <div style={{textAlign:"center",padding:"40px 0"}}>
       <div style={{fontSize:40,marginBottom:10}}>⏳</div>
       <p style={{fontWeight:600,marginBottom:4}}>Teams not announced yet</p>
-      <p style={{color:"#6b7280",fontSize:13}}>Check back once the admin has finalised and published the teams.</p>
+      <p style={{color:"#9aa8bf",fontSize:13}}>Check back once the admin has finalised and published the teams.</p>
     </div>
   );
 }
@@ -8548,7 +8546,7 @@ function StatsPage({onExit}){
     const cell=(label,val,accent)=>(
       <div style={{flex:1,textAlign:"center"}}>
         <div style={{fontFamily:"'Oswald',sans-serif",fontSize:19,fontWeight:700,color:accent||"#fff",lineHeight:1}}>{val}</div>
-        <div style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginTop:3}}>{label}</div>
+        <div style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginTop:3}}>{label}</div>
       </div>
     );
     return(
@@ -8557,14 +8555,14 @@ function StatsPage({onExit}){
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
           <div style={{width:3,height:14,borderRadius:2,background:"#fbbf24"}}/>
           <span style={{fontSize:10,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".15em"}}>BATTING</span>
-          <span style={{marginLeft:"auto",fontSize:10,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace"}}>{s.matches} match{s.matches===1?"":"es"}</span>
+          <span style={{marginLeft:"auto",fontSize:10,color:"#8291ab",fontFamily:"'JetBrains Mono',monospace"}}>{s.matches} match{s.matches===1?"":"es"}</span>
         </div>
         <div style={{display:"flex",gap:4,marginBottom:6,flexWrap:"wrap"}}>
           {cell("Runs",b.runs,"#fbbf24")}{cell("Inns",b.inns)}{cell("HS",b.hs+(b.hsNotOut&&b.hs>0?"*":""))}{cell("Avg",fmtAvg(b.avg))}
           {cell("SR",fmtSR(b.sr))}{cell("4s",b.fours,"#fbbf24")}{cell("6s",b.sixes,"#34d399")}
         </div>
         <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap"}}>
-          {cell("50s",b.fifties,"#a5b4fc")}{cell("100s",b.hundreds,"#f472b6")}{cell("Ducks",b.ducks,"#9ca3af")}{cell("Boundaries",b.boundaries,"#fbbf24")}
+          {cell("50s",b.fifties,"#a5b4fc")}{cell("100s",b.hundreds,"#f472b6")}{cell("Ducks",b.ducks,"#bcc7d8")}{cell("Boundaries",b.boundaries,"#fbbf24")}
         </div>
         {/* Bowling */}
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
@@ -8586,7 +8584,7 @@ function StatsPage({onExit}){
             {cell("Catches",f.catches,"#34d399")}{cell("Run Outs",f.runOuts,"#34d399")}{cell("Stumpings",f.stumpings,"#34d399")}
           </div>
         </>)}
-        {(b.inns===0&&w.inns===0)&&<p style={{color:"#6b7280",fontSize:12,textAlign:"center",marginTop:10}}>No scored appearances yet.</p>}
+        {(b.inns===0&&w.inns===0)&&<p style={{color:"#9aa8bf",fontSize:12,textAlign:"center",marginTop:10}}>No scored appearances yet.</p>}
       </div>
     );
   };
@@ -8606,18 +8604,18 @@ function StatsPage({onExit}){
           transition:"background .15s"
         }}>
           <span style={{width:28,textAlign:"center",fontSize:isTop3?20:13,flexShrink:0}}>
-            {rank<3?MEDALS[rank]:<span style={{fontFamily:"'Oswald',sans-serif",fontWeight:700,color:"#4b5563"}}>{rank+1}</span>}
+            {rank<3?MEDALS[rank]:<span style={{fontFamily:"'Oswald',sans-serif",fontWeight:700,color:"#8291ab"}}>{rank+1}</span>}
           </span>
           <PlayerAvatar name={s.name} avatar={s.avatar} size={isTop3?36:28}/>
           <span style={{flex:1,overflow:"hidden"}}>
             <span style={{display:"block",fontWeight:700,fontSize:isTop3?15:13,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</span>
-            {isTop3&&<span style={{display:"block",fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:1}}>{s.matches}M · {kind==="runs"?s.bat.inns+" inn":s.bowl.oversStr+" ov"}</span>}
+            {isTop3&&<span style={{display:"block",fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",marginTop:1}}>{s.matches}M · {kind==="runs"?s.bat.inns+" inn":s.bowl.oversStr+" ov"}</span>}
           </span>
           <div style={{textAlign:"right",flexShrink:0}}>
             <span style={{fontFamily:"'Oswald',sans-serif",fontSize:isTop3?22:16,fontWeight:700,color:accent}}>{val}</span>
-            <span style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginLeft:3}}>{unit}</span>
+            <span style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",marginLeft:3}}>{unit}</span>
           </div>
-          <span style={{color:"#4b5563",fontSize:11,transform:isExp?"rotate(180deg)":"none",transition:"transform .2s",flexShrink:0}}>▾</span>
+          <span style={{color:"#8291ab",fontSize:11,transform:isExp?"rotate(180deg)":"none",transition:"transform .2s",flexShrink:0}}>▾</span>
         </div>
         {isExp&&(
           <div style={{background:"rgba(10,8,35,.5)",borderRadius:12,border:"1px solid rgba(99,102,241,.15)",marginTop:4}}>
@@ -8631,7 +8629,7 @@ function StatsPage({onExit}){
   return(
     <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh"}}>
       <PageHeader title="📊 Club Stats" onBack={onExit} backLabel="home"
-        right={<p style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",margin:0}}>{venueF==="All"?"All":venueF} · {matchCount}M</p>}
+        right={<p style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",margin:0}}>{venueF==="All"?"All":venueF} · {matchCount}M</p>}
       />
       {/* ── Content ── */}
       <div style={{padding:"14px 16px 0"}}>
@@ -8647,7 +8645,7 @@ function StatsPage({onExit}){
                   padding:"5px 12px",borderRadius:20,cursor:"pointer",fontSize:11,fontWeight:600,
                   fontFamily:"'Inter',sans-serif",border:"none",transition:"all .15s",
                   background:active?"linear-gradient(135deg,#f59e0b,#ef4444)":"rgba(255,255,255,.07)",
-                  color:active?"#111":"#9ca3af"
+                  color:active?"#111":"#bcc7d8"
                 }}>{label}{v!=="All"&&<span style={{opacity:.55,marginLeft:4}}>{venueCounts[v]}</span>}</button>
               );
             })}
@@ -8665,7 +8663,7 @@ function StatsPage({onExit}){
                   padding:"5px 12px",borderRadius:20,cursor:"pointer",fontSize:11,fontWeight:600,
                   fontFamily:"'Inter',sans-serif",border:"none",transition:"all .15s",
                   background:active?"linear-gradient(135deg,#34d399,#10b981)":"rgba(255,255,255,.07)",
-                  color:active?"#111":"#9ca3af"
+                  color:active?"#111":"#bcc7d8"
                 }}>{id==="All"?"All tournaments":"🏆 "+label}</button>
               );
             })}
@@ -8678,7 +8676,7 @@ function StatsPage({onExit}){
             {[["Matches",matchCount,"#6366f1"],["Club Runs",clubRuns,"#fbbf24"],["Wickets",clubWkts,"#f87171"]].map(([lbl,val,col])=>(
               <div key={lbl} style={{background:"rgba(255,255,255,.04)",border:`1px solid ${col}28`,borderRadius:14,padding:"10px 8px",textAlign:"center"}}>
                 <div style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700,color:col,lineHeight:1}}>{val}</div>
-                <div style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginTop:3}}>{lbl.toUpperCase()}</div>
+                <div style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginTop:3}}>{lbl.toUpperCase()}</div>
               </div>
             ))}
           </div>
@@ -8691,13 +8689,13 @@ function StatsPage({onExit}){
           <div style={{textAlign:"center",padding:"40px 16px"}}>
             <div style={{fontSize:48,marginBottom:12}}>📭</div>
             <p style={{fontWeight:700,fontSize:16,marginBottom:6}}>No stats yet</p>
-            <p style={{color:"#6b7280",fontSize:13}}>Complete and save a match to start building club stats.</p>
+            <p style={{color:"#9aa8bf",fontSize:13}}>Complete and save a match to start building club stats.</p>
           </div>
         ):!hasData?(
           <div style={{textAlign:"center",padding:"32px 16px"}}>
             <div style={{fontSize:40,marginBottom:10}}>🏟️</div>
             <p style={{fontWeight:700,marginBottom:4}}>No matches at {venueF}</p>
-            <p style={{color:"#6b7280",fontSize:12}}>Try a different venue above.</p>
+            <p style={{color:"#9aa8bf",fontSize:12}}>Try a different venue above.</p>
           </div>
         ):(<>
           {/* Tabs */}
@@ -8708,7 +8706,7 @@ function StatsPage({onExit}){
                 padding:"9px 2px",borderRadius:10,border:"none",cursor:"pointer",
                 fontSize:15,fontWeight:600,fontFamily:"'Inter',sans-serif",transition:"all .15s",
                 background:view===id?"linear-gradient(135deg,rgba(99,102,241,.6),rgba(139,92,246,.6))":"transparent",
-                color:view===id?"#fff":"#6b7280",
+                color:view===id?"#fff":"#9aa8bf",
                 boxShadow:view===id?"0 2px 8px rgba(99,102,241,.3)":""
               }} title={id}>{lbl}</button>
             ))}
@@ -8723,12 +8721,12 @@ function StatsPage({onExit}){
                   border:`1px solid ${bdg.winner?"rgba(251,191,36,.3)":"rgba(255,255,255,.06)"}`,
                   borderRadius:16,padding:"14px 10px",textAlign:"center"}}>
                   <div style={{fontSize:28,marginBottom:6,opacity:bdg.winner?1:.35}}>{bdg.emoji}</div>
-                  <p style={{fontSize:10,color:"#9ca3af",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",marginBottom:6}}>{bdg.label}</p>
+                  <p style={{fontSize:10,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",marginBottom:6}}>{bdg.label}</p>
                   {bdg.winner?(<>
                     <p style={{fontWeight:700,fontSize:14,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bdg.winner.name}</p>
                     <p style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{bdg.stat}</p>
                   </>):(
-                    <p style={{fontSize:11,color:"#4b5563"}}>Not yet decided</p>
+                    <p style={{fontSize:11,color:"#8291ab"}}>Not yet decided</p>
                   )}
                 </div>
               ))}
@@ -8738,7 +8736,7 @@ function StatsPage({onExit}){
           {/* ── HEAD-TO-HEAD ── */}
           {view==="h2h"&&(()=>{
             const h2h=computeHeadToHead(filteredHistory);
-            if(h2h.length===0) return <div style={{textAlign:"center",padding:"30px 0"}}><div style={{fontSize:36,marginBottom:8}}>⚔️</div><p style={{color:"#6b7280",fontSize:13}}>No completed matches between teams yet.</p></div>;
+            if(h2h.length===0) return <div style={{textAlign:"center",padding:"30px 0"}}><div style={{fontSize:36,marginBottom:8}}>⚔️</div><p style={{color:"#9aa8bf",fontSize:13}}>No completed matches between teams yet.</p></div>;
             return (
               <div>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
@@ -8752,16 +8750,16 @@ function StatsPage({onExit}){
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
                         <div style={{flex:1,textAlign:"left"}}>
                           <div style={{fontWeight:700,fontSize:14,color:aLead?"#34d399":"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.a}</div>
-                          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,color:aLead?"#34d399":"#9ca3af",lineHeight:1}}>{r.aWins}</div>
+                          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,color:aLead?"#34d399":"#bcc7d8",lineHeight:1}}>{r.aWins}</div>
                         </div>
                         <div style={{textAlign:"center",flexShrink:0,padding:"0 6px"}}>
-                          <div style={{fontSize:10,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace"}}>vs</div>
-                          <div style={{fontSize:10,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{r.played} played</div>
-                          {r.tied>0&&<div style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{r.tied} tied</div>}
+                          <div style={{fontSize:10,color:"#8291ab",fontFamily:"'JetBrains Mono',monospace"}}>vs</div>
+                          <div style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",marginTop:4}}>{r.played} played</div>
+                          {r.tied>0&&<div style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{r.tied} tied</div>}
                         </div>
                         <div style={{flex:1,textAlign:"right"}}>
                           <div style={{fontWeight:700,fontSize:14,color:bLead?"#34d399":"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.b}</div>
-                          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,color:bLead?"#34d399":"#9ca3af",lineHeight:1}}>{r.bWins}</div>
+                          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,color:bLead?"#34d399":"#bcc7d8",lineHeight:1}}>{r.bWins}</div>
                         </div>
                       </div>
                     </div>
@@ -8779,7 +8777,7 @@ function StatsPage({onExit}){
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,fontWeight:700,color:"#fbbf24",letterSpacing:".15em"}}>MOST RUNS</span>
               </div>
               {topRuns.length?topRuns.map((s,i)=><LeaderEntry key={s.key} s={s} rank={i} kind="runs"/>)
-                :<p style={{color:"#6b7280",fontSize:12,marginBottom:16}}>No runs recorded yet.</p>}
+                :<p style={{color:"#9aa8bf",fontSize:12,marginBottom:16}}>No runs recorded yet.</p>}
 
               <div style={{height:1,background:"rgba(255,255,255,.06)",margin:"16px 0"}}/>
 
@@ -8788,7 +8786,7 @@ function StatsPage({onExit}){
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,fontWeight:700,color:"#f87171",letterSpacing:".15em"}}>MOST WICKETS</span>
               </div>
               {topWkts.length?topWkts.map((s,i)=><LeaderEntry key={s.key} s={s} rank={i} kind="wkts"/>)
-                :<p style={{color:"#6b7280",fontSize:12}}>No wickets recorded yet.</p>}
+                :<p style={{color:"#9aa8bf",fontSize:12}}>No wickets recorded yet.</p>}
               <p style={{color:"#4338ca",fontSize:10,fontFamily:"'JetBrains Mono',monospace",textAlign:"center",marginTop:16}}>Tap any player to see their full stats</p>
             </div>
           )}
@@ -8797,7 +8795,7 @@ function StatsPage({onExit}){
           {view==="players"&&(
             <div>
               <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Search players…" style={{marginBottom:12}}/>
-              {players.length===0&&<p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"16px 0"}}>No players match "{q}".</p>}
+              {players.length===0&&<p style={{color:"#9aa8bf",fontSize:13,textAlign:"center",padding:"16px 0"}}>No players match "{q}".</p>}
               {players.map(s=>(
                 <div key={s.key} style={{marginBottom:8,background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:16,overflow:"hidden"}}>
                   <button onClick={()=>setExpanded(expanded===s.key?null:s.key)} style={{
@@ -8807,15 +8805,15 @@ function StatsPage({onExit}){
                     <span style={{flex:1,overflow:"hidden"}}>
                       <span style={{display:"block",fontWeight:700,fontSize:15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                         {s.name}
-                        {!s.pid&&<span style={{color:"#4b5563",fontSize:10,marginLeft:6,fontFamily:"'JetBrains Mono',monospace"}}>unlinked</span>}
+                        {!s.pid&&<span style={{color:"#8291ab",fontSize:10,marginLeft:6,fontFamily:"'JetBrains Mono',monospace"}}>unlinked</span>}
                       </span>
                       <span style={{display:"flex",gap:12,marginTop:3}}>
                         <span style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace"}}>{s.bat.runs} runs</span>
                         <span style={{fontSize:11,color:"#f87171",fontFamily:"'JetBrains Mono',monospace"}}>{s.bowl.wkts} wkts</span>
-                        <span style={{fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace"}}>{s.matches}M</span>
+                        <span style={{fontSize:11,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace"}}>{s.matches}M</span>
                       </span>
                     </span>
-                    <span style={{color:"#4b5563",fontSize:12,transform:expanded===s.key?"rotate(180deg)":"none",transition:"transform .2s",flexShrink:0}}>▾</span>
+                    <span style={{color:"#8291ab",fontSize:12,transform:expanded===s.key?"rotate(180deg)":"none",transition:"transform .2s",flexShrink:0}}>▾</span>
                   </button>
                   {expanded===s.key&&(
                     <div style={{borderTop:"1px solid rgba(255,255,255,.06)"}}>
@@ -8852,17 +8850,17 @@ function StatsPage({onExit}){
                   background:"rgba(255,255,255,.03)"}}>
                   <span style={{fontSize:24,flexShrink:0}}>{icon}</span>
                   <div style={{flex:1,overflow:"hidden"}}>
-                    <div style={{fontSize:9,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".12em",marginBottom:3}}>{title}</div>
+                    <div style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".12em",marginBottom:3}}>{title}</div>
                     <div style={{fontWeight:700,fontSize:15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
                     <div style={{fontSize:11,color:accent,fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{value}</div>
                   </div>
                   {detail&&<div style={{textAlign:"right",flexShrink:0}}>
-                    <div style={{fontSize:9,color:"#4b5563",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.6}}>{detail.split("·").map((d,i)=><div key={i}>{d.trim()}</div>)}</div>
+                    <div style={{fontSize:9,color:"#8291ab",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.6}}>{detail.split("·").map((d,i)=><div key={i}>{d.trim()}</div>)}</div>
                   </div>}
                 </div>
               </div>
             );
-            if(!hsEntry&&!bestBowl)return<p style={{color:"#6b7280",textAlign:"center",padding:"20px 0",fontSize:13}}>No records yet for this venue.</p>;
+            if(!hsEntry&&!bestBowl)return<p style={{color:"#9aa8bf",textAlign:"center",padding:"20px 0",fontSize:13}}>No records yet for this venue.</p>;
             return(
               <div>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
@@ -8877,7 +8875,7 @@ function StatsPage({onExit}){
                   <div style={{width:3,height:16,borderRadius:2,background:"#f87171"}}/>
                   <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,fontWeight:700,color:"#f87171",letterSpacing:".15em"}}>BOWLING</span>
                 </div>
-                {bestBowl?<RC accent="#f87171" icon="🎳" title="BEST BOWLING" name={bestBowl.name} value={`${bestBowl.wkts}/${bestBowl.runs}`} detail={`${bestBowl.vn}·${bestBowl.dt}`}/>:<p style={{color:"#6b7280",fontSize:12,marginBottom:10}}>No wickets recorded yet.</p>}
+                {bestBowl?<RC accent="#f87171" icon="🎳" title="BEST BOWLING" name={bestBowl.name} value={`${bestBowl.wkts}/${bestBowl.runs}`} detail={`${bestBowl.vn}·${bestBowl.dt}`}/>:<p style={{color:"#9aa8bf",fontSize:12,marginBottom:10}}>No wickets recorded yet.</p>}
                 {mostMaidens&&<RC accent="#a5b4fc" icon="🔒" title="MOST MAIDENS" name={mostMaidens.name} value={`${mostMaidens.maidens} maiden${mostMaidens.maidens>1?"s":""}`} detail={`${mostMaidens.vn}·${mostMaidens.dt}`}/>}
               </div>
             );
@@ -8981,14 +8979,14 @@ function TournamentsPage({role,onExit,onStartMatch}){
                 ))}
               </div>
               <button className="btn btn-primary w-full" onClick={createTournament} style={{padding:"10px 16px"}}>+ Create Tournament</button>
-              <p style={{color:"#6b7280",fontSize:10,fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>Every match started from this tournament will default to this ground — no need to pick it again each time.</p>
+              <p style={{color:"#9aa8bf",fontSize:10,fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>Every match started from this tournament will default to this ground — no need to pick it again each time.</p>
             </div>
           )}
           {list.length===0?(
             <div style={{textAlign:"center",padding:"40px 16px"}}>
               <div style={{fontSize:48,marginBottom:12}}>🏆</div>
               <p style={{fontWeight:700,fontSize:16,marginBottom:6}}>No tournaments yet</p>
-              <p style={{color:"#6b7280",fontSize:13}}>{isAdmin?"Create one above to build a fixture list.":"Check back once an admin sets one up."}</p>
+              <p style={{color:"#9aa8bf",fontSize:13}}>{isAdmin?"Create one above to build a fixture list.":"Check back once an admin sets one up."}</p>
             </div>
           ):(
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -9002,9 +9000,9 @@ function TournamentsPage({role,onExit,onStartMatch}){
                     background:"rgba(255,255,255,.03)",color:"#fff"}}>
                     <span>
                       <span style={{display:"block",fontWeight:700,fontSize:15}}>{t.name}</span>
-                      <span style={{display:"block",fontSize:11,color:"#6b7280",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{fx.length} fixture{fx.length===1?"":"s"} · {played} played</span>
+                      <span style={{display:"block",fontSize:11,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{fx.length} fixture{fx.length===1?"":"s"} · {played} played</span>
                     </span>
-                    <span style={{color:"#4b5563"}}>→</span>
+                    <span style={{color:"#8291ab"}}>→</span>
                   </button>
                 );
               })}
@@ -9036,11 +9034,11 @@ function TournamentsPage({role,onExit,onStartMatch}){
                 </div>
               )}
               <button className="btn btn-primary w-full" onClick={addFixture} style={{padding:"10px 14px"}}>+ Add Fixture</button>
-              {squadNames.length===0&&<p style={{color:"#6b7280",fontSize:10,fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>No saved squads yet — set them up first in Roster → Tools → Squads, or use "Other" to type a name directly.</p>}
+              {squadNames.length===0&&<p style={{color:"#9aa8bf",fontSize:10,fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>No saved squads yet — set them up first in Roster → Tools → Squads, or use "Other" to type a name directly.</p>}
             </div>
           )}
           {fixtures.length===0?(
-            <p style={{color:"#6b7280",fontSize:13,textAlign:"center",padding:"20px 0"}}>No fixtures added yet.</p>
+            <p style={{color:"#9aa8bf",fontSize:13,textAlign:"center",padding:"20px 0"}}>No fixtures added yet.</p>
           ):(
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {fixtures.map(([fid,fx])=>(
@@ -9071,7 +9069,7 @@ function TournamentsPage({role,onExit,onStartMatch}){
                   ):(
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
                       <div style={{flex:1,minWidth:0}}>
-                        <p style={{fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fx.team1} <span style={{color:"#6b7280",fontWeight:400}}>vs</span> {fx.team2}</p>
+                        <p style={{fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fx.team1} <span style={{color:"#9aa8bf",fontWeight:400}}>vs</span> {fx.team2}</p>
                         {fx.played?<p style={{fontSize:11,color:"#34d399",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>✅ Played</p>
                           :<p style={{fontSize:11,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>Not played yet</p>}
                       </div>
@@ -9124,13 +9122,13 @@ function AnnouncementPage({onExit}){
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:18}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📢 Announcements</h1>
-          <button onClick={onExit} style={{background:"none",border:"none",color:"#6b7280",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
+          <button onClick={onExit} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← back</button>
         </div>
         {current&&current.text&&(
           <div style={{background:"rgba(245,158,11,.1)",border:"1px solid rgba(245,158,11,.3)",borderRadius:14,padding:"12px 14px",marginBottom:16}}>
             <p style={{fontSize:10,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>CURRENT ANNOUNCEMENT</p>
             <p style={{fontSize:13,color:"#fff"}}>{current.text}</p>
-            {current.by&&<p style={{fontSize:10,color:"#6b7280",marginTop:4}}>— {current.by} · {current.postedAt?new Date(current.postedAt).toLocaleDateString():""}</p>}
+            {current.by&&<p style={{fontSize:10,color:"#9aa8bf",marginTop:4}}>— {current.by} · {current.postedAt?new Date(current.postedAt).toLocaleDateString():""}</p>}
             <button onClick={clear} style={{marginTop:10,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",borderRadius:10,padding:"6px 14px",fontSize:12,cursor:"pointer",fontWeight:600}}>🗑️ Remove Announcement</button>
           </div>
         )}
@@ -9628,8 +9626,8 @@ class ErrorBoundary extends React.Component{
           <div className="card" style={{textAlign:"center"}}>
             <div style={{fontSize:44,marginBottom:12}}>⚠️</div>
             <h2 style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:700,marginBottom:10}}>Something went wrong</h2>
-            <p style={{color:"#9ca3af",fontSize:12,marginBottom:6,fontFamily:"'JetBrains Mono',monospace"}}>{String(this.state.error.message||this.state.error)}</p>
-            <p style={{color:"#6b7280",fontSize:12,marginBottom:18}}>This is usually caused by stale match data. Tap below to reset and go home — the live match (if any) is unaffected on the server.</p>
+            <p style={{color:"#bcc7d8",fontSize:12,marginBottom:6,fontFamily:"'JetBrains Mono',monospace"}}>{String(this.state.error.message||this.state.error)}</p>
+            <p style={{color:"#9aa8bf",fontSize:12,marginBottom:18}}>This is usually caused by stale match data. Tap below to reset and go home — the live match (if any) is unaffected on the server.</p>
             <button className="btn btn-primary w-full" onClick={()=>{this.setState({error:null});window.location.hash="";window.location.reload();}}>🔄 Reset & Reload</button>
           </div>
         </div>
