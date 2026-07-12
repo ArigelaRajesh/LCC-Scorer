@@ -1513,7 +1513,14 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
       const v=s.val();
       if(v&&v.sessionId&&v.sessionId!==mySessionIdSafe){ setKickedOut(true); }
     });
-    return ()=>{ clearInterval(hb); ref.off("value",cb); };
+    return ()=>{
+      clearInterval(hb); ref.off("value",cb);
+      // Release-on-exit: free the slot the instant this device stops actively scoring, rather than
+      // making the next device wait out the full heartbeat timeout or hit an unnecessary "Take Over
+      // Anyway" prompt. Safe even if we'd been kicked out already — releaseSession only clears the
+      // slot if it still holds exactly OUR sessionId, so a takeover elsewhere is never undone by this.
+      releaseSession(sessionMatchId,mySlot,mySessionIdSafe);
+    };
   },[isScorer,sessionReady,sessionMatchId,mySlot]);
 
   // Track whether a revert snapshot exists in Firebase, so the super-admin revert button
@@ -7178,6 +7185,18 @@ function claimSession(matchId,slot,sessionId,force){
     });
   });
 }
+// Free a session slot immediately (logout / navigating away), rather than leaving it to expire on its
+// own after SESSION_TIMEOUT_MS. Transaction-guarded: only clears the slot if it STILL holds exactly
+// our own sessionId — if we'd already been taken over by another device (kicked out), this correctly
+// does nothing rather than deleting the other device's now-rightful claim.
+function releaseSession(matchId,slot,sessionId){
+  if(!FB_OK||!DB||!slot) return Promise.resolve();
+  const ref=DB.ref(sessionPath(matchId,slot));
+  return ref.transaction(cur=>{
+    if(cur&&cur.sessionId===sessionId) return null; // returning null deletes the node
+    return cur; // not ours anymore (or already gone) — leave it exactly as-is
+  }).catch(()=>{});
+}
 
 function ScorerGate({onOk,onCancel,mySessionId}){
   const[data,setData]=React.useState(undefined);
@@ -8809,7 +8828,7 @@ function AnnouncementPage({onExit}){
 
 // ── Basic Admin: Player Tools — merge, link, bulk-add ─────────────────────────
 // ── AdminHome — beautiful shared home for both Super and Basic admin ──────────
-function AdminHome({tier,onPick,onExit}){
+function AdminHome({tier,onPick,onExit,onLogout}){
   const isSuper=tier==="super";
   const[live,setLive]=React.useState(null);
   const[poll,setPoll]=React.useState(null);
@@ -8919,49 +8938,67 @@ function AdminHome({tier,onPick,onExit}){
       }}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12}}>
           <div>
-            <p style={{fontSize:12,color:"rgba(255,255,255,.65)",fontFamily:"'Inter',sans-serif",marginBottom:4}}>
+            <p style={{fontSize:12,color:"rgba(255,255,255,.65)",fontFamily:"'Inter',sans-serif",marginBottom:6}}>
               {timeStr} · {now.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}
             </p>
-            <p style={{fontSize:11,color:isSuper?"#fbbf24":"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginBottom:3,letterSpacing:".1em"}}>
-              {isSuper?"⚡ FULL ACCESS":"🛠️ HELPER ACCESS"}
-            </p>
-            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700,lineHeight:1}}>
-              <span>{isSuper?"👑 ":"🛠️ "}</span>
-              <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 60%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 60%,#818cf8)",
-                WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
+            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,lineHeight:1,display:"flex",alignItems:"center",gap:9,flexWrap:"wrap"}}>
+              <span>
+                <span>{isSuper?"👑 ":"🛠️ "}</span>
+                <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 60%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 60%,#818cf8)",
+                  WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
+              </span>
+              <span style={{fontSize:9,color:isSuper?"#fbbf24":"#818cf8",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".08em",
+                fontWeight:700,border:`1px solid ${isSuper?"rgba(251,191,36,.4)":"rgba(129,140,248,.4)"}`,borderRadius:20,padding:"3px 9px"}}>
+                {isSuper?"FULL ACCESS":"HELPER"}
+              </span>
             </h1>
           </div>
-          <button onClick={onExit} style={{
-            background: isSuper?"rgba(245,158,11,.12)":"rgba(99,102,241,.12)",
-            border: isSuper?"1px solid rgba(245,158,11,.3)":"1px solid rgba(99,102,241,.3)",
-            color: isSuper?"#fbbf24":"#a5b4fc",
-            fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",
-            borderRadius:10,padding:"7px 12px"}}>← home</button>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
+            <button onClick={onExit} style={{
+              background: isSuper?"rgba(245,158,11,.12)":"rgba(99,102,241,.12)",
+              border: isSuper?"1px solid rgba(245,158,11,.3)":"1px solid rgba(99,102,241,.3)",
+              color: isSuper?"#fbbf24":"#a5b4fc",
+              fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",
+              borderRadius:10,padding:"7px 12px"}}>← home</button>
+            {onLogout&&(
+              <button onClick={()=>{
+                  if(confirm("Log out on this device?\n\nThis frees your admin session for the next device immediately, and forgets your saved PIN here — you'll need to enter it again next time."))
+                    onLogout();
+                }}
+                style={{background:"transparent",border:"1px solid rgba(239,68,68,.3)",color:"rgba(248,113,113,.85)",
+                  fontSize:10,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:10,padding:"5px 10px"}}
+                title="Free this session for other devices and forget the remembered PIN here">🔓 Log Out</button>
+            )}
+          </div>
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {hasLive
-            ?<Pill label={`● LIVE · ${live.battingTeam} ${live.totalRuns||0}/${live.wickets||0}`} color="52,211,153" dot/>
+            ?<Pill label={`LIVE · ${live.battingTeam} ${live.totalRuns||0}/${live.wickets||0}`} color="52,211,153" dot/>
             :<Pill label="No active match" color="107,114,128"/>}
           {poll
             ?<Pill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>
             :<Pill label="No poll open" color="107,114,128"/>}
-          <Pill label={`${rosterCount} members`} color="99,102,241"/>
-          <Pill label={`${histCount} matches`} color="245,158,11"/>
+          <Pill label={`${rosterCount} member${rosterCount===1?"":"s"}`} color="99,102,241"/>
+          <Pill label={`${histCount} match${histCount===1?"":"es"}`} color="245,158,11"/>
         </div>
       </div>
 
       <div style={{padding:"0 18px"}}>
 
-        {/* ── Super Admin exclusive section — shown FIRST so it's always visible ── */}
+        {/* ── Super Admin exclusive section — shown FIRST so it's always visible. Gold/crown themed
+            to match the rest of the super-admin branding rather than alarm-red — these are routine
+            management actions (post a notice, rotate a PIN), not warnings, and red fighting for
+            attention against every other tile's own accent color was a big part of what made this
+            page feel noisy. ── */}
         {isSuper&&(
-          <div style={{background:"rgba(239,68,68,.07)",border:"1.5px solid rgba(239,68,68,.25)",
+          <div style={{background:"rgba(251,191,36,.06)",border:"1.5px solid rgba(251,191,36,.25)",
             borderRadius:18,padding:"14px 14px 12px",marginBottom:14}}>
-            <p style={{fontSize:9,color:"rgba(239,68,68,.8)",fontFamily:"'JetBrains Mono',monospace",
+            <p style={{fontSize:9,color:"rgba(251,191,36,.85)",fontFamily:"'JetBrains Mono',monospace",
               letterSpacing:".2em",fontWeight:700,marginBottom:10}}>👑 SUPER ADMIN ONLY</p>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               <Tile em="📢" title="Post Notice" sub="Home screen announcement" col="245,158,11"
                 onClick={()=>onPick("announce")} delay={.02}/>
-              <Tile em="🔐" title="Manage PINs" sub="Change admin PINs" col="239,68,68"
+              <Tile em="🔐" title="Manage PINs" sub="Change admin PINs" col="251,191,36"
                 onClick={()=>onPick("pinMgmt")} delay={.04}/>
             </div>
           </div>
@@ -8996,13 +9033,13 @@ function AdminHome({tier,onPick,onExit}){
           col="245,158,11" full onClick={()=>onPick("stats")} delay={.14}/>
         <div style={{height:8}}/>
         <Tile em="🏆" title="Tournaments" sub="Fixtures · start matches · scoped stats"
-          col="52,211,153" full onClick={()=>onPick("tournaments")} delay={.17}/>
+          col="56,189,248" full onClick={()=>onPick("tournaments")} delay={.17}/>
       </div>
     </div>
   );
 }
 
-function SuperAdminHome({onScore,onHistory,onAnnounce,onRoster,onStats,onPoll,onPins,onTournaments,onExit}){
+function SuperAdminHome({onScore,onHistory,onAnnounce,onRoster,onStats,onPoll,onPins,onTournaments,onExit,onLogout}){
   return <AdminHome tier="super" onPick={(s)=>{
     if(s==="admin")      onScore();
     else if(s==="history")  onHistory();
@@ -9012,11 +9049,11 @@ function SuperAdminHome({onScore,onHistory,onAnnounce,onRoster,onStats,onPoll,on
     else if(s==="poll")     onPoll();
     else if(s==="pinMgmt")  onPins();
     else if(s==="tournaments") onTournaments();
-  }} onExit={onExit}/>;
+  }} onExit={onExit} onLogout={onLogout}/>;
 }
 
-function BasicAdminHome({onPick,onExit}){
-  return <AdminHome tier="basic" onPick={onPick} onExit={onExit}/>;
+function BasicAdminHome({onPick,onExit,onLogout}){
+  return <AdminHome tier="basic" onPick={onPick} onExit={onExit} onLogout={onLogout}/>;
 }
 
 // ── Global toast bus ─────────────────────────────────────────────────────────
@@ -9113,7 +9150,26 @@ function Root(){
     window.history.replaceState({screen:"landing",depth:1},"");
     setScreen("landing");
     setGate(null);
+    // Free the admin session lock immediately on exit, not just when <App> itself unmounts — an
+    // admin who only browsed the dashboard/Poll/Roster/History and never actually entered live
+    // scoring would otherwise leave the lock held (nothing was heartbeating it, but nothing released
+    // it either) until it naturally expired. The admin slot is global (not matchId-scoped), so this
+    // needs no matchId to release correctly.
+    if(adminTier!==null) releaseSession(null,"admin",mySessionId);
     setAdminTier(null); // Clear admin tier so stale tier never contaminates next login
+  };
+  // Explicit "Log Out" — distinct from "← home". Home just navigates away (this device stays
+  // remembered, so picking Admin again logs back in silently). Log Out additionally forgets the
+  // remembered PIN on THIS device — for handing the phone to someone else, or when it isn't your
+  // device at all — so the next person who opens the app gets a real PIN prompt, not a free pass in.
+  const logoutAdmin=()=>{
+    if(adminTier!==null) releaseSession(null,"admin",mySessionId);
+    try{localStorage.removeItem("lcc_pin_admin");}catch(e){}
+    navStack.current=["landing"];
+    window.history.replaceState({screen:"landing",depth:1},"");
+    setScreen("landing");
+    setGate(null);
+    setAdminTier(null);
   };
   const pick=(r)=>{
     if(r==="scorer"){setGate("scorer");}
@@ -9178,7 +9234,7 @@ function Root(){
 
   if(screen==="landing") return <Landing onPick={pick}/>;
   if(screen==="viewer")  return <ViewerLive onExit={home}/>;
-  if(screen==="basicAdmin") return <BasicAdminHome onPick={nav} onExit={home}/>;
+  if(screen==="basicAdmin") return <BasicAdminHome onPick={nav} onExit={home} onLogout={logoutAdmin}/>;
   if(screen==="history") return <HistoryPage role={isSuper?"admin":"viewer"} onExit={()=>nav(adminHome)}/>;
   if(screen==="poll")    return <PollPage role={isAdmin?"admin":"viewer"} onExit={()=>nav(adminHome)}/>;
   if(screen==="roster")  return <RosterPage role={isAdmin?"admin":"viewer"} onExit={()=>nav(adminHome)}/>;
@@ -9197,7 +9253,8 @@ function Root(){
     onAnnounce={()=>nav("announce")}
     onPins={()=>nav("pinMgmt")}
     onTournaments={()=>nav("tournaments")}
-    onExit={home}/>;
+    onExit={home}
+    onLogout={logoutAdmin}/>;
   if(screen==="pinMgmt") return <PinMgmtModal onClose={()=>nav(adminHome)}/>;
   if(screen==="admin") return <App role="admin" mySessionId={mySessionId} onExit={()=>nav(adminHome)} onHistory={()=>nav("history")} onPoll={()=>nav("poll")} onRoster={()=>nav("roster")} onAnnounce={()=>nav("announce")} prefillFixture={pendingFixtureRef.current}/>;
   return <Landing onPick={pick}/>;
