@@ -5451,8 +5451,8 @@ function ViewerTeams({match,inn}){
 
 // Build a WhatsApp-ready FINAL RESULT message: winner, margin, both innings, and player of the match.
 // Read-only string building over the match-over snapshot. Used by the "Share Result" button.
-function buildResultShareText(snap,potm){
-  if(!snap||!snap.inn||!snap.mo) return "";
+function buildResultShareParts(snap,potm){
+  if(!snap||!snap.inn||!snap.mo) return null;
   const inn=snap.inn, inn1=snap.inn1, mo=snap.mo;
   const lines=[];
   lines.push("🏆 "+(mo.winner?`${mo.winner} WON`:"MATCH TIED")+(mo.margin?` by ${mo.margin}`:""));
@@ -5469,9 +5469,13 @@ function buildResultShareText(snap,potm){
   if(stars.length){ lines.push(""); lines.push("⭐ "+stars.join("  |  ")); }
   const pom=potm&&potm.winner;
   if(pom){ lines.push(""); lines.push("🏅 Player of the Match: "+pom); }
-  lines.push("");
-  lines.push("Full scorecard 👉 "+ (typeof window!=="undefined" ? window.location.origin : ""));
-  return lines.join("\n");
+  return {body:lines.join("\n"), url:(typeof window!=="undefined"?window.location.origin:"")};
+}
+// Combined single string — clipboard fallback + stable shape for tests/other callers.
+function buildResultShareText(snap,potm){
+  const parts=buildResultShareParts(snap,potm);
+  if(!parts) return "";
+  return parts.body+"\n\nFull scorecard 👉 "+parts.url;
 }
 
 // Compute a concise summary of a finished innings for the innings-break card: top scorer and best
@@ -5499,8 +5503,15 @@ function inningsSummary(inn){
 // Web Share sheet when available (iOS/Android Safari & Chrome both support it), which lets the person
 // pick WhatsApp directly; falls back to copying the text to the clipboard with a small confirmation
 // otherwise. Pure string building + a share call — no app state touched, safe to call anytime.
-function buildLiveShareText(snap){
-  if(!snap||!snap.inn) return "";
+//
+// IMPORTANT: the score text and the link are built as SEPARATE pieces (buildLiveShareParts), not one
+// combined string. Passing navigator.share({text}) with a URL embedded INSIDE that text string was the
+// actual bug reported: several share targets (confirmed on iOS Chrome) auto-detect the URL inside the
+// text and collapse the ENTIRE share down to just that link — the whole score message silently
+// vanished, leaving only "https://.../#live". The Web Share API has a dedicated `url` field for
+// exactly this reason; passing text and url separately keeps both intact through the share sheet.
+function buildLiveShareParts(snap){
+  if(!snap||!snap.inn) return null;
   const inn=snap.inn, inn1=snap.inn1, match=snap.match;
   const lines=[];
   const title=[inn.format,match?.tournamentName].filter(Boolean).join(" · ");
@@ -5515,22 +5526,29 @@ function buildLiveShareText(snap){
     const ballsLeft=Math.max(0,totalBalls-(inn.totalBalls||0));
     if(need>0 && ballsLeft>0) lines.push(`Need ${need} off ${ballsLeft} balls to win`);
   }
-  lines.push("");
-  lines.push("Watch live 👉 "+ (typeof window!=="undefined" ? window.location.origin+"/#live" : "#live"));
-  return lines.join("\n");
+  return {body:lines.join("\n"), url:(typeof window!=="undefined"?window.location.origin+"/#live":"#live")};
+}
+// Combined single string — used for the clipboard fallback (which has no separate url concept) and
+// kept as the stable shape for tests/other callers.
+function buildLiveShareText(snap){
+  const parts=buildLiveShareParts(snap);
+  if(!parts) return "";
+  return parts.body+"\n\nWatch live 👉 "+parts.url;
 }
 function shareLive(snap,onCopied){
-  const text=buildLiveShareText(snap);
-  if(!text) return;
+  const parts=buildLiveShareParts(snap);
+  if(!parts) return;
   try{
     if(navigator.share){
-      navigator.share({text}).catch(()=>{}); // user cancelling the sheet is not an error
+      navigator.share({text:parts.body,url:parts.url}).catch(()=>{}); // user cancelling the sheet is not an error
       return;
     }
   }catch(e){}
-  // Fallback: copy to clipboard.
+  // Fallback: copy to clipboard — here text+url DO need to be one combined string since there's
+  // nothing else to paste but the clipboard contents.
   try{
-    navigator.clipboard.writeText(text).then(()=>{ onCopied&&onCopied(); }).catch(()=>{ onCopied&&onCopied(); });
+    const combined=parts.body+"\n\nWatch live 👉 "+parts.url;
+    navigator.clipboard.writeText(combined).then(()=>{ onCopied&&onCopied(); }).catch(()=>{ onCopied&&onCopied(); });
   }catch(e){ onCopied&&onCopied(); }
 }
 
@@ -5666,9 +5684,11 @@ function ViewerLive({onExit}){
         <POTMVoting inn={inn} inn1={inn1} potm={potm} role="viewer"/>
         <button className="btn w-full" style={{marginTop:16,background:"rgba(37,211,102,.15)",border:"1px solid rgba(37,211,102,.4)",color:"#25d366",fontWeight:600}}
           onClick={()=>{
-            const text=buildResultShareText(snap,potm);
-            try{ if(navigator.share){ navigator.share({text}).catch(()=>{}); return; } }catch(e){}
-            try{ navigator.clipboard.writeText(text).then(()=>{ setShareToast(true); setTimeout(()=>setShareToast(false),2200); }).catch(()=>{}); }catch(e){}
+            const parts=buildResultShareParts(snap,potm);
+            if(!parts) return;
+            try{ if(navigator.share){ navigator.share({text:parts.body,url:parts.url}).catch(()=>{}); return; } }catch(e){}
+            const combined=parts.body+"\n\nFull scorecard 👉 "+parts.url;
+            try{ navigator.clipboard.writeText(combined).then(()=>{ setShareToast(true); setTimeout(()=>setShareToast(false),2200); }).catch(()=>{}); }catch(e){}
           }}>📤 Share Result</button>
         {shareToast&&<div style={{textAlign:"center",marginTop:8,fontSize:11,color:"#25d366",fontFamily:"'JetBrains Mono',monospace"}}>✓ Result copied — paste it into WhatsApp!</div>}
         <button className="btn btn-ghost w-full" style={{marginTop:8}} onClick={onExit}>← Back</button>
