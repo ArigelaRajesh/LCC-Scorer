@@ -337,9 +337,9 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .chip-4{background:#f59e0b;color:#111;border-color:#fbbf24;box-shadow:0 0 12px rgba(245,158,11,.4)}
 .chip-6{background:#10b981;color:#111;border-color:#34d399;box-shadow:0 0 12px rgba(16,185,129,.35)}
 .chip-decl{background:#8b5cf6;color:#fff;border-color:#c4b5fd;box-shadow:0 0 12px rgba(139,92,246,.4)}
-.chip-WD,.chip-NB{background:transparent;color:#fbbf24;border-color:#f59e0b;border-style:dashed}
-.chip-0{background:rgba(148,163,184,.14);color:#dbe4f0;border-color:#8fa3bf}
-.chip-run{background:rgba(99,102,241,.2);color:#a5b4fc;border-color:#6366f1}
+.chip-WD,.chip-NB{background:#f59e0b;color:#111;border-color:#fbbf24;border-style:dashed;box-shadow:0 0 12px rgba(245,158,11,.4)}
+.chip-0{background:#64748b;color:#fff;border-color:#94a3b8;box-shadow:0 0 12px rgba(100,116,139,.4)}
+.chip-run{background:#3b82f6;color:#fff;border-color:#60a5fa;box-shadow:0 0 12px rgba(59,130,246,.4)}
 
 /* Mini cards */
 .mini-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:12px}
@@ -2725,9 +2725,9 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                 only when there IS a partnership to speak of: two-batsman mode with both ends occupied.
                 Hidden during single-batsman innings (no partnership concept there) and while a new
                 batsman is still being selected after a wicket (inn.nonStrikerName briefly absent). */}
-            {/* Current partnership — compact blue bar, identical to the viewer header. Replaces the
-                old plain text line so scorer/admin see the same clear progress-bar treatment. */}
-            <CurrentPartnershipBar inn={inn} compact/>
+            {/* Current partnership — compact blue bar with inline label, identical to the viewer
+                header so scorer/admin see the same treatment. */}
+            <CurrentPartnershipBar inn={inn} compact labelled/>
           </div>
           {/* CHASE STRIP — full-width match equation during the 2nd innings, with a progress bar
               that actually has room to breathe (the old narrow side panel cramped all of this). */}
@@ -5428,9 +5428,9 @@ function CurrentPartnershipBar({inn,compact,labelled}){
   const pct=Math.max(4,Math.min(100,(runs/50)*100));
   return (
     <div style={{marginTop:compact?5:8}}>
-      {labelled&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"var(--text-mute)",textTransform:"uppercase",letterSpacing:".15em",marginBottom:4}}>Current Partnership</div>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:3}}>
         <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:compact?11:12,color:"var(--text-dim)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          {labelled&&<span style={{color:"var(--text-mute)",textTransform:"uppercase",letterSpacing:".1em",fontSize:compact?9:10}}>Current P'ship </span>}
           🤝 {firstName(inn.strikerName)} &amp; {firstName(inn.nonStrikerName)}
         </span>
         <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:compact?11:12,flexShrink:0}}>
