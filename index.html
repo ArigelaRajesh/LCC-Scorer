@@ -92,6 +92,7 @@
 <style>
 
 @keyframes pulseGlow{0%,100%{box-shadow:0 0 20px rgba(245,158,11,.4)}50%{box-shadow:0 0 40px rgba(245,158,11,.8)}}
+@keyframes creditPulse{0%,100%{opacity:.55;text-shadow:0 0 6px rgba(165,180,252,.2)}50%{opacity:1;text-shadow:0 0 14px rgba(165,180,252,.7)}}
 @keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
 @keyframes slowDrift{0%{background-position:0% center}100%{background-position:-300% center}}
 @keyframes bounceIn{0%{transform:scale(0.3);opacity:0}50%{transform:scale(1.05)}70%{transform:scale(0.9)}100%{transform:scale(1);opacity:1}}
@@ -181,6 +182,7 @@
 body.hc{--bg-1:#000000;--bg-2:#01050f;--bg-3:#020a1a;--bg-4:#01050f;--bg-5:#000000;
   --surface:#050b1c;--surface-2:#0a1428;--surface-3:#03080f;--border:#2c4f8f;
   --text:#ffffff;--text-dim:#d4e2ff;--text-mute:#8ea6d6}
+body.hc, body.hc .screen, body.hc .result-screen{background:#000000!important}
 @keyframes screenIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 .screen,.result-screen{animation:screenIn .28s ease-out both}
 @keyframes skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
@@ -218,7 +220,7 @@ body.hc{--bg-1:#000000;--bg-2:#01050f;--bg-3:#020a1a;--bg-4:#01050f;--bg-5:#0000
    future re-theme is a few lines, not hundreds of edits. Deep midnight-navy base,
    bright cyan as the primary accent, warm amber kept only for run/boundary emphasis. */
 :root{
-  --bg-1:#020617; --bg-2:#0a1a3a; --bg-3:#0e2148; --bg-4:#071630; --bg-5:#020814;
+  --bg-1:#031022; --bg-2:#062a3f; --bg-3:#132a63; --bg-4:#2a1458; --bg-5:#0a0418;
   --surface:#0d1b3e;         /* card background */
   --surface-2:#122550;       /* raised card / header */
   --surface-3:#0a1530;       /* inputs, deep panels */
@@ -238,12 +240,23 @@ body.hc{--bg-1:#000000;--bg-2:#01050f;--bg-3:#020a1a;--bg-4:#01050f;--bg-5:#0000
 button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 input,select,textarea{touch-action:manipulation}
 html{overflow-x:hidden;max-width:100vw}
-body{font-family:'Inter',sans-serif;background:linear-gradient(150deg,var(--bg-1),var(--bg-2),var(--bg-3),var(--bg-2),var(--bg-1)) fixed;background-color:var(--bg-1);color:var(--text);min-height:100dvh;overflow-x:hidden;max-width:100vw}
+body{font-family:'Inter',sans-serif;
+  background:
+    radial-gradient(ellipse 90% 55% at 15% 0%, rgba(20,140,150,.28), transparent 60%),
+    radial-gradient(ellipse 80% 50% at 85% 8%, rgba(99,102,241,.26), transparent 62%),
+    radial-gradient(ellipse 100% 60% at 50% 100%, rgba(124,58,237,.30), transparent 65%),
+    radial-gradient(ellipse 70% 45% at 92% 88%, rgba(217,70,160,.18), transparent 60%),
+    linear-gradient(165deg,var(--bg-1),var(--bg-2) 40%,var(--bg-4) 75%,var(--bg-5));
+  background-attachment:fixed;background-color:var(--bg-1);color:var(--text);min-height:100dvh;overflow-x:hidden;max-width:100vw}
 .font-mono{font-family:'JetBrains Mono',monospace}
 .font-display{font-family:'Oswald',sans-serif}
 
 /* Layout */
-.screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,var(--bg-1) 0%,var(--bg-2) 30%,var(--bg-3) 60%,var(--bg-4) 82%,var(--bg-5) 100%);position:relative;overflow:hidden}
+.screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:
+    radial-gradient(ellipse 90% 55% at 15% 0%, rgba(20,140,150,.30), transparent 60%),
+    radial-gradient(ellipse 80% 50% at 85% 10%, rgba(99,102,241,.28), transparent 62%),
+    radial-gradient(ellipse 100% 60% at 50% 100%, rgba(124,58,237,.32), transparent 65%),
+    linear-gradient(165deg,var(--bg-1),var(--bg-2) 40%,var(--bg-4) 75%,var(--bg-5));position:relative;overflow:hidden}
 
 /* result-screen: full-viewport centered (PinGate, Centered, MatchOver) */
 .result-screen{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px 16px;background:linear-gradient(160deg,var(--bg-1) 0%,var(--bg-2) 30%,var(--bg-3) 60%,var(--bg-4) 82%,var(--bg-5) 100%)}
@@ -292,7 +305,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(150deg,var(--bg-1
 /* Inputs */
 input,select,textarea{width:100%;background:var(--surface-3);border:1.5px solid var(--border);border-radius:12px;padding:10px 14px;color:#fff;font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:border-color .2s}
 input:focus,select:focus,textarea:focus{border-color:var(--primary)}
-input::placeholder{color:#4338ca}
+input::placeholder{color:#8b93d9;opacity:1}
 label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.15em;margin-bottom:6px}
 
 /* Buttons */
@@ -5940,7 +5953,8 @@ function ViewerLive({onExit}){
           </>);
         })()}
         </>)}
-        <p style={{textAlign:"center",color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginTop:16}}>🔄 Updates automatically · {inn.venue}</p>
+        {/* The old "Updates automatically · venue" footer was removed: venue lives in the Match tab
+            now, and auto-updating is implicit for a live page — the line was pure redundancy. */}
       </div>
     </div>
   );
@@ -7233,7 +7247,7 @@ function FindYourself(){
             onFocus={()=>setFocused(true)}
             onBlur={()=>setTimeout(()=>setFocused(false),120)}
             onKeyDown={e=>e.key==="Enter"&&search()}
-            placeholder="🔍 Find your stats — type your name…" style={{width:"100%",fontSize:13,paddingRight:q?32:undefined}}/>
+            placeholder="🔍 Find your stats… type your name here" style={{width:"100%",fontSize:13,paddingRight:q?32:undefined}}/>
           {q&&(
             <button onClick={clearSearch} aria-label="Clear search" style={{
               position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",
@@ -7473,7 +7487,7 @@ function Landing({onPick}){
           {tile("🙌","Join the Club","Add your name","rgba(52,211,153,.45)","rgba(52,211,153,.18)",()=>onPick("roster"),3,"NEW")}
         </div>
 
-        <p style={{textAlign:"center",marginTop:"clamp(10px,2.5vw,16px)",marginBottom:0,color:"rgba(129,140,248,.4)",fontSize:11,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".05em"}}>Created by Rajesh Arigela</p>
+        <p style={{textAlign:"center",marginTop:"clamp(10px,2.5vw,16px)",marginBottom:0,color:"#a5b4fc",fontSize:11,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".05em",animation:"creditPulse 2.8s ease-in-out infinite"}}>Created by Rajesh Arigela</p>
       </div>
     </div>
   );
@@ -9330,15 +9344,11 @@ function AdminHome({tier,onPick,onExit,onLogout}){
             <p style={{fontSize:12,color:"rgba(255,255,255,.65)",fontFamily:"'Inter',sans-serif",marginBottom:6}}>
               {timeStr} · {now.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}
             </p>
-            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,lineHeight:1,display:"flex",alignItems:"center",gap:9,flexWrap:"wrap"}}>
+            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,lineHeight:1}}>
               <span>
                 <span>{isSuper?"👑 ":"🛠️ "}</span>
                 <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 60%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 60%,#818cf8)",
                   WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
-              </span>
-              <span style={{fontSize:9,color:isSuper?"#fbbf24":"#818cf8",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".08em",
-                fontWeight:700,border:`1px solid ${isSuper?"rgba(251,191,36,.4)":"rgba(129,140,248,.4)"}`,borderRadius:20,padding:"3px 9px"}}>
-                {isSuper?"FULL ACCESS":"HELPER"}
               </span>
             </h1>
           </div>
@@ -9361,12 +9371,8 @@ function AdminHome({tier,onPick,onExit,onLogout}){
           </div>
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {hasLive
-            ?<AdminPill label={`LIVE · ${live.battingTeam} ${live.totalRuns||0}/${live.wickets||0}`} color="52,211,153" dot/>
-            :<AdminPill label="No active match" color="107,114,128"/>}
-          {poll
-            ?<AdminPill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>
-            :<AdminPill label="No poll open" color="107,114,128"/>}
+          {hasLive&&<AdminPill label={`LIVE · ${live.battingTeam} ${live.totalRuns||0}/${live.wickets||0}`} color="52,211,153" dot/>}
+          {poll&&<AdminPill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>}
           <AdminPill label={`${rosterCount} member${rosterCount===1?"":"s"}`} color="99,102,241"/>
           <AdminPill label={`${histCount} match${histCount===1?"":"es"}`} color="245,158,11"/>
         </div>
