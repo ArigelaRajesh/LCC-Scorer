@@ -336,6 +336,7 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .chip-W{background:#ef4444;color:#fff;border-color:#f87171;box-shadow:0 0 12px rgba(239,68,68,.4)}
 .chip-4{background:#f59e0b;color:#111;border-color:#fbbf24;box-shadow:0 0 12px rgba(245,158,11,.4)}
 .chip-6{background:#10b981;color:#111;border-color:#34d399;box-shadow:0 0 12px rgba(16,185,129,.35)}
+.chip-decl{background:#8b5cf6;color:#fff;border-color:#c4b5fd;box-shadow:0 0 12px rgba(139,92,246,.4)}
 .chip-WD,.chip-NB{background:transparent;color:#fbbf24;border-color:#f59e0b;border-style:dashed}
 .chip-0{background:rgba(148,163,184,.14);color:#dbe4f0;border-color:#8fa3bf}
 .chip-run{background:rgba(99,102,241,.2);color:#a5b4fc;border-color:#6366f1}
@@ -670,7 +671,7 @@ function chipClass(ev){
   if(ev.type==="WD") return "chip chip-WD";
   if(ev.type==="NB") return "chip chip-NB";
   if(ev.type==="0")  return "chip chip-0";
-  if(ev.type==="DECL") return "chip chip-6"; // reuse the boundary styling — visually distinct, no new CSS needed
+  if(ev.type==="DECL") return "chip chip-decl"; // own purple styling, matching the 1D/2D buttons
   if(ev.type==="OT")   return "chip chip-WD"; // orange dashed — overthrow declare
   return "chip chip-run";
 }
@@ -3422,16 +3423,16 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
           <button className="btn btn-outline-amber" onClick={()=>setEM("WD")} style={{borderRadius:14,fontSize:13}}>Wide</button>
           <button className="btn btn-outline-amber" onClick={()=>setEM("NB")} style={{borderRadius:14,fontSize:13,borderColor:"#ca8a04",color:"#facc15"}}>No Ball</button>
         </div>
-        {/* Overthrow gets its own full-width line now that 1D/2D moved up beside the boundaries.
-            The rare once-a-match actions (retire, end innings, edit overs, restore) stay behind
+        {/* Overthrow + Retire share a row now — both are mid-innings actions common enough to want
+            one tap away. The rare once-a-match actions (end innings, edit overs, restore) stay behind
             "More actions" below. */}
-        <button className="btn w-full" onClick={()=>setShowOT(true)} style={{borderRadius:14,fontSize:13,padding:"10px 6px",background:"transparent",border:"1.5px solid rgba(251,146,60,.55)",color:"#fb923c",fontWeight:600}}>🔄 Overthrow</button>
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn" onClick={()=>setShowOT(true)} style={{flex:1,borderRadius:14,fontSize:13,padding:"10px 6px",background:"transparent",border:"1.5px solid rgba(251,146,60,.55)",color:"#fb923c",fontWeight:600}}>🔄 Overthrow</button>
+          <button className="btn" onClick={onRetire} style={{flex:1,borderRadius:14,fontSize:13,padding:"10px 6px",background:"transparent",border:"1.5px solid rgba(139,92,246,.5)",color:"#c4b5fd",fontWeight:600}}>🔁 Retire {inn.single?"Bat":"Striker"}</button>
+        </div>
         <button className="btn w-full" onClick={()=>setShowMore(s=>!s)} style={{borderRadius:14,fontSize:12,padding:"9px",background:"transparent",border:"1px solid rgba(99,102,241,.3)",color:"#818cf8",marginTop:6}}>
-          {showMore?"▲ Fewer actions":"▼ More actions (retire, end innings, edit overs…)"}
+          {showMore?"▲ Fewer actions":"▼ More actions (end innings, edit overs…)"}
         </button>
-        {showMore&&(
-          <button className="btn w-full" onClick={onRetire} style={{borderRadius:14,fontSize:13,padding:"12px",background:"transparent",border:"1.5px solid rgba(139,92,246,.5)",color:"#c4b5fd",marginTop:8}}>🔁 Retire {inn.single?"Batsman":"Striker"}</button>
-        )}
       </div>
 
       {/* End Innings / Revert — always clickable, even mid-wicket or mid-bowler-change, so admin/scorer can always end or recover */}
@@ -5418,7 +5419,7 @@ function PartnershipChart({inn}){
 // reference stand so early runs still show visible movement. Module scope = stable identity = no
 // remount/animation replay on Firebase updates. Renders nothing when there's no live stand to show
 // (single-batsman innings, or a new batsman still being chosen after a wicket).
-function CurrentPartnershipBar({inn,compact}){
+function CurrentPartnershipBar({inn,compact,labelled}){
   if(!inn||inn.single||!inn.strikerName||!inn.nonStrikerName) return null;
   const runs=inn.partnership||0;
   const balls=inn.partnershipBalls||0;
@@ -5427,6 +5428,7 @@ function CurrentPartnershipBar({inn,compact}){
   const pct=Math.max(4,Math.min(100,(runs/50)*100));
   return (
     <div style={{marginTop:compact?5:8}}>
+      {labelled&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:"var(--text-mute)",textTransform:"uppercase",letterSpacing:".15em",marginBottom:4}}>Current Partnership</div>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:3}}>
         <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:compact?11:12,color:"var(--text-dim)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
           🤝 {firstName(inn.strikerName)} &amp; {firstName(inn.nonStrikerName)}
@@ -5810,15 +5812,25 @@ function ViewerLive({onExit}){
           <span style={{color:"#9aa8bf",fontSize:12,fontFamily:"'JetBrains Mono',monospace"}}> vs {inn.bowlingTeam}</span>
         </div>
         <MilestoneCelebration inn={inn} resetKey={(match?.matchId||"m")+":"+(inn.inningsNum||1)} playSound={soundOn}/>
-        <div className="flex items-center" style={{gap:10}}>
-          <span key={inn.totalRuns+"-"+inn.wickets} className="score-number score-pulse">{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
-          <span style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:16,marginBottom:4}}>({ovStr(inn.totalBalls)} ov)</span>
+        {/* Big score with CRR + Projected pills on the right — same layout as the admin scoreboard so
+            the viewer reads as prominently. Proj (extrapolated final at current rate) shows in the 1st
+            innings only, the standard broadcast stat. */}
+        <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:8,minWidth:0}}>
+            <span key={inn.totalRuns+"-"+inn.wickets} className="score-big score-pulse">{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
+            <span style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>({ovStr(inn.totalBalls)} ov)</span>
+          </div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end"}}>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#bcc7d8",
+              background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",
+              borderRadius:9,padding:"5px 10px",whiteSpace:"nowrap"}}>CRR <span style={{color:"#fbbf24",fontWeight:700}}>{crr}</span></span>
+            {!inn.target&&inn.totalBalls>0&&inn.overs>0&&
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#a5b4fc",
+                background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",
+                borderRadius:9,padding:"5px 10px",whiteSpace:"nowrap"}}>Proj <span style={{color:"#fff",fontWeight:700}}>{Math.round(parseFloat(crr)*inn.overs)}</span></span>}
+          </div>
         </div>
-        {/* Current partnership — compact blue bar (names + runs/balls + progress), same visual as the
-            "current" row of the full chart. The full multi-stand card was removed from the Live body
-            per Lokesh; only the current stand shows, here in the header. */}
-        <CurrentPartnershipBar inn={inn}/>
-        {/* TICKER — one line describing the latest ball, refreshed per delivery */}
+        {/* TICKER — one line describing the latest ball, directly under the score (ball info first) */}
         {(()=>{
           const evs=inn.overEvents&&inn.overEvents.length?inn.overEvents:((inn.completedOvers||[]).slice(-1)[0]||[]);
           const line=describeBall(evs[evs.length-1],inn);
@@ -5826,17 +5838,15 @@ function ViewerLive({onExit}){
           const big=line.startsWith("SIX")||line.startsWith("FOUR")||line.startsWith("WICKET");
           return(
             <div key={(inn.totalBalls||0)+"-"+(inn.totalRuns||0)+"-"+(inn.wickets||0)}
-              style={{marginTop:8,fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:".04em",
+              style={{marginTop:6,fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:".04em",
                 color:line.startsWith("WICKET")?"var(--red-2)":big?"var(--amber-2)":"var(--text-dim)",
                 animation:"screenIn .35s ease-out both"}}>
               ▸ {line}
             </div>
           );
         })()}
-        {/* The mini ball-strip that used to sit here was removed on purpose: it showed the exact same
-            chips as the "This Over" card just below the fold, and the double display was the main
-            thing making the header feel cluttered. The single-line ticker above covers the latest
-            ball; the This Over card covers the over's rhythm. One home for each piece of info. */}
+        {/* Current partnership — labelled, then the blue bar (names + runs/balls + progress). */}
+        <CurrentPartnershipBar inn={inn} labelled/>
         {/* CHASE BANNER — the match equation front and centre during the 2nd innings, updating every
             ball. Cyan glow normally; warms to amber/red as the required rate climbs. */}
         {inn.target!=null&&bLeft>0&&req>0&&(
@@ -5849,16 +5859,8 @@ function ViewerLive({onExit}){
             {rrr&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginTop:3,color:parseFloat(rrr)>12?"#f87171":parseFloat(rrr)>9?"#fbbf24":"var(--text-dim)"}}>req rate {rrr} · current {crr} · target {inn.target}</div>}
           </div>
         )}
-        {/* CRR / Target row — only when the chase banner is NOT showing (1st innings, or chase
-            resolved). During a live chase the banner directly above already displays required rate,
-            current rate, AND the equation — repeating "CRR x.xx · Target N" right under it was pure
-            duplication and made the header read as cluttered. One home for each piece of info. */}
-        {!(inn.target!=null&&bLeft>0&&req>0)&&(
-          <div className="flex" style={{gap:16,marginTop:8,flexWrap:"wrap"}}>
-            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#9aa8bf"}}>CRR <span style={{color:"#fbbf24",fontWeight:600}}>{crr}</span></span>
-            {inn.target&&<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#818cf8"}}>Target <span style={{color:"#fff",fontWeight:600}}>{inn.target}</span></span>}
-          </div>
-        )}
+        {/* CRR now lives as a pill next to the score above (admin-style). Target shows in the chase
+            banner during a chase. No separate CRR row needed here anymore. */}
       </div>
       <div className="content" style={{paddingTop:16}}>
         {/* Tabs as a clean 3-column segmented control; the sound control sits on its own as a
@@ -5866,8 +5868,8 @@ function ViewerLive({onExit}){
         <div style={{display:"flex",alignItems:"center",gap:10,margin:"8px 14px 16px"}}>
           <div className="tabs" style={{margin:0,flex:1}}>
             <button className={`tab${tab==="live"?" active":""}`} onClick={()=>setTab("live")}>📡 Live</button>
-            <button className={`tab${tab==="teams"?" active":""}`} onClick={()=>setTab("teams")}>👥 Match</button>
             <button className={`tab${tab==="scorecard"?" active":""}`} onClick={()=>setTab("scorecard")}>📋 Scorecard</button>
+            <button className={`tab${tab==="teams"?" active":""}`} onClick={()=>setTab("teams")}>👥 Match</button>
           </div>
           <button onClick={()=>{ setSoundOn(s=>!s); try{_getHeroCtx();}catch(e){} }}
             title={soundOn?"Match sounds on — tap to mute":"Match sounds off — tap to enable"}
