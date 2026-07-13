@@ -308,9 +308,9 @@ label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-si
 .btn-outline-amber:hover{background:rgba(217,119,6,.15)}
 .btn-outline-gray{background:transparent;border:1.5px solid #526480;color:#9aa8bf;padding:13px 14px}
 .btn-outline-gray:hover{border-color:#6366f1;color:#818cf8}
-.btn-run{background:var(--surface-2);border:1.5px solid var(--border);color:#fff;padding:10px 8px;font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;border-radius:14px;width:100%;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .08s ease,box-shadow .08s ease,background .08s ease;cursor:pointer;user-select:none}
-.btn-run:active{transform:scale(.9);background:rgba(99,102,241,.45);border-color:#818cf8;box-shadow:0 0 20px rgba(99,102,241,.5)}
-.btn-run:hover{border-color:#818cf8;background:rgba(99,102,241,.2)}
+.btn-run{background:linear-gradient(135deg,rgba(56,189,248,.20),rgba(37,99,235,.28));border:2px solid #3f7fd6;color:#fff;padding:10px 8px;font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;border-radius:14px;width:100%;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .08s ease,box-shadow .08s ease,background .08s ease;cursor:pointer;user-select:none;box-shadow:0 2px 10px rgba(37,99,235,.18)}
+.btn-run:active{transform:scale(.9);background:rgba(99,102,241,.6);border-color:#a5b4fc;box-shadow:0 0 24px rgba(99,102,241,.7)}
+.btn-run:hover{border-color:#818cf8;background:rgba(99,102,241,.3)}
 .btn-run.amber{background:linear-gradient(135deg,var(--amber),#d97706);color:#111;border:none;box-shadow:0 0 24px rgba(245,158,11,.45);text-shadow:0 1px 0 rgba(0,0,0,.15)}
 .btn-run.amber:active{transform:scale(.9);box-shadow:0 0 32px rgba(245,158,11,.8);filter:brightness(1.15)}
 .btn-run.green{background:linear-gradient(135deg,var(--green),#059669);color:#04121a;border:none;box-shadow:0 0 20px rgba(16,185,129,.3)}
@@ -2723,9 +2723,9 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                 Hidden during single-batsman innings (no partnership concept there) and while a new
                 batsman is still being selected after a wicket (inn.nonStrikerName briefly absent). */}
             {!inn.single&&inn.strikerName&&inn.nonStrikerName&&(
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#bcc7d8"}}>
-                🤝 {inn.strikerName} & {inn.nonStrikerName}: <span style={{color:"#e5e7eb",fontWeight:700}}>{inn.partnership||0}</span>
-                <span style={{color:"#9aa8bf"}}> ({inn.partnershipBalls||0})</span>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"var(--text-dim)"}}>
+                🤝 {firstName(inn.strikerName)} & {firstName(inn.nonStrikerName)}: <span style={{color:"var(--text)",fontWeight:700}}>{inn.partnership||0}</span>
+                <span style={{color:"var(--text-mute)"}}> ({inn.partnershipBalls||0})</span>
               </div>
             )}
           </div>
@@ -5482,6 +5482,10 @@ function buildResultShareParts(snap,potm){
   if(s1&&s1.topBat) stars.push(`${s1.topBat.name} ${s1.topBat.runs}(${s1.topBat.balls})`);
   if(s2&&s2.topBat) stars.push(`${s2.topBat.name} ${s2.topBat.runs}(${s2.topBat.balls})`);
   if(stars.length){ lines.push(""); lines.push("⭐ "+stars.join("  |  ")); }
+  // Best partnership across the match.
+  let bp=null;
+  [s1,s2].forEach(ss=>{ if(ss&&ss.bestPart&&(!bp||ss.bestPart.runs>bp.runs)) bp=ss.bestPart; });
+  if(bp){ lines.push("🤝 Best stand: "+bp.pair[0]+" & "+bp.pair[1]+" ("+bp.runs+")"); }
   const pom=potm&&potm.winner;
   if(pom){ lines.push(""); lines.push("🏅 Player of the Match: "+pom); }
   return {body:lines.join("\n"), url:(typeof window!=="undefined"?window.location.origin:"")};
@@ -5508,9 +5512,21 @@ function inningsSummary(inn){
     // Best = most wickets, then fewest runs conceded.
     if(!bestBowl || (w.wickets||0)>(bestBowl.wickets||0) || ((w.wickets||0)===(bestBowl.wickets||0)&&(w.runs||0)<(bestBowl.runs||0))) bestBowl=w;
   });
+  // Best (highest-scoring) partnership of the innings — from the completed-stands list plus the
+  // current unbroken stand, so it works both mid-innings and on a finished/saved innings.
+  let bestPart=null;
+  const stands=[...(inn.partnerships||[])];
+  if(inn.strikerName&&inn.nonStrikerName&&!inn.single){
+    stands.push({runs:inn.partnership||0,pair:[inn.strikerName,inn.nonStrikerName]});
+  }
+  stands.forEach(p=>{
+    if(!p||!p.pair) return;
+    if(!bestPart || (p.runs||0)>(bestPart.runs||0)) bestPart={runs:p.runs||0,pair:p.pair};
+  });
   return {
     topBat: topBat&&(topBat.runs||0)>0 ? {name:topBat.name, runs:topBat.runs||0, balls:topBat.balls||0} : null,
     bestBowl: bestBowl&&(bestBowl.wickets||0)>0 ? {name:bestBowl.name, wickets:bestBowl.wickets||0, runs:bestBowl.runs||0, overs:ovStr((bestBowl.overs||0)*6+(bestBowl.ballsThisOver||0))} : null,
+    bestPart: bestPart&&bestPart.runs>0 ? bestPart : null,
   };
 }
 
@@ -5675,6 +5691,16 @@ function ViewerLive({onExit}){
           </div>
         </div>
 
+        {s&&s.bestPart&&(
+          <div style={{background:"rgba(56,189,248,.07)",border:"1px solid rgba(56,189,248,.25)",borderRadius:14,padding:"14px",marginTop:10}}>
+            <div style={{fontSize:10,color:"#38bdf8",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".1em",marginBottom:6}}>🤝 BEST PARTNERSHIP</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8}}>
+              <div style={{fontWeight:700,fontSize:14}}>{firstName(s.bestPart.pair[0])} & {firstName(s.bestPart.pair[1])}</div>
+              <div style={{color:"#e5e7eb",fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700}}>{s.bestPart.runs}</div>
+            </div>
+          </div>
+        )}
+
         <div style={{textAlign:"center",marginTop:24,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>
           ⏳ {chasingTeam} setting up their innings…
         </div>
@@ -5749,9 +5775,15 @@ function ViewerLive({onExit}){
           <span key={inn.totalRuns+"-"+inn.wickets} className="score-number score-pulse">{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
           <span style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:16,marginBottom:4}}>({ovStr(inn.totalBalls)} ov)</span>
         </div>
-        {/* The plain-text partnership line that briefly lived here moved into the Live tab body as the
-            full Partnerships card (same component the scorer's Batting tab uses, with the progress
-            bars) — Lokesh explicitly preferred that richer card over a bare text line. */}
+        {/* The full multi-stand Partnerships card lives in the Live tab body below. Here in the
+            header we show ONLY the current stand as a compact one-liner — enough at a glance; anyone
+            wanting the earlier partnerships taps into the card. */}
+        {!inn.single&&inn.strikerName&&inn.nonStrikerName&&(
+          <div style={{marginTop:6,fontFamily:"'JetBrains Mono',monospace",fontSize:13,color:"var(--text-dim)"}}>
+            🤝 {firstName(inn.strikerName)} & {firstName(inn.nonStrikerName)}: <span style={{color:"var(--text)",fontWeight:700}}>{inn.partnership||0}</span>
+            <span style={{color:"var(--text-mute)"}}> ({inn.partnershipBalls||0})</span>
+          </div>
+        )}
         {/* TICKER — one line describing the latest ball, refreshed per delivery */}
         {(()=>{
           const evs=inn.overEvents&&inn.overEvents.length?inn.overEvents:((inn.completedOvers||[]).slice(-1)[0]||[]);
@@ -5801,7 +5833,7 @@ function ViewerLive({onExit}){
           <div className="tabs" style={{margin:0,flex:1}}>
             <button className={`tab${tab==="live"?" active":""}`} onClick={()=>setTab("live")}>📡 Live</button>
             <button className={`tab${tab==="teams"?" active":""}`} onClick={()=>setTab("teams")}>👥 Teams</button>
-            <button className={`tab${tab==="scorecard"?" active":""}`} onClick={()=>setTab("scorecard")}>📋 Card</button>
+            <button className={`tab${tab==="scorecard"?" active":""}`} onClick={()=>setTab("scorecard")}>📋 Scorecard</button>
           </div>
           <button onClick={()=>{ setSoundOn(s=>!s); try{_getHeroCtx();}catch(e){} }}
             title={soundOn?"Match sounds on — tap to mute":"Match sounds off — tap to enable"}
