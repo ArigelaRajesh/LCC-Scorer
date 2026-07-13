@@ -3008,6 +3008,87 @@ function playSiren(){
   }catch(e){}
 }
 
+// ── Milestone sounds ─────────────────────────────────────────────────────────────────────────────
+// Until now every milestone (fifty, century, hat-trick, five-for, partnership, 30…) played the same
+// generic crowd cheer, so a century sounded identical to a 30. These give the big moments their own
+// distinct, recognisable stings — all synthesised in the same Web Audio style as the existing sounds
+// (no audio files, keeps the app a single HTML file).
+
+// Triumphant ascending fanfare — for a batter's FIFTY or CENTURY. A bright three-note major arpeggio
+// (do–mi–sol) capped by the octave, the classic "achievement unlocked" shape.
+function playFanfare(big){
+  const ctx=_getHeroCtx(); if(!ctx)return;
+  try{
+    const t=ctx.currentTime;
+    // C major arpeggio; century adds the high octave flourish and a touch more length.
+    const notes=big?[523.25,659.25,783.99,1046.5,1318.5]:[523.25,659.25,783.99,1046.5];
+    notes.forEach((f,i)=>{
+      const step=0.11;
+      const st=t+i*step;
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      osc.type="triangle";
+      osc.frequency.setValueAtTime(f,st);
+      g.gain.setValueAtTime(0.0001,st);
+      g.gain.exponentialRampToValueAtTime(0.16,st+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,st+step*2.2);
+      // a soft second oscillator a fifth up for richness
+      const osc2=ctx.createOscillator(), g2=ctx.createGain();
+      osc2.type="sine"; osc2.frequency.setValueAtTime(f*1.5,st);
+      g2.gain.setValueAtTime(0.0001,st);
+      g2.gain.exponentialRampToValueAtTime(0.06,st+0.02);
+      g2.gain.exponentialRampToValueAtTime(0.0001,st+step*2);
+      osc.connect(g); g.connect(ctx.destination); osc.start(st); osc.stop(st+step*2.5);
+      osc2.connect(g2); g2.connect(ctx.destination); osc2.start(st); osc2.stop(st+step*2.5);
+    });
+  }catch(e){}
+}
+
+// Rising achievement sting — for the "smaller" milestones (partnership 50, 30 up, team 50). Two quick
+// rising notes: a bright, satisfying "ding-ding" that's clearly positive but lighter than the fanfare.
+function playAchievement(){
+  const ctx=_getHeroCtx(); if(!ctx)return;
+  try{
+    const t=ctx.currentTime;
+    [ {f:784, st:0}, {f:1046.5, st:0.12} ].forEach(n=>{
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      osc.type="sine"; osc.frequency.setValueAtTime(n.f,t+n.st);
+      g.gain.setValueAtTime(0.0001,t+n.st);
+      g.gain.exponentialRampToValueAtTime(0.15,t+n.st+0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+n.st+0.32);
+      osc.connect(g); g.connect(ctx.destination); osc.start(t+n.st); osc.stop(t+n.st+0.35);
+    });
+  }catch(e){}
+}
+
+// Dramatic bowler-milestone stab — for a HAT-TRICK or FIVE-FOR. A bold, slightly menacing rising
+// brass-like swell then a punchy accent, distinct from the batting fanfare so bowling glory sounds
+// like bowling glory.
+function playBowlerGlory(){
+  const ctx=_getHeroCtx(); if(!ctx)return;
+  try{
+    const t=ctx.currentTime;
+    // rising swell
+    const osc=ctx.createOscillator(), g=ctx.createGain();
+    osc.type="sawtooth";
+    osc.frequency.setValueAtTime(220,t);
+    osc.frequency.exponentialRampToValueAtTime(440,t+0.35);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.13,t+0.1);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.45);
+    const lp=ctx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=1400;
+    osc.connect(lp); lp.connect(g); g.connect(ctx.destination); osc.start(t); osc.stop(t+0.5);
+    // punchy accent chord at the top
+    [440,554.37,659.25].forEach(f=>{
+      const o=ctx.createOscillator(), og=ctx.createGain();
+      o.type="triangle"; o.frequency.setValueAtTime(f,t+0.38);
+      og.gain.setValueAtTime(0.0001,t+0.38);
+      og.gain.exponentialRampToValueAtTime(0.12,t+0.4);
+      og.gain.exponentialRampToValueAtTime(0.0001,t+0.75);
+      o.connect(og); og.connect(ctx.destination); o.start(t+0.38); o.stop(t+0.8);
+    });
+  }catch(e){}
+}
+
 // ── QuickAddPlayer — adds a new club member to the roster mid-match ──────────
 // Scorer/admin taps "+ Add to club", types a name, saves to Firebase.
 // The real-time roster listener in App picks it up instantly — player appears
@@ -5351,7 +5432,19 @@ function MilestoneCelebration({inn,resetKey,playSound}){
     const next=queue[0];
     setQueue(q=>q.slice(1));
     setShow(next);
-    if(playSound){ try{playCrowdCheer(true);}catch(e){} }
+    if(playSound){
+      try{
+        // Pick a sound that fits the milestone rather than one generic cheer for everything (which
+        // made a century sound identical to a 30). The three functions below were built for exactly
+        // this: a triumphant fanfare for a batter's fifty/century (century = the bigger variant),
+        // a dramatic swell for bowling glory (hat-trick / five-for), and a lighter "ding-ding"
+        // achievement sting for the smaller landmarks (30 up, team 50, partnership).
+        const k=next.kind;
+        if(k==="bat"){ playFanfare(/💯/.test(next.emoji||"")||/CENTURY/.test(next.title||"")); }
+        else if(k==="hat"||k==="figs"){ playBowlerGlory(); }
+        else { playAchievement(); } // bat30, team, part
+      }catch(e){}
+    }
   },[queue,show,playSound]);
 
   // Auto-dismiss whatever's currently showing. Depends only on `show`, so this timer is scheduled
