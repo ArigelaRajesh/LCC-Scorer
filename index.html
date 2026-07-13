@@ -220,7 +220,7 @@ body.hc, body.hc .screen, body.hc .result-screen{background:#000000!important}
    future re-theme is a few lines, not hundreds of edits. Deep midnight-navy base,
    bright cyan as the primary accent, warm amber kept only for run/boundary emphasis. */
 :root{
-  --bg-1:#031022; --bg-2:#062a3f; --bg-3:#132a63; --bg-4:#2a1458; --bg-5:#0a0418;
+  --bg-1:#05070d; --bg-2:#0a0e1a; --bg-3:#0d1226; --bg-4:#0b0a1f; --bg-5:#050409;
   --surface:#0d1b3e;         /* card background */
   --surface-2:#122550;       /* raised card / header */
   --surface-3:#0a1530;       /* inputs, deep panels */
@@ -242,21 +242,21 @@ input,select,textarea{touch-action:manipulation}
 html{overflow-x:hidden;max-width:100vw}
 body{font-family:'Inter',sans-serif;
   background:
-    radial-gradient(ellipse 90% 55% at 15% 0%, rgba(20,140,150,.28), transparent 60%),
-    radial-gradient(ellipse 80% 50% at 85% 8%, rgba(99,102,241,.26), transparent 62%),
-    radial-gradient(ellipse 100% 60% at 50% 100%, rgba(124,58,237,.30), transparent 65%),
-    radial-gradient(ellipse 70% 45% at 92% 88%, rgba(217,70,160,.18), transparent 60%),
-    linear-gradient(165deg,var(--bg-1),var(--bg-2) 40%,var(--bg-4) 75%,var(--bg-5));
+    radial-gradient(ellipse 85% 50% at 12% -2%, rgba(16,185,129,.20), transparent 55%),
+    radial-gradient(ellipse 75% 48% at 88% 6%, rgba(56,120,255,.22), transparent 58%),
+    radial-gradient(ellipse 95% 55% at 50% 104%, rgba(147,51,234,.26), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 95% 92%, rgba(225,60,150,.14), transparent 55%),
+    linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5));
   background-attachment:fixed;background-color:var(--bg-1);color:var(--text);min-height:100dvh;overflow-x:hidden;max-width:100vw}
 .font-mono{font-family:'JetBrains Mono',monospace}
 .font-display{font-family:'Oswald',sans-serif}
 
 /* Layout */
 .screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:
-    radial-gradient(ellipse 90% 55% at 15% 0%, rgba(20,140,150,.30), transparent 60%),
-    radial-gradient(ellipse 80% 50% at 85% 10%, rgba(99,102,241,.28), transparent 62%),
-    radial-gradient(ellipse 100% 60% at 50% 100%, rgba(124,58,237,.32), transparent 65%),
-    linear-gradient(165deg,var(--bg-1),var(--bg-2) 40%,var(--bg-4) 75%,var(--bg-5));position:relative;overflow:hidden}
+    radial-gradient(ellipse 85% 50% at 12% -2%, rgba(16,185,129,.22), transparent 55%),
+    radial-gradient(ellipse 75% 48% at 88% 8%, rgba(56,120,255,.24), transparent 58%),
+    radial-gradient(ellipse 95% 55% at 50% 104%, rgba(147,51,234,.28), transparent 60%),
+    linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5));position:relative;overflow:hidden}
 
 /* result-screen: full-viewport centered (PinGate, Centered, MatchOver) */
 .result-screen{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px 16px;background:linear-gradient(160deg,var(--bg-1) 0%,var(--bg-2) 30%,var(--bg-3) 60%,var(--bg-4) 82%,var(--bg-5) 100%)}
@@ -1478,6 +1478,13 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
   const[inn1,setInn1]=useState(null);
   const[saved,setSaved]=useState(false);
   const[syncErr,setSyncErr]=useState(null);
+  // Live-write status for the scorer's confidence indicator: "idle" (nothing pending), "syncing"
+  // (a write is in flight), "ok" (last write confirmed by Firebase), "error" (last write failed).
+  // This is the difference between a scorer knowing their ball saved vs. scoring five more into a
+  // dead connection — a direct guard against the data-loss scenarios we've fought before.
+  // (Network online/offline is tracked separately by the existing `isOffline` state below, which
+  // already has an auto-retry-on-reconnect effect — we reuse that rather than a second flag.)
+  const[syncState,setSyncState]=useState("idle");
   const[loaded,setLoaded]=useState(!FB_OK||!DB); // becomes true once we've checked Firebase for an existing match
   const[preEnd,setPreEnd]=useState(null); // snapshot before ending innings/match, so admin can revert
   const[preEndInDB,setPreEndInDB]=useState(false); // does a revert snapshot exist in Firebase (survives refresh)?
@@ -1766,7 +1773,8 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
       setIsOffline(false);
       // Re-send whatever we last tried to write — don't wait for the next ball.
       if(lastPayloadRef.current && FB_OK && DB){
-        DB.ref("live").set(lastPayloadRef.current).then(()=>{setSyncErr(null);}).catch(()=>{});
+        setSyncState("syncing");
+        DB.ref("live").set(lastPayloadRef.current).then(()=>{setSyncErr(null);setSyncState("ok");}).catch(()=>{setSyncState("error");});
       }
     };
     window.addEventListener("online",goOnline);
@@ -1798,10 +1806,12 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
     const payload=JSON.parse(JSON.stringify({match,inn,inn1,ib,mo,pinA:match?.pinA||null,pinB:match?.pinB||null,teamA:match?.teamA||null,teamB:match?.teamB||null,battingTeam:inn?.battingTeam||null,writer:writerId.current,role:myRole,intent:myIntent,t}));
     lastPayloadRef.current=payload;
     try{localStorage.setItem("lcc_pending_write",JSON.stringify(payload));}catch(e){}
+    setSyncState("syncing");
     DB.ref("live").set(payload).then(()=>{
       if(syncErr)setSyncErr(null);
+      setSyncState("ok");
       try{localStorage.removeItem("lcc_pending_write");}catch(e){}
-    }).catch(e=>{console.error("sync failed",e);setSyncErr(e.message||"Write blocked — check Firebase rules");});
+    }).catch(e=>{console.error("sync failed",e);setSyncErr(e.message||"Write blocked — check Firebase rules");setSyncState("error");});
   },[match,inn,inn1,ib,mo,isScorer,loaded]);
 
   // ── AUTOMATIC PERIODIC BACKUP ─────────────────────────────────────────────────────────────────
@@ -2690,6 +2700,22 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                   now lives INSIDE the ⚙️ menu, reclaiming the vertical space that used to push the
                   scoring pad below the fold. */}
               <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                {/* Sync status — the scorer's confirmation that their last ball actually reached the
+                    server. "✓ saved" = confirmed, "⟳ saving" = in flight, "⚠ not saved" = failed. */}
+                {(role==="admin"||role==="scorer")&&(()=>{
+                  const st=isOffline?"offline":syncState;
+                  const cfg={
+                    offline:{t:"⚡ offline",c:"#f87171",b:"rgba(239,68,68,.4)",bg:"rgba(239,68,68,.12)"},
+                    error:{t:"⚠ not saved",c:"#f87171",b:"rgba(239,68,68,.4)",bg:"rgba(239,68,68,.12)"},
+                    syncing:{t:"⟳ saving",c:"#fbbf24",b:"rgba(251,191,36,.4)",bg:"rgba(251,191,36,.1)"},
+                    ok:{t:"✓ saved",c:"#34d399",b:"rgba(52,211,153,.4)",bg:"rgba(52,211,153,.1)"},
+                    idle:null,
+                  }[st];
+                  if(!cfg) return null;
+                  return <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:8,fontWeight:700,
+                    color:cfg.c,border:`1px solid ${cfg.b}`,background:cfg.bg,borderRadius:6,padding:"2px 6px",
+                    whiteSpace:"nowrap",letterSpacing:".03em"}}>{cfg.t}</span>;
+                })()}
                 {(role==="admin"||role==="scorer")&&<AdminActionsMenu
                   onHistory={role==="admin"?onHistory:null} onAnnounce={role==="admin"?onAnnounce:null}
                   inn={inn} onEditMatchSave={role==="admin"?(({overs,maxWkts})=>setInn(p=>({...p,overs,maxWkts}))):null}
@@ -2741,6 +2767,19 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
             {/* Current partnership — compact blue bar with inline label, identical to the viewer
                 header so scorer/admin see the same treatment. */}
             <CurrentPartnershipBar inn={inn} compact labelled/>
+            {/* Write-FAILED banner — distinct from the offline banner above (which covers "no network").
+                This one fires when we ARE online but the server rejected/failed the write, which the
+                offline banner wouldn't catch. Red and urgent: a failed save while apparently connected
+                is the sneakiest data-loss case, so the scorer should see it and stop. */}
+            {(role==="admin"||role==="scorer")&&!isOffline&&syncState==="error"&&(
+              <div style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.5)",
+                borderRadius:10,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:16}}>⚠️</span>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#fca5a5",lineHeight:1.4}}>
+                  Last ball didn't save to the server. It will retry automatically — if this stays, check your connection before scoring more.
+                </span>
+              </div>
+            )}
           </div>
           {/* CHASE STRIP — full-width match equation during the 2nd innings, with a progress bar
               that actually has room to breathe (the old narrow side panel cramped all of this). */}
