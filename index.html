@@ -2722,12 +2722,9 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                 only when there IS a partnership to speak of: two-batsman mode with both ends occupied.
                 Hidden during single-batsman innings (no partnership concept there) and while a new
                 batsman is still being selected after a wicket (inn.nonStrikerName briefly absent). */}
-            {!inn.single&&inn.strikerName&&inn.nonStrikerName&&(
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"var(--text-dim)"}}>
-                🤝 {firstName(inn.strikerName)} & {firstName(inn.nonStrikerName)}: <span style={{color:"var(--text)",fontWeight:700}}>{inn.partnership||0}</span>
-                <span style={{color:"var(--text-mute)"}}> ({inn.partnershipBalls||0})</span>
-              </div>
-            )}
+            {/* Current partnership — compact blue bar, identical to the viewer header. Replaces the
+                old plain text line so scorer/admin see the same clear progress-bar treatment. */}
+            <CurrentPartnershipBar inn={inn} compact/>
           </div>
           {/* CHASE STRIP — full-width match equation during the 2nd innings, with a progress bar
               that actually has room to breathe (the old narrow side panel cramped all of this). */}
@@ -5416,6 +5413,37 @@ function PartnershipChart({inn}){
   );
 }
 
+// Compact CURRENT-partnership bar for the headers (viewer + scorer + admin) — the same visual
+// language as the "● current" row inside the full PartnershipChart (blue fill), distilled to one
+// self-contained strip: names, runs, balls, and a progress bar that fills relative to a modest
+// reference stand so early runs still show visible movement. Module scope = stable identity = no
+// remount/animation replay on Firebase updates. Renders nothing when there's no live stand to show
+// (single-batsman innings, or a new batsman still being chosen after a wicket).
+function CurrentPartnershipBar({inn,compact}){
+  if(!inn||inn.single||!inn.strikerName||!inn.nonStrikerName) return null;
+  const runs=inn.partnership||0;
+  const balls=inn.partnershipBalls||0;
+  // Fill relative to a 50-run reference (a healthy stand), capped at 100%. Gives visible movement
+  // from the very first run rather than needing a huge partnership before the bar looks non-empty.
+  const pct=Math.max(4,Math.min(100,(runs/50)*100));
+  return (
+    <div style={{marginTop:compact?5:8}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:3}}>
+        <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:compact?11:12,color:"var(--text-dim)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          🤝 {firstName(inn.strikerName)} &amp; {firstName(inn.nonStrikerName)}
+        </span>
+        <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:compact?11:12,flexShrink:0}}>
+          <span style={{color:"var(--text)",fontWeight:700}}>{runs}</span>
+          <span style={{color:"var(--text-mute)"}}> ({balls})</span>
+        </span>
+      </div>
+      <div style={{height:5,borderRadius:3,background:"var(--surface-3)",overflow:"hidden"}}>
+        <div style={{height:"100%",width:pct+"%",borderRadius:3,background:"var(--primary)",transition:"width .3s ease"}}/>
+      </div>
+    </div>
+  );
+}
+
 function ViewerTeams({match,inn}){
   const teamA=match?.teamA||"Team A", teamB=match?.teamB||"Team B";
   let listA=match?.pubTeamA||[], listB=match?.pubTeamB||[];
@@ -5775,15 +5803,10 @@ function ViewerLive({onExit}){
           <span key={inn.totalRuns+"-"+inn.wickets} className="score-number score-pulse">{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
           <span style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:16,marginBottom:4}}>({ovStr(inn.totalBalls)} ov)</span>
         </div>
-        {/* The full multi-stand Partnerships card lives in the Live tab body below. Here in the
-            header we show ONLY the current stand as a compact one-liner — enough at a glance; anyone
-            wanting the earlier partnerships taps into the card. */}
-        {!inn.single&&inn.strikerName&&inn.nonStrikerName&&(
-          <div style={{marginTop:6,fontFamily:"'JetBrains Mono',monospace",fontSize:13,color:"var(--text-dim)"}}>
-            🤝 {firstName(inn.strikerName)} & {firstName(inn.nonStrikerName)}: <span style={{color:"var(--text)",fontWeight:700}}>{inn.partnership||0}</span>
-            <span style={{color:"var(--text-mute)"}}> ({inn.partnershipBalls||0})</span>
-          </div>
-        )}
+        {/* Current partnership — compact blue bar (names + runs/balls + progress), same visual as the
+            "current" row of the full chart. The full multi-stand card was removed from the Live body
+            per Lokesh; only the current stand shows, here in the header. */}
+        <CurrentPartnershipBar inn={inn}/>
         {/* TICKER — one line describing the latest ball, refreshed per delivery */}
         {(()=>{
           const evs=inn.overEvents&&inn.overEvents.length?inn.overEvents:((inn.completedOvers||[]).slice(-1)[0]||[]);
@@ -5886,10 +5909,6 @@ function ViewerLive({onExit}){
             </div>}
           </div>
         </div>
-        {/* Partnerships — the same rich card (progress bars, "● current", runs + balls) that the
-            scorer's Batting tab shows, now on the viewer Live tab too. Lokesh explicitly preferred
-            this card over the bare "A & B: 6 (0)" header text line it replaces. */}
-        <PartnershipChart inn={inn}/>
         {/* This over — now the ONE home for ball chips (the header's duplicate mini-strip was
             removed). Between overs, rather than an empty "— new over —" box, show the over that
             just finished, dimmed and labelled, so the recent rhythm of play is never off-screen. */}
