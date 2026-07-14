@@ -5841,7 +5841,7 @@ function ViewerLive({onExit}){
     const chasingTeam=inn.bowlingTeam;
     const rr=inn.overs?((inn.totalRuns||0)/(inn.overs)).toFixed(2):null;
     return (
-      <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh",padding:"20px 16px"}}>
+      <div style={{background:"radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.26), transparent 62%), radial-gradient(circle at 50% 45%, rgba(30,58,138,.18), transparent 70%), linear-gradient(180deg,#0b1230 0%,#0a0e24 32%,#0d0a24 62%,#100a24 100%)",minHeight:"100dvh",padding:"20px 16px"}}>
         <div className="flex items-center justify-between" style={{marginBottom:20}}>
           <span style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".2em",fontWeight:700}}>⏸ INNINGS BREAK</span>
           <div className="flex items-center" style={{gap:10}}>
@@ -5934,7 +5934,7 @@ function ViewerLive({onExit}){
   const BW=inn.bowlers[inn.bowlerName];
 
   return(
-    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh"}}>
+    <div style={{background:"radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.26), transparent 62%), radial-gradient(circle at 50% 45%, rgba(30,58,138,.18), transparent 70%), linear-gradient(180deg,#0b1230 0%,#0a0e24 32%,#0d0a24 62%,#100a24 100%)",minHeight:"100dvh"}}>
       <div className="score-header">
         <BallFlash inn={inn} soundOn={soundOn}/>
         <div className="flex items-center justify-between" style={{marginBottom:8}}>
@@ -6206,7 +6206,7 @@ function HistoryPage({role,onExit}){
   ):list;
 
   return(
-    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh"}}>
+    <div style={{background:"radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.26), transparent 62%), radial-gradient(circle at 50% 45%, rgba(30,58,138,.18), transparent 70%), linear-gradient(180deg,#0b1230 0%,#0a0e24 32%,#0d0a24 62%,#100a24 100%)",minHeight:"100dvh"}}>
       <PageHeader title="📚 Match History" onBack={onExit} backLabel="home"/>
       <div className="resp-wrap" style={{padding:"16px 16px 32px"}}>
         <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Search by team or venue…" style={{marginBottom:14,fontSize:13}}/>
@@ -6503,7 +6503,7 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
         </p>
       </div>
     )}
-    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh",padding:"20px 16px"}}>
+    <div style={{background:"radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.26), transparent 62%), radial-gradient(circle at 50% 45%, rgba(30,58,138,.18), transparent 70%), linear-gradient(180deg,#0b1230 0%,#0a0e24 32%,#0d0a24 62%,#100a24 100%)",minHeight:"100dvh",padding:"20px 16px"}}>
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:14}}>
           <button onClick={onBack} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← all matches</button>
@@ -7850,7 +7850,7 @@ function PollPage({role,onExit}){
     :[["vote","🗳️ Vote"],["teams","🏏 Teams"]];
 
   return(
-    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh"}}>
+    <div style={{background:"radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.26), transparent 62%), radial-gradient(circle at 50% 45%, rgba(30,58,138,.18), transparent 70%), linear-gradient(180deg,#0b1230 0%,#0a0e24 32%,#0d0a24 62%,#100a24 100%)",minHeight:"100dvh"}}>
       <PageHeader title="📋 Weekend Poll" onBack={onExit} backLabel="home"/>
       <div className="resp-wrap" style={{padding:"14px 16px 32px"}}>
         <div className={`tabs`} style={{marginBottom:18,gridTemplateColumns:`repeat(${tabs.length},1fr)`}}>
@@ -7892,7 +7892,7 @@ function RosterPage({role,onExit}){
   if(roster===undefined||passphrase===undefined) return <Centered emoji="🏏" title="Loading…" onExit={onExit}/>;
 
   return(
-    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh"}}>
+    <div style={{background:"radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.26), transparent 62%), radial-gradient(circle at 50% 45%, rgba(30,58,138,.18), transparent 70%), linear-gradient(180deg,#0b1230 0%,#0a0e24 32%,#0d0a24 62%,#100a24 100%)",minHeight:"100dvh"}}>
       <PageHeader title="🏏 Players & Roster" onBack={onExit} backLabel="home"/>
       <div className="resp-wrap" style={{padding:"14px 16px 32px"}}>
         {isAdmin&&(
@@ -8885,7 +8885,7 @@ function StatsPage({onExit}){
   };
 
   return(
-    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh"}}>
+    <div style={{background:"radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.26), transparent 62%), radial-gradient(circle at 50% 45%, rgba(30,58,138,.18), transparent 70%), linear-gradient(180deg,#0b1230 0%,#0a0e24 32%,#0d0a24 62%,#100a24 100%)",minHeight:"100dvh"}}>
       <PageHeader title="📊 Club Stats" onBack={onExit} backLabel="home"
         right={<p style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",margin:0}}>{venueF==="All"?"All":venueF} · {matchCount}M</p>}
       />
@@ -8957,9 +8957,9 @@ function StatsPage({onExit}){
           </div>
         ):(<>
           {/* Tabs */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:4,marginBottom:18,
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginBottom:18,
             background:"rgba(255,255,255,.04)",borderRadius:14,padding:4}}>
-            {[["leaders","🏆"],["awards","🏅"],["players","👤"],["records","📖"],["h2h","⚔️"]].map(([id,lbl])=>(
+            {[["leaders","🏆"],["players","👤"],["records","📖"],["h2h","⚔️"]].map(([id,lbl])=>(
               <button key={id} onClick={()=>setView(id)} style={{
                 padding:"9px 2px",borderRadius:10,border:"none",cursor:"pointer",
                 fontSize:15,fontWeight:600,fontFamily:"'Inter',sans-serif",transition:"all .15s",
@@ -8969,28 +8969,6 @@ function StatsPage({onExit}){
               }} title={id}>{lbl}</button>
             ))}
           </div>
-
-          {/* ── AWARDS ── */}
-          {view==="awards"&&(
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              {badges.map(bdg=>(
-                <div key={bdg.key} style={{
-                  background:bdg.winner?"linear-gradient(150deg,rgba(251,191,36,.14),rgba(251,191,36,.04))":"rgba(255,255,255,.02)",
-                  border:`1px solid ${bdg.winner?"rgba(251,191,36,.35)":"rgba(255,255,255,.06)"}`,
-                  boxShadow:bdg.winner?"0 4px 16px rgba(0,0,0,.3), 0 0 18px rgba(251,191,36,.08)":"none",
-                  borderRadius:16,padding:"14px 10px",textAlign:"center"}}>
-                  <div style={{fontSize:28,marginBottom:6,opacity:bdg.winner?1:.35}}>{bdg.emoji}</div>
-                  <p style={{fontSize:10,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",marginBottom:6}}>{bdg.label}</p>
-                  {bdg.winner?(<>
-                    <p style={{fontWeight:700,fontSize:14,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bdg.winner.name}</p>
-                    <p style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{bdg.stat}</p>
-                  </>):(
-                    <p style={{fontSize:11,color:"#8291ab"}}>Not yet decided</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
 
           {/* ── HEAD-TO-HEAD ── */}
           {view==="h2h"&&(()=>{
@@ -9138,6 +9116,33 @@ function StatsPage({onExit}){
                 </div>
                 {bestBowl?<RC accent="#f87171" icon="🎳" title="BEST BOWLING" name={bestBowl.name} value={`${bestBowl.wkts}/${bestBowl.runs}`} detail={`${bestBowl.vn}·${bestBowl.dt}`}/>:<p style={{color:"#9aa8bf",fontSize:12,marginBottom:10}}>No wickets recorded yet.</p>}
                 {mostMaidens&&<RC accent="#a5b4fc" icon="🔒" title="MOST MAIDENS" name={mostMaidens.name} value={`${mostMaidens.maidens} maiden${mostMaidens.maidens>1?"s":""}`} detail={`${mostMaidens.vn}·${mostMaidens.dt}`}/>}
+                {/* Season badges — the Orange/Purple Cap ones are deliberately left out here because
+                    they're just the #1 entries from the Leaders tab under a different name. */}
+                {(()=>{
+                  const unique=badges.filter(b=>b.key!=="orangeCap"&&b.key!=="purpleCap"&&b.winner);
+                  if(!unique.length) return null;
+                  return(<>
+                    <div style={{height:1,background:"rgba(255,255,255,.06)",margin:"16px 0"}}/>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                      <div style={{width:3,height:16,borderRadius:2,background:"#a78bfa"}}/>
+                      <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,fontWeight:700,color:"#a78bfa",letterSpacing:".15em"}}>SEASON BADGES</span>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      {unique.map(bdg=>(
+                        <div key={bdg.key} style={{
+                          background:"linear-gradient(150deg,rgba(167,139,250,.16),rgba(167,139,250,.04))",
+                          border:"1px solid rgba(167,139,250,.35)",
+                          boxShadow:"0 4px 16px rgba(0,0,0,.3), 0 0 18px rgba(167,139,250,.08)",
+                          borderRadius:16,padding:"14px 10px",textAlign:"center"}}>
+                          <div style={{fontSize:26,marginBottom:6}}>{bdg.emoji}</div>
+                          <p style={{fontSize:10,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",marginBottom:6}}>{bdg.label}</p>
+                          <p style={{fontWeight:700,fontSize:14,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bdg.winner.name}</p>
+                          <p style={{fontSize:11,color:"#c4b5fd",fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{bdg.stat}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </>);
+                })()}
               </div>
             );
           })()}
@@ -9221,7 +9226,7 @@ function TournamentsPage({role,onExit,onStartMatch}){
   const playedCount=fixtures.filter(([,fx])=>fx.played).length;
 
   return(
-    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh"}}>
+    <div style={{background:"radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.26), transparent 62%), radial-gradient(circle at 50% 45%, rgba(30,58,138,.18), transparent 70%), linear-gradient(180deg,#0b1230 0%,#0a0e24 32%,#0d0a24 62%,#100a24 100%)",minHeight:"100dvh"}}>
       <PageHeader title={cur?`🏆 ${cur.name}`:"🏆 Tournaments"} onBack={cur?()=>setSelected(null):onExit} backLabel={cur?"tournaments":"home"}/>
       <div style={{padding:"16px 16px 32px"}}>
         {!cur?(<>
@@ -9379,7 +9384,7 @@ function AnnouncementPage({onExit}){
   };
   if(current===undefined) return <Centered emoji="📢" title="Loading…" onExit={onExit}/>;
   return(
-    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh",padding:"20px 16px"}}>
+    <div style={{background:"radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.26), transparent 62%), radial-gradient(circle at 50% 45%, rgba(30,58,138,.18), transparent 70%), linear-gradient(180deg,#0b1230 0%,#0a0e24 32%,#0d0a24 62%,#100a24 100%)",minHeight:"100dvh",padding:"20px 16px"}}>
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:18}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📢 Announcements</h1>
