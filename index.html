@@ -306,6 +306,7 @@ body{font-family:'Inter',sans-serif;
 input,select,textarea{width:100%;background:var(--surface-3);border:1.5px solid var(--border);border-radius:12px;padding:10px 14px;color:#fff;font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:border-color .2s}
 input:focus,select:focus,textarea:focus{border-color:var(--primary)}
 input::placeholder{color:#8b93d9;opacity:1}
+.find-stats-input::placeholder{color:rgba(255,255,255,.62);opacity:1}
 label{display:block;color:#818cf8;font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.15em;margin-bottom:6px}
 
 /* Buttons */
@@ -5845,7 +5846,7 @@ function ViewerLive({onExit}){
     const chasingTeam=inn.bowlingTeam;
     const rr=inn.overs?((inn.totalRuns||0)/(inn.overs)).toFixed(2):null;
     return (
-      <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",padding:"20px 16px"}}>
+      <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh",padding:"20px 16px"}}>
         <div className="flex items-center justify-between" style={{marginBottom:20}}>
           <span style={{fontSize:11,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".2em",fontWeight:700}}>⏸ INNINGS BREAK</span>
           <div className="flex items-center" style={{gap:10}}>
@@ -5938,7 +5939,7 @@ function ViewerLive({onExit}){
   const BW=inn.bowlers[inn.bowlerName];
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh"}}>
+    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh"}}>
       <div className="score-header">
         <BallFlash inn={inn} soundOn={soundOn}/>
         <div className="flex items-center justify-between" style={{marginBottom:8}}>
@@ -6221,7 +6222,7 @@ function HistoryPage({role,onExit}){
   ):list;
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh"}}>
+    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh"}}>
       <PageHeader title="📚 Match History" onBack={onExit} backLabel="home"/>
       <div className="resp-wrap" style={{padding:"16px 16px 32px"}}>
         <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Search by team or venue…" style={{marginBottom:14,fontSize:13}}/>
@@ -6518,7 +6519,7 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
         </p>
       </div>
     )}
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",padding:"20px 16px"}}>
+    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh",padding:"20px 16px"}}>
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:14}}>
           <button onClick={onBack} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:13,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← all matches</button>
@@ -7427,6 +7428,7 @@ function FindYourself(){
             onFocus={()=>setFocused(true)}
             onBlur={()=>setTimeout(()=>setFocused(false),120)}
             onKeyDown={e=>e.key==="Enter"&&search()}
+            className="find-stats-input"
             placeholder="🔍 Find your stats… type your name here" style={{width:"100%",fontSize:13,paddingRight:q?32:undefined}}/>
           {q&&(
             <button onClick={clearSearch} aria-label="Clear search" style={{
@@ -7510,14 +7512,16 @@ function RecentMatchesCarousel({onOpen}){
           const r=m.result||{};
           return(
             <button key={m.id||i} onClick={()=>onOpen&&onOpen(m)} style={{
-              scrollSnapAlign:"start",flexShrink:0,width:172,background:"var(--surface)",
-              border:"1px solid var(--border)",borderRadius:14,padding:"10px 12px",
+              scrollSnapAlign:"start",flexShrink:0,width:172,
+              background:"linear-gradient(155deg,rgba(251,191,36,.08),rgba(99,102,241,.06) 60%,rgba(255,255,255,.02))",
+              border:"1px solid rgba(251,191,36,.22)",borderRadius:14,padding:"11px 12px",
+              boxShadow:"0 4px 16px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.05)",
               textAlign:"left",cursor:"pointer",fontFamily:"'Inter',sans-serif",color:"inherit",
               transition:"border-color .15s,transform .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor="rgba(99,102,241,.5)";e.currentTarget.style.transform="translateY(-2px)";}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor="";e.currentTarget.style.transform="";}}>
+              onMouseEnter={e=>{e.currentTarget.style.borderColor="rgba(251,191,36,.5)";e.currentTarget.style.transform="translateY(-2px)";}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor="rgba(251,191,36,.22)";e.currentTarget.style.transform="";}}>
               <p style={{fontSize:9,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>{m.venue||""}</p>
-              <p style={{fontSize:12,fontWeight:700,marginBottom:6,lineHeight:1.3}}>{r.winner?`🏆 ${r.winner} won`:"Tied"}{r.margin?" by "+r.margin:""}</p>
+              <p style={{fontSize:12,fontWeight:700,marginBottom:6,lineHeight:1.3,color:r.winner?"#fcd34d":"#e5e7eb"}}>{r.winner?`🏆 ${r.winner} won`:"🤝 Tied"}{r.margin?" by "+r.margin:""}</p>
               {m.inn1&&<p style={{fontSize:10,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn1.battingTeam}: {m.inn1.totalRuns}/{m.inn1.wickets}</p>}
               {m.inn2&&<p style={{fontSize:10,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn2.battingTeam}: {m.inn2.totalRuns}/{m.inn2.wickets}</p>}
               <p style={{fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>View →</p>
@@ -7560,30 +7564,33 @@ function Landing({onPick}){
     </button>
   );
   // Compact quick-action tile — 2-up grid so all four actions read as one dashboard instead of a
-  // scroll-forever list. Icon badge on top, label + one-line sub below, accent-colored top edge.
-  const tile=(emoji,title,sub,accent,glow,onClick,idx,badge)=>(
+  // scroll-forever list. Icon sits beside the title (not stacked above) so every tile reads the same
+  // shape, and a fixed min-height keeps all four the same size even when a subtitle wraps to 2 lines.
+  const tile=(emoji,title,sub,rgb,onClick,idx,badge)=>(
     <button onClick={onClick} style={{
       borderRadius:18,cursor:"pointer",position:"relative",overflow:"hidden",textAlign:"left",
-      display:"flex",flexDirection:"column",gap:8,
-      padding:"clamp(12px,3.4vw,16px) clamp(12px,3.4vw,14px)",
-      background:"linear-gradient(160deg,rgba(20,17,55,.88),rgba(15,12,41,.94))",
-      border:`1.5px solid ${accent}`,borderTop:`3px solid ${accent}`,color:"#fff",
+      display:"flex",flexDirection:"row",alignItems:"center",gap:12,
+      minHeight:"clamp(86px,22vw,100px)",
+      padding:"clamp(12px,3.4vw,15px) clamp(12px,3.4vw,14px)",
+      background:`linear-gradient(150deg,rgba(${rgb},.30),rgba(${rgb},.12) 55%,rgba(${rgb},.05))`,
+      border:`1.5px solid rgba(${rgb},.55)`,color:"#fff",
       fontFamily:"'Inter',sans-serif",backdropFilter:"blur(12px)",
       animation:`slideInUp .5s ease ${0.08*idx+0.2}s both`,
-      boxShadow:`0 6px 22px ${glow}`,transition:"transform .18s,box-shadow .18s"
+      boxShadow:`0 8px 24px rgba(0,0,0,.4), 0 0 26px rgba(${rgb},.16), inset 0 2px 0 rgba(${rgb},.55), inset 0 1px 0 rgba(255,255,255,.07)`,transition:"transform .18s,box-shadow .18s"
     }}
-    onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 12px 30px ${glow}`;}}
-    onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=`0 6px 22px ${glow}`;}}>
-      <span style={{position:"absolute",right:-16,top:-16,width:64,height:64,borderRadius:"50%",
-        background:glow,filter:"blur(20px)",pointerEvents:"none"}}/>
-      <span style={{display:"flex",alignItems:"center",justifyContent:"space-between",position:"relative"}}>
-        <span style={{fontSize:"clamp(24px,7vw,30px)",lineHeight:1,
-          filter:"drop-shadow(0 3px 8px rgba(0,0,0,.5))"}}>{emoji}</span>
-        {badge&&<span style={{fontSize:8,fontWeight:700,color:"#111",background:"linear-gradient(135deg,#34d399,#10b981)",borderRadius:6,padding:"2px 6px",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".04em"}}>{badge}</span>}
-      </span>
-      <span style={{position:"relative"}}>
-        <span style={{display:"block",fontWeight:800,fontSize:"clamp(14px,4vw,16px)",lineHeight:1.15,letterSpacing:"-.01em",marginBottom:2}}>{title}</span>
-        <span style={{display:"block",fontSize:"clamp(9px,2.6vw,10.5px)",color:"#94a3d4",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.3}}>{sub}</span>
+    onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 14px 34px rgba(0,0,0,.45), 0 0 40px rgba(${rgb},.28), inset 0 2px 0 rgba(${rgb},.7)`;}}
+    onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=`0 8px 24px rgba(0,0,0,.4), 0 0 26px rgba(${rgb},.16), inset 0 2px 0 rgba(${rgb},.55), inset 0 1px 0 rgba(255,255,255,.07)`;}}>
+      <span style={{position:"absolute",inset:0,borderRadius:18,pointerEvents:"none",
+        background:`radial-gradient(120% 80% at 85% -10%, rgba(${rgb},.22), transparent 60%)`}}/>
+      <span style={{fontSize:"clamp(23px,6.2vw,27px)",lineHeight:1,width:"clamp(44px,11.5vw,52px)",height:"clamp(44px,11.5vw,52px)",
+        borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
+        background:`linear-gradient(145deg,rgba(${rgb},.32),rgba(${rgb},.12))`,position:"relative",
+        boxShadow:`inset 0 1px 0 rgba(255,255,255,.12), 0 2px 8px rgba(0,0,0,.3)`,
+        filter:"drop-shadow(0 2px 4px rgba(0,0,0,.35))"}}>{emoji}</span>
+      <span style={{position:"relative",flex:1,minWidth:0}}>
+        {badge&&<span style={{position:"absolute",top:-6,right:0,fontSize:8,fontWeight:700,color:"#fff",background:`rgba(${rgb},.9)`,borderRadius:6,padding:"2px 6px",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".04em",boxShadow:`0 0 10px rgba(${rgb},.6)`}}>{badge}</span>}
+        <span style={{display:"block",fontWeight:800,fontSize:"clamp(14px,4vw,16px)",lineHeight:1.15,letterSpacing:"-.01em",marginBottom:3}}>{title}</span>
+        <span style={{display:"block",fontSize:"clamp(9px,2.6vw,10.5px)",color:"rgba(255,255,255,.65)",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.35}}>{sub}</span>
       </span>
     </button>
   );
@@ -7591,8 +7598,7 @@ function Landing({onPick}){
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",
       padding:"0 clamp(12px,4vw,20px) calc(16px + env(safe-area-inset-bottom, 0px))",
       position:"relative",overflow:"hidden",minHeight:"100dvh",
-      background:"linear-gradient(150deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#1c1150,#0a2540,#022c1e)",
-      backgroundSize:"400% 400%",animation:"bgShift 22s ease infinite"}}>
+      background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.16), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.20), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.24), transparent 62%), radial-gradient(ellipse 60% 40% at 95% 88%, rgba(225,60,150,.13), transparent 55%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))"}}>
       <div style={{width:"100%",maxWidth:"min(440px, 100%)",position:"relative",zIndex:1,
         paddingTop:"max(8px, env(safe-area-inset-top))",display:"flex",flexDirection:"column",minHeight:"100dvh"}}>
 
@@ -7661,10 +7667,10 @@ function Landing({onPick}){
 
         {/* ── Quick-action grid — 2×2 so everything fits one screen without scrolling ── */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"clamp(9px,2.4vw,12px)",flex:1}}>
-          {tile("👁️","Watch Live","Live scoreboard · no PIN","rgba(16,185,129,.45)","rgba(16,185,129,.18)",()=>onPick("viewer"),0)}
-          {tile("🏏","Score","Team scorers · PIN","rgba(245,158,11,.45)","rgba(245,158,11,.18)",()=>onPick("scorer"),1)}
-          {tile("📋","Weekend Poll","Vote for this week","rgba(167,139,250,.45)","rgba(167,139,250,.18)",()=>onPick("poll"),2)}
-          {tile("🙌","Join the Club","Add your name","rgba(52,211,153,.45)","rgba(52,211,153,.18)",()=>onPick("roster"),3,"NEW")}
+          {tile("👁️","Watch Live","Live scoreboard · no PIN","16,185,129",()=>onPick("viewer"),0)}
+          {tile("🏏","Score a Match","Team scorers · PIN","56,189,248",()=>onPick("scorer"),1)}
+          {tile("📋","Weekend Poll","Vote for this week","167,139,250",()=>onPick("poll"),2)}
+          {tile("🙌","Join the Club","Add your name","244,114,182",()=>onPick("roster"),3,"NEW")}
         </div>
 
         <p style={{textAlign:"center",marginTop:"clamp(10px,2.5vw,16px)",marginBottom:0,color:"#a5b4fc",fontSize:11,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".05em",animation:"creditPulse 2.8s ease-in-out infinite"}}>Created by Rajesh Arigela</p>
@@ -7850,7 +7856,7 @@ function PollPage({role,onExit}){
     :[["vote","🗳️ Vote"],["teams","🏏 Teams"]];
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh"}}>
+    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh"}}>
       <PageHeader title="📋 Weekend Poll" onBack={onExit} backLabel="home"/>
       <div className="resp-wrap" style={{padding:"14px 16px 32px"}}>
         <div className={`tabs`} style={{marginBottom:18,gridTemplateColumns:`repeat(${tabs.length},1fr)`}}>
@@ -7892,7 +7898,7 @@ function RosterPage({role,onExit}){
   if(roster===undefined||passphrase===undefined) return <Centered emoji="🏏" title="Loading…" onExit={onExit}/>;
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh"}}>
+    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh"}}>
       <PageHeader title="🏏 Players & Roster" onBack={onExit} backLabel="home"/>
       <div className="resp-wrap" style={{padding:"14px 16px 32px"}}>
         {isAdmin&&(
@@ -8885,7 +8891,7 @@ function StatsPage({onExit}){
   };
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh"}}>
+    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh"}}>
       <PageHeader title="📊 Club Stats" onBack={onExit} backLabel="home"
         right={<p style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",margin:0}}>{venueF==="All"?"All":venueF} · {matchCount}M</p>}
       />
@@ -9218,7 +9224,7 @@ function TournamentsPage({role,onExit,onStartMatch}){
   const playedCount=fixtures.filter(([,fx])=>fx.played).length;
 
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh"}}>
+    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh"}}>
       <PageHeader title={cur?`🏆 ${cur.name}`:"🏆 Tournaments"} onBack={cur?()=>setSelected(null):onExit} backLabel={cur?"tournaments":"home"}/>
       <div style={{padding:"16px 16px 32px"}}>
         {!cur?(<>
@@ -9376,7 +9382,7 @@ function AnnouncementPage({onExit}){
   };
   if(current===undefined) return <Centered emoji="📢" title="Loading…" onExit={onExit}/>;
   return(
-    <div style={{background:"linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",minHeight:"100dvh",padding:"20px 16px"}}>
+    <div style={{background:"radial-gradient(ellipse 85% 45% at 12% 0%, rgba(16,185,129,.13), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 6%, rgba(56,120,255,.17), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.2), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",minHeight:"100dvh",padding:"20px 16px"}}>
       <div className="resp-wrap">
         <div className="flex items-center justify-between" style={{marginBottom:18}}>
           <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700}}>📢 Announcements</h1>
