@@ -2693,8 +2693,10 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                 <span style={{color:role==="admin"?"var(--admin)":"var(--green-2)",fontFamily:"'JetBrains Mono',monospace",fontSize:8,fontWeight:700,textTransform:"uppercase",letterSpacing:".15em",border:`1px solid ${role==="admin"?"var(--admin)":"rgba(52,211,153,.5)"}`,borderRadius:6,padding:"2px 6px",boxShadow:role==="admin"?"0 0 10px var(--admin-glow)":"none"}}>{role==="admin"?"🔑 Admin":"✏️ Scorer"}</span>
                 <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:9,textTransform:"uppercase",letterSpacing:".2em"}}>{inn.inningsNum===1?"1st":"2nd"} Inn</span>
                 <span style={{width:3,height:3,borderRadius:"50%",background:"#4338ca",display:"inline-block"}}/>
-                <span style={{fontWeight:700,fontSize:13}}>{inn.battingTeam}</span>
-                <span style={{color:"#8291ab",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>vs {inn.bowlingTeam}</span>
+                <span style={{display:"inline-flex",alignItems:"baseline",gap:6,minWidth:0}}>
+                  <span style={{fontWeight:700,fontSize:13,whiteSpace:"nowrap"}}>{inn.battingTeam}</span>
+                  <span style={{color:"#8291ab",fontSize:11,fontFamily:"'JetBrains Mono',monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>vs {inn.bowlingTeam}</span>
+                </span>
               </div>
               {/* Controls moved to the top-right so they no longer occupy their own row. Fix Players
                   now lives INSIDE the ⚙️ menu, reclaiming the vertical space that used to push the
