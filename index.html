@@ -2681,7 +2681,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
         </div>
       )}
       <div className="score-header">
-        <MilestoneCelebration inn={inn} resetKey={(match?.matchId||"m")+":"+(inn.inningsNum||1)} playSound={true}/>
+        <MilestoneCelebration inn={inn} resetKey={(match?.matchId||"m")+":"+(inn.inningsNum||1)} playSound={celebrationSound}/>
         <BallFlash inn={inn} soundOn={celebrationSound}/>
         {/* Single-column header — no more tall right-hand panel (it sat mostly empty in the 1st
             innings and squeezed the score). Stats now live as compact chips on the score line, and
