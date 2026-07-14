@@ -5783,8 +5783,11 @@ function ViewerLive({onExit}){
   // Bat-crack for ordinary 1–3 run singles/twos/threes — quiet audio-only feedback. Boundaries and
   // wickets are handled by the shared <BallFlash> component below instead (visual + sound together,
   // same component used on the scorer's own screen), so that logic isn't duplicated in two places.
-  const[soundOn,setSoundOnRaw]=React.useState(()=>{try{return localStorage.getItem("lcc_viewer_sound")!=="0"}catch(e){return true}});
-  const setSoundOn=(v)=>{ setSoundOnRaw(prev=>{ const n=typeof v==="function"?v(prev):v; try{localStorage.setItem("lcc_viewer_sound",n?"1":"0");}catch(e){} return n; }); };
+  // Single shared sound setting across the whole app — same "lcc_ball_sound" key the scorer/admin
+  // 🔊 toggle uses. Previously the viewer had its own separate "lcc_viewer_sound" flag, which meant
+  // sound could be ON in the viewer but OFF on the scorer (or vice-versa) — confusing. One key now.
+  const[soundOn,setSoundOnRaw]=React.useState(()=>{try{return localStorage.getItem("lcc_ball_sound")!=="0"}catch(e){return true}});
+  const setSoundOn=(v)=>{ setSoundOnRaw(prev=>{ const n=typeof v==="function"?v(prev):v; try{localStorage.setItem("lcc_ball_sound",n?"1":"0");}catch(e){} return n; }); };
   const soundOnRef=React.useRef(false);
   React.useEffect(()=>{ soundOnRef.current=soundOn; },[soundOn]);
   const prevScoreRef=React.useRef(null);
