@@ -5978,6 +5978,10 @@ function ViewerLive({onExit}){
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#a5b4fc",
                 background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",
                 borderRadius:9,padding:"5px 10px",whiteSpace:"nowrap"}}>Proj <span style={{color:"#fff",fontWeight:700}}>{Math.round(parseFloat(crr)*inn.overs)}</span></span>}
+            {inn.target!=null&&
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#67e8f9",
+                background:"rgba(34,211,238,.1)",border:"1px solid rgba(34,211,238,.35)",
+                borderRadius:9,padding:"5px 10px",whiteSpace:"nowrap"}}>Target <span style={{color:"#fff",fontWeight:700}}>{inn.target}</span></span>}
           </div>
         </div>
         {/* TICKER — one line describing the latest ball, directly under the score (ball info first) */}
@@ -6002,11 +6006,11 @@ function ViewerLive({onExit}){
         {inn.target!=null&&bLeft>0&&req>0&&(
           <div key={req+"-"+bLeft} style={{marginTop:10,textAlign:"center",background:"rgba(34,211,238,.08)",
             border:`1.5px solid ${rrr&&parseFloat(rrr)>12?"rgba(248,113,113,.55)":rrr&&parseFloat(rrr)>9?"rgba(251,191,36,.5)":"rgba(34,211,238,.4)"}`,
-            borderRadius:14,padding:"10px 12px",animation:"screenIn .3s ease-out both"}}>
-            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,letterSpacing:.5}}>
+            borderRadius:14,padding:"9px 12px",animation:"screenIn .3s ease-out both"}}>
+            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:19,fontWeight:700,letterSpacing:.5}}>
               🎯 Need <span style={{color:"var(--primary)"}}>{Math.max(req,0)}</span> off <span style={{color:"var(--primary)"}}>{bLeft}</span> balls
             </span>
-            {rrr&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginTop:3,color:parseFloat(rrr)>12?"#f87171":parseFloat(rrr)>9?"#fbbf24":"var(--text-dim)"}}>req rate {rrr} · current {crr} · target {inn.target}</div>}
+            {rrr&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,marginTop:2,color:parseFloat(rrr)>12?"#f87171":parseFloat(rrr)>9?"#fbbf24":"var(--text-dim)"}}>required rate {rrr}</div>}
           </div>
         )}
         {/* CRR now lives as a pill next to the score above (admin-style). Target shows in the chase
@@ -6087,6 +6091,35 @@ function ViewerLive({onExit}){
                 ?<span style={{color:"#2d2a6a",fontFamily:"'JetBrains Mono',monospace",fontSize:12,alignSelf:"center"}}>— new over —</span>
                 :evs.map((ev,i)=><div key={i} className={chipClass(ev)}>{chipLbl(ev)}</div>)}
             </div>
+            {/* RECENT OVERS — runs (and any wickets) in each of the last completed overs, newest last.
+                Turns the previously empty space into a genuine at-a-glance momentum read: are they
+                accelerating or stalling? Only shown once at least one over is complete. */}
+            {co.length>0&&(()=>{
+              const recent=co.slice(-6).map((ov,idx)=>{
+                const startIdx=co.length-Math.min(6,co.length)+idx;
+                const runs=(ov||[]).reduce((a,e)=>a+evRuns(e),0);
+                const wkts=(ov||[]).filter(e=>e&&e.type==="W").length;
+                return {n:startIdx+1,runs,wkts};
+              });
+              const last5=co.slice(-5).reduce((a,ov)=>a+(ov||[]).reduce((s,e)=>s+evRuns(e),0),0);
+              return(
+                <div style={{marginTop:14}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+                    <p className="section-title" style={{marginBottom:0}}>Recent Overs</p>
+                    {co.length>=2&&<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"var(--text-mute)"}}>last {Math.min(5,co.length)} ov: <span style={{color:"#67e8f9",fontWeight:700}}>{last5}</span> runs</span>}
+                  </div>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {recent.map((o,i)=>(
+                      <div key={i} style={{flex:"1 1 auto",minWidth:52,textAlign:"center",background:"rgba(255,255,255,.03)",
+                        border:`1px solid ${o.wkts>0?"rgba(248,113,113,.35)":"rgba(99,102,241,.25)"}`,borderRadius:10,padding:"7px 4px"}}>
+                        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:19,fontWeight:700,color:o.runs>=12?"#34d399":o.runs<=2?"#9aa8bf":"#fff"}}>{o.runs}</div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:8,color:"var(--text-mute)",letterSpacing:".05em"}}>OV {o.n}{o.wkts>0?` · ${o.wkts}w`:""}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </>);
         })()}
         </>)}
