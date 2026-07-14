@@ -9515,37 +9515,37 @@ function AdminHome({tier,onPick,onExit,onLogout}){
 
       {/* ── Header ── */}
       <div style={{
-        padding:"22px 18px 18px",
+        padding:"18px 18px 18px",
         borderBottom: isSuper ? "1px solid rgba(245,158,11,.18)" : "1px solid rgba(99,102,241,.15)",
         marginBottom:16
       }}>
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,marginBottom:14}}>
-          <div style={{minWidth:0}}>
-            <p style={{fontSize:12,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace",marginBottom:7,letterSpacing:".02em"}}>
-              {timeStr} · {now.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}
-            </p>
-            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700,lineHeight:1}}>
-              <span>{isSuper?"👑 ":"🛠️ "}</span>
-              <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 55%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 55%,#818cf8)",
-                WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
-            </h1>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0}}>
-            <button onClick={onExit} style={{
-              background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.14)",color:"var(--text-dim)",
-              fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",
-              borderRadius:10,padding:"8px 13px",whiteSpace:"nowrap"}}>← Home</button>
-            {onLogout&&(
-              <button onClick={()=>{
-                  if(confirm("Log out on this device?\n\nThis frees your admin session for the next device immediately, and forgets your saved PIN here — you'll need to enter it again next time."))
-                    onLogout();
-                }}
-                style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.32)",color:"#f87171",
-                  fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:10,padding:"8px 12px",whiteSpace:"nowrap"}}
-                title="Free this session for other devices and forget the remembered PIN here">🔓 Log Out</button>
-            )}
-          </div>
+        {/* Row 1: controls on their own line, right-aligned — so they never squeeze the title. */}
+        <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginBottom:16}}>
+          <button onClick={onExit} style={{
+            background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.14)",color:"var(--text-dim)",
+            fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",
+            borderRadius:10,padding:"8px 14px",whiteSpace:"nowrap"}}>← Home</button>
+          {onLogout&&(
+            <button onClick={()=>{
+                if(confirm("Log out on this device?\n\nThis frees your admin session for the next device immediately, and forgets your saved PIN here — you'll need to enter it again next time."))
+                  onLogout();
+              }}
+              style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.32)",color:"#f87171",
+                fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:10,padding:"8px 14px",whiteSpace:"nowrap"}}
+              title="Free this session for other devices and forget the remembered PIN here">🔓 Log Out</button>
+          )}
         </div>
+        {/* Row 2: greeting — full width, single line. */}
+        <p style={{fontSize:12,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace",marginBottom:8,letterSpacing:".02em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+          {timeStr} · {now.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}
+        </p>
+        {/* Row 3: the big title — full width now, so it stays on one line. */}
+        <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:"clamp(24px,7vw,30px)",fontWeight:700,lineHeight:1.05,marginBottom:14,whiteSpace:"nowrap"}}>
+          <span>{isSuper?"👑 ":"🛠️ "}</span>
+          <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 55%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 55%,#818cf8)",
+            WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
+        </h1>
+        {/* Row 4: status pills. */}
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {hasLive&&<AdminPill label={`LIVE · ${live.battingTeam} ${live.totalRuns||0}/${live.wickets||0}`} color="52,211,153" dot/>}
           {poll&&<AdminPill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>}
