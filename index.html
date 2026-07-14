@@ -9440,22 +9440,24 @@ const AdminTile=({em,title,sub,col,badge,onClick,delay=0,full=false})=>(
   <button onClick={onClick} style={{
     display:"flex",flexDirection:full?"row":"column",
     alignItems:full?"center":"flex-start",
-    gap:full?12:8,
-    padding:full?"15px 15px":"16px 15px",
-    borderRadius:16,cursor:"pointer",textAlign:"left",border:`1px solid rgba(${col},.35)`,
-    background:`linear-gradient(150deg,rgba(${col},.14),rgba(${col},.05))`,color:"#fff",width:"100%",
-    boxShadow:`0 4px 16px rgba(0,0,0,.28)`,
+    gap:full?13:10,
+    padding:full?"15px 16px":"16px 15px",
+    borderRadius:18,cursor:"pointer",textAlign:"left",border:`1.5px solid rgba(${col},.5)`,
+    background:`linear-gradient(145deg,rgba(${col},.28),rgba(${col},.10) 55%,rgba(${col},.05))`,color:"#fff",width:"100%",
+    boxShadow:`0 6px 20px rgba(0,0,0,.35), 0 0 24px rgba(${col},.12), inset 0 1px 0 rgba(255,255,255,.06)`,
     animation:`fadeUp .3s ease ${delay}s both`,position:"relative"
   }}>
-    {badge!=null&&<div style={{position:"absolute",top:8,right:8,minWidth:18,height:18,borderRadius:9,
+    {badge!=null&&<div style={{position:"absolute",top:9,right:9,minWidth:19,height:19,borderRadius:10,
       background:`rgb(${col})`,display:"flex",alignItems:"center",justifyContent:"center",
-      fontSize:9,fontWeight:700,color:"#111",padding:"0 4px"}}>{badge}</div>}
-    <span style={{fontSize:full?24:26,flexShrink:0}}>{em}</span>
+      fontSize:9,fontWeight:700,color:"#111",padding:"0 5px",boxShadow:`0 0 10px rgba(${col},.6)`}}>{badge}</div>}
+    <span style={{fontSize:full?24:26,flexShrink:0,width:full?44:46,height:full?44:46,borderRadius:12,
+      display:"flex",alignItems:"center",justifyContent:"center",
+      background:`rgba(${col},.18)`,border:`1px solid rgba(${col},.3)`}}>{em}</span>
     <span style={{flex:1,minWidth:0}}>
-      <span style={{display:"block",fontWeight:700,fontSize:full?14:13,marginBottom:full?2:3}}>{title}</span>
-      <span style={{display:"block",fontSize:10,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.4}}>{sub}</span>
+      <span style={{display:"block",fontWeight:700,fontSize:full?15:14,marginBottom:full?2:4}}>{title}</span>
+      <span style={{display:"block",fontSize:10,color:"rgba(255,255,255,.6)",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.4}}>{sub}</span>
     </span>
-    {full&&<span style={{color:`rgba(${col},.6)`,fontSize:16,flexShrink:0}}>→</span>}
+    {full&&<span style={{color:`rgb(${col})`,fontSize:18,flexShrink:0,fontWeight:700}}>→</span>}
   </button>
 );
 
@@ -9519,33 +9521,32 @@ function AdminHome({tier,onPick,onExit,onLogout}){
         borderBottom: isSuper ? "1px solid rgba(245,158,11,.18)" : "1px solid rgba(99,102,241,.15)",
         marginBottom:16
       }}>
-        {/* Row 1: controls on their own line, right-aligned — so they never squeeze the title. */}
-        <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginBottom:16}}>
+        {/* Row 1: greeting on the left fills the space, controls on the right — no empty gap. */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+          <p style={{flex:1,minWidth:0,fontSize:12,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".02em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",margin:0}}>
+            {timeStr} · {now.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}
+          </p>
           <button onClick={onExit} style={{
             background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.14)",color:"var(--text-dim)",
             fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",
-            borderRadius:10,padding:"8px 14px",whiteSpace:"nowrap"}}>← Home</button>
+            borderRadius:10,padding:"8px 13px",whiteSpace:"nowrap",flexShrink:0}}>← Home</button>
           {onLogout&&(
             <button onClick={()=>{
                 if(confirm("Log out on this device?\n\nThis frees your admin session for the next device immediately, and forgets your saved PIN here — you'll need to enter it again next time."))
                   onLogout();
               }}
               style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.32)",color:"#f87171",
-                fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:10,padding:"8px 14px",whiteSpace:"nowrap"}}
+                fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:10,padding:"8px 13px",whiteSpace:"nowrap",flexShrink:0}}
               title="Free this session for other devices and forget the remembered PIN here">🔓 Log Out</button>
           )}
         </div>
-        {/* Row 2: greeting — full width, single line. */}
-        <p style={{fontSize:12,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace",marginBottom:8,letterSpacing:".02em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-          {timeStr} · {now.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}
-        </p>
-        {/* Row 3: the big title — full width now, so it stays on one line. */}
+        {/* Row 2: the big title — full width, single line. */}
         <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:"clamp(24px,7vw,30px)",fontWeight:700,lineHeight:1.05,marginBottom:14,whiteSpace:"nowrap"}}>
           <span>{isSuper?"👑 ":"🛠️ "}</span>
           <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 55%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 55%,#818cf8)",
             WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
         </h1>
-        {/* Row 4: status pills. */}
+        {/* Row 3: status pills. */}
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {hasLive&&<AdminPill label={`LIVE · ${live.battingTeam} ${live.totalRuns||0}/${live.wickets||0}`} color="52,211,153" dot/>}
           {poll&&<AdminPill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>}
@@ -9562,10 +9563,11 @@ function AdminHome({tier,onPick,onExit,onLogout}){
             attention against every other tile's own accent color was a big part of what made this
             page feel noisy. ── */}
         {isSuper&&(
-          <div style={{background:"rgba(251,191,36,.06)",border:"1.5px solid rgba(251,191,36,.25)",
-            borderRadius:18,padding:"14px 14px 12px",marginBottom:14}}>
-            <p style={{fontSize:9,color:"rgba(251,191,36,.85)",fontFamily:"'JetBrains Mono',monospace",
-              letterSpacing:".2em",fontWeight:700,marginBottom:10}}>👑 SUPER ADMIN ONLY</p>
+          <div style={{background:"linear-gradient(150deg,rgba(251,191,36,.12),rgba(251,191,36,.03))",
+            border:"1.5px solid rgba(251,191,36,.32)",boxShadow:"0 6px 20px rgba(0,0,0,.3), 0 0 30px rgba(251,191,36,.08)",
+            borderRadius:20,padding:"15px 15px 13px",marginBottom:14}}>
+            <p style={{fontSize:9,color:"#fcd34d",fontFamily:"'JetBrains Mono',monospace",
+              letterSpacing:".2em",fontWeight:700,marginBottom:11}}>👑 SUPER ADMIN ONLY</p>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               <AdminTile em="📢" title="Post Notice" sub="Home screen announcement" col="245,158,11"
                 onClick={()=>onPick("announce")} delay={.02}/>
@@ -9591,7 +9593,7 @@ function AdminHome({tier,onPick,onExit,onLogout}){
             col="167,139,250" badge={yesCount>0?yesCount:null}
             onClick={()=>onPick("poll")} delay={.05}/>
           <AdminTile em="👤" title="Roster & Players" sub="Add · merge · bulk add"
-            col="245,158,11" badge={rosterCount}
+            col="20,184,166" badge={rosterCount}
             onClick={()=>onPick("roster")} delay={.08}/>
         </div>
 
@@ -9601,7 +9603,7 @@ function AdminHome({tier,onPick,onExit,onLogout}){
           col="99,102,241" full onClick={()=>onPick("history")} delay={.11}/>
         <div style={{height:8}}/>
         <AdminTile em="📊" title="Stats & Records" sub="Leaderboard · player profiles · venue filter"
-          col="245,158,11" full onClick={()=>onPick("stats")} delay={.14}/>
+          col="236,72,153" full onClick={()=>onPick("stats")} delay={.14}/>
         <div style={{height:8}}/>
         <AdminTile em="🏆" title="Tournaments" sub="Fixtures · start matches · scoped stats"
           col="56,189,248" full onClick={()=>onPick("tournaments")} delay={.17}/>
