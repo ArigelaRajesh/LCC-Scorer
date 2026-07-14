@@ -7651,7 +7651,6 @@ function Landing({onPick}){
         </div>
 
         <FindYourself/>
-        <RecentMatchesCarousel onOpen={setViewMatch}/>
 
         {announcement&&announcement.text&&(
           <div style={{
@@ -7671,12 +7670,17 @@ function Landing({onPick}){
           </div>
         )}
 
-        {/* ── Quick-action grid — 2×2 so everything fits one screen without scrolling ── */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"clamp(9px,2.4vw,12px)",flex:1}}>
+        {/* ── Quick-action grid — the primary reason people open the app, so it sits right under the
+            search where it's immediately reachable. Recent Matches (supporting context) goes below. ── */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"clamp(9px,2.4vw,12px)"}}>
           {tile("👁️","Watch Live","Live scoreboard · no PIN","16,185,129",()=>onPick("viewer"),0)}
           {tile("🏏","Score a Match","Team scorers · PIN","56,189,248",()=>onPick("scorer"),1)}
           {tile("📋","Weekend Poll","Vote for this week","167,139,250",()=>onPick("poll"),2)}
           {tile("🙌","Join the Club","Add your name","244,114,182",()=>onPick("roster"),3,"NEW")}
+        </div>
+
+        <div style={{marginTop:"clamp(14px,3.5vw,20px)"}}>
+          <RecentMatchesCarousel onOpen={setViewMatch}/>
         </div>
 
         <p style={{textAlign:"center",marginTop:"clamp(10px,2.5vw,16px)",marginBottom:0,color:"#a5b4fc",fontSize:11,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".05em",animation:"creditPulse 2.8s ease-in-out infinite"}}>Created by Rajesh Arigela</p>
