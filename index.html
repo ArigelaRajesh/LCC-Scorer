@@ -2791,11 +2791,11 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
             return(
               <div style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.09)",
                 borderRadius:12,padding:"9px 12px"}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
-                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#818cf8",whiteSpace:"nowrap"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"nowrap"}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#818cf8",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>
                     Target <span style={{color:"#fff",fontWeight:700}}>{inn.target}</span> · Need <span style={{color:"#fff",fontWeight:700}}>{Math.max(req,0)}</span> off <span style={{color:"#fff",fontWeight:700}}>{bLeft}</span>b
                   </span>
-                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap",
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap",flexShrink:0,
                     color:rrr&&parseFloat(rrr)>12?"#f87171":"#bcc7d8"}}>
                     {rrr&&<>RRR <span style={{fontWeight:700,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span> · </>}
                     <span style={{fontWeight:700,color:ahead?"#34d399":"#f87171"}}>{ahead?"▲ ON TRACK":"▼ BEHIND"}</span>
@@ -6002,11 +6002,11 @@ function ViewerLive({onExit}){
           return(
             <div key={req+"-"+bLeft} style={{marginTop:10,background:"rgba(255,255,255,.04)",
               border:"1px solid rgba(255,255,255,.09)",borderRadius:12,padding:"10px 13px",animation:"screenIn .3s ease-out both"}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#a5b4fc",whiteSpace:"nowrap"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"nowrap"}}>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#a5b4fc",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>
                   Target <span style={{color:"#fff",fontWeight:700}}>{inn.target}</span> · Need <span style={{color:"#fff",fontWeight:700}}>{Math.max(req,0)}</span> off <span style={{color:"#fff",fontWeight:700}}>{bLeft}</span>b
                 </span>
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap",color:rrr&&parseFloat(rrr)>12?"#f87171":"#bcc7d8"}}>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,whiteSpace:"nowrap",flexShrink:0,color:rrr&&parseFloat(rrr)>12?"#f87171":"#bcc7d8"}}>
                   {rrr&&<>RRR <span style={{fontWeight:700,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span> · </>}
                   <span style={{fontWeight:700,color:ahead?"#34d399":"#f87171"}}>{ahead?"▲ ON TRACK":"▼ BEHIND"}</span>
                 </span>
@@ -6053,12 +6053,6 @@ function ViewerLive({onExit}){
             <BowlingTab inn={inn}/>
           </>
         ):(<>
-        {inn.inningsNum===2&&inn1&&(
-          <div style={{background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.18)",borderRadius:10,padding:"6px 12px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#8291ab"}}><span style={{color:"#6f7dab"}}>1st inn</span>  {inn1.battingTeam}</span>
-            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:700,color:"#a5b4fc"}}>{inn1.totalRuns}/{inn1.wickets} <span style={{fontSize:10,color:"#8291ab",fontWeight:400}}>({ovStr(inn1.totalBalls)})</span></span>
-          </div>
-        )}
         <div className="grid-2" style={{marginBottom:16}}>
           <div className="mini-card">
             <p className="section-title">🟡 {inn.single?"Batsman":"Batting"}</p>
