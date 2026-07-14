@@ -7505,14 +7505,14 @@ function RecentMatchesCarousel({onOpen}){
   if(!list||list.length===0) return null;
   return(
     <div style={{marginBottom:"clamp(10px,2.5vw,14px)"}}>
-      <p style={{fontSize:10,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".12em",marginBottom:6,paddingLeft:2}}>Recent matches</p>
-      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,scrollSnapType:"x mandatory"}}>
+      <p style={{fontSize:11,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".14em",fontWeight:700,marginBottom:9,paddingLeft:2}}>🏆 Recent Matches</p>
+      <div style={{display:"flex",gap:9,overflowX:"auto",paddingBottom:4,scrollSnapType:"x mandatory"}}>
         {list.map((m,i)=>{
           if(!m) return null;
           const r=m.result||{};
           return(
             <button key={m.id||i} onClick={()=>onOpen&&onOpen(m)} style={{
-              scrollSnapAlign:"start",flexShrink:0,width:178,position:"relative",overflow:"hidden",
+              scrollSnapAlign:"start",flexShrink:0,width:168,position:"relative",overflow:"hidden",
               background:"linear-gradient(150deg,rgba(99,102,241,.26),rgba(99,102,241,.10) 55%,rgba(99,102,241,.04))",
               border:"1.5px solid rgba(99,102,241,.5)",borderRadius:16,padding:"12px 13px",
               boxShadow:"0 6px 20px rgba(0,0,0,.35), 0 0 22px rgba(99,102,241,.12), inset 0 1px 0 rgba(255,255,255,.06)",
@@ -7522,11 +7522,10 @@ function RecentMatchesCarousel({onOpen}){
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,.35), 0 0 22px rgba(99,102,241,.12), inset 0 1px 0 rgba(255,255,255,.06)";}}>
               <span style={{position:"absolute",inset:0,borderRadius:16,pointerEvents:"none",
                 background:"radial-gradient(120% 80% at 85% -10%, rgba(129,140,248,.2), transparent 60%)"}}/>
-              <p style={{position:"relative",fontSize:9,color:"rgba(255,255,255,.55)",fontFamily:"'JetBrains Mono',monospace",marginBottom:5}}>{m.venue||""}</p>
-              <p style={{position:"relative",fontSize:12.5,fontWeight:700,marginBottom:7,lineHeight:1.3,color:r.winner?"#fcd34d":"#e5e7eb"}}>{r.winner?`🏆 ${r.winner} won`:"🤝 Tied"}{r.margin?" by "+r.margin:""}</p>
-              {m.inn1&&<p style={{position:"relative",fontSize:10,color:"rgba(255,255,255,.7)",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn1.battingTeam}: {m.inn1.totalRuns}/{m.inn1.wickets}</p>}
-              {m.inn2&&<p style={{position:"relative",fontSize:10,color:"rgba(255,255,255,.7)",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn2.battingTeam}: {m.inn2.totalRuns}/{m.inn2.wickets}</p>}
-              <p style={{position:"relative",fontSize:10,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",marginTop:7,fontWeight:600}}>View →</p>
+              <p style={{position:"relative",fontSize:12.5,fontWeight:700,marginBottom:8,lineHeight:1.25,color:r.winner?"#fcd34d":"#e5e7eb"}}>{r.winner?`🏆 ${r.winner} won`:"🤝 Tied"}{r.margin?" by "+r.margin:""}</p>
+              {m.inn1&&<p style={{position:"relative",fontSize:10,color:"rgba(255,255,255,.72)",fontFamily:"'JetBrains Mono',monospace",marginBottom:2}}>{m.inn1.battingTeam}: {m.inn1.totalRuns}/{m.inn1.wickets}</p>}
+              {m.inn2&&<p style={{position:"relative",fontSize:10,color:"rgba(255,255,255,.72)",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn2.battingTeam}: {m.inn2.totalRuns}/{m.inn2.wickets}</p>}
+              <p style={{position:"relative",fontSize:10,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",marginTop:8,fontWeight:600}}>View →</p>
             </button>
           );
         })}
@@ -7600,7 +7599,7 @@ function Landing({onPick}){
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",
       padding:"0 clamp(12px,4vw,20px) calc(16px + env(safe-area-inset-bottom, 0px))",
       position:"relative",overflow:"hidden",minHeight:"100dvh",
-      background:"radial-gradient(ellipse 90% 40% at 10% -2%, rgba(16,185,129,.22), transparent 55%), radial-gradient(ellipse 85% 45% at 92% 3%, rgba(56,120,255,.28), transparent 58%), radial-gradient(ellipse 100% 40% at 50% 34%, rgba(99,102,241,.16), transparent 62%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(147,51,234,.24), transparent 62%), radial-gradient(ellipse 60% 40% at 95% 88%, rgba(225,60,150,.14), transparent 55%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))"}}>
+      background:"radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.26), transparent 62%), radial-gradient(circle at 50% 45%, rgba(30,58,138,.18), transparent 70%), linear-gradient(180deg,#0b1230 0%,#0a0e24 32%,#0d0a24 62%,#100a24 100%)"}}>
       <div style={{width:"100%",maxWidth:"min(440px, 100%)",position:"relative",zIndex:1,
         paddingTop:"max(8px, env(safe-area-inset-top))",display:"flex",flexDirection:"column",minHeight:"100dvh"}}>
 
