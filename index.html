@@ -8959,7 +8959,7 @@ function StatsPage({onExit}){
           {/* Tabs */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:4,marginBottom:18,
             background:"rgba(255,255,255,.04)",borderRadius:14,padding:4}}>
-            {[["leaders","🏆"],["awards","👑"],["players","👤"],["records","🌟"],["h2h","⚔️"]].map(([id,lbl])=>(
+            {[["leaders","🏆"],["awards","🏅"],["players","👤"],["records","📖"],["h2h","⚔️"]].map(([id,lbl])=>(
               <button key={id} onClick={()=>setView(id)} style={{
                 padding:"9px 2px",borderRadius:10,border:"none",cursor:"pointer",
                 fontSize:15,fontWeight:600,fontFamily:"'Inter',sans-serif",transition:"all .15s",
@@ -8975,8 +8975,9 @@ function StatsPage({onExit}){
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               {badges.map(bdg=>(
                 <div key={bdg.key} style={{
-                  background:bdg.winner?"rgba(255,255,255,.05)":"rgba(255,255,255,.02)",
-                  border:`1px solid ${bdg.winner?"rgba(251,191,36,.3)":"rgba(255,255,255,.06)"}`,
+                  background:bdg.winner?"linear-gradient(150deg,rgba(251,191,36,.14),rgba(251,191,36,.04))":"rgba(255,255,255,.02)",
+                  border:`1px solid ${bdg.winner?"rgba(251,191,36,.35)":"rgba(255,255,255,.06)"}`,
+                  boxShadow:bdg.winner?"0 4px 16px rgba(0,0,0,.3), 0 0 18px rgba(251,191,36,.08)":"none",
                   borderRadius:16,padding:"14px 10px",textAlign:"center"}}>
                   <div style={{fontSize:28,marginBottom:6,opacity:bdg.winner?1:.35}}>{bdg.emoji}</div>
                   <p style={{fontSize:10,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".1em",marginBottom:6}}>{bdg.label}</p>
@@ -9100,12 +9101,14 @@ function StatsPage({onExit}){
             const mostFours=[...allBat].sort((a,b)=>b.fours-a.fours)[0]||null;
             const bestBowl=[...allBowl].filter(w=>w.wkts>0).sort((a,b)=>b.wkts-a.wkts||a.runs-b.runs)[0]||null;
             const mostMaidens=[...allBowl].filter(w=>w.maidens>0).sort((a,b)=>b.maidens-a.maidens)[0]||null;
-            const RC=({accent,icon,title,name,value,detail})=>(
+            const RC=({accent,icon,title,name,value,detail})=>{
+              const rgb=accent==="#fbbf24"?"251,191,36":accent==="#34d399"?"52,211,153":accent==="#f87171"?"248,113,113":accent==="#a5b4fc"?"165,180,252":"99,102,241";
+              return(
               <div style={{display:"flex",gap:0,marginBottom:10,borderRadius:16,overflow:"hidden",
-                border:"1px solid rgba(255,255,255,.07)"}}>
+                border:`1px solid rgba(${rgb},.25)`,boxShadow:`0 4px 14px rgba(0,0,0,.28), 0 0 16px rgba(${rgb},.07)`}}>
                 <div style={{width:4,background:accent,flexShrink:0}}/>
                 <div style={{flex:1,display:"flex",alignItems:"center",gap:12,padding:"13px 14px",
-                  background:"rgba(255,255,255,.03)"}}>
+                  background:`linear-gradient(150deg,rgba(${rgb},.12),rgba(${rgb},.03))`}}>
                   <span style={{fontSize:24,flexShrink:0}}>{icon}</span>
                   <div style={{flex:1,overflow:"hidden"}}>
                     <div style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".12em",marginBottom:3}}>{title}</div>
@@ -9117,7 +9120,7 @@ function StatsPage({onExit}){
                   </div>}
                 </div>
               </div>
-            );
+            );};
             if(!hsEntry&&!bestBowl)return<p style={{color:"#9aa8bf",textAlign:"center",padding:"20px 0",fontSize:13}}>No records yet for this venue.</p>;
             return(
               <div>
