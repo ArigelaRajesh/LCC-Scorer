@@ -2787,12 +2787,11 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
           {/* CHASE STRIP — full-width match equation during the 2nd innings, with a progress bar
               that actually has room to breathe (the old narrow side panel cramped all of this). */}
           {inn.target&&(()=>{
-            const pct=Math.min(100,Math.max(0,(inn.totalRuns/inn.target)*100));
             const ahead=parseFloat(crr)>=parseFloat(rrr||crr);
             return(
               <div style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.09)",
-                borderRadius:12,padding:"8px 12px"}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap",marginBottom:6}}>
+                borderRadius:12,padding:"9px 12px"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
                   <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#818cf8",whiteSpace:"nowrap"}}>
                     Target <span style={{color:"#fff",fontWeight:700}}>{inn.target}</span> · Need <span style={{color:"#fff",fontWeight:700}}>{Math.max(req,0)}</span> off <span style={{color:"#fff",fontWeight:700}}>{bLeft}</span>b
                   </span>
@@ -2801,10 +2800,6 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                     {rrr&&<>RRR <span style={{fontWeight:700,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span> · </>}
                     <span style={{fontWeight:700,color:ahead?"#34d399":"#f87171"}}>{ahead?"▲ ON TRACK":"▼ BEHIND"}</span>
                   </span>
-                </div>
-                <div style={{height:5,borderRadius:3,background:"rgba(255,255,255,.08)",overflow:"hidden"}}>
-                  <div style={{height:"100%",width:pct+"%",borderRadius:3,transition:"width .4s ease",
-                    background:ahead?"linear-gradient(90deg,#34d399,#10b981)":"linear-gradient(90deg,#f87171,#ef4444)"}}/>
                 </div>
               </div>
             );
@@ -6003,12 +5998,11 @@ function ViewerLive({onExit}){
             needed, required rate, whether they're ON TRACK or BEHIND, and a colour-coded progress bar
             (green ahead / red behind). Replaces the older bulky "Need X off Y balls" banner. */}
         {inn.target!=null&&bLeft>0&&req>0&&(()=>{
-          const pct=Math.min(100,Math.max(0,((inn.totalRuns||0)/inn.target)*100));
           const ahead=parseFloat(crr)>=parseFloat(rrr||crr);
           return(
             <div key={req+"-"+bLeft} style={{marginTop:10,background:"rgba(255,255,255,.04)",
               border:"1px solid rgba(255,255,255,.09)",borderRadius:12,padding:"10px 13px",animation:"screenIn .3s ease-out both"}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap",marginBottom:7}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#a5b4fc",whiteSpace:"nowrap"}}>
                   Target <span style={{color:"#fff",fontWeight:700}}>{inn.target}</span> · Need <span style={{color:"#fff",fontWeight:700}}>{Math.max(req,0)}</span> off <span style={{color:"#fff",fontWeight:700}}>{bLeft}</span>b
                 </span>
@@ -6016,10 +6010,6 @@ function ViewerLive({onExit}){
                   {rrr&&<>RRR <span style={{fontWeight:700,color:parseFloat(rrr)>12?"#f87171":"#fff"}}>{rrr}</span> · </>}
                   <span style={{fontWeight:700,color:ahead?"#34d399":"#f87171"}}>{ahead?"▲ ON TRACK":"▼ BEHIND"}</span>
                 </span>
-              </div>
-              <div style={{height:6,borderRadius:3,background:"rgba(255,255,255,.08)",overflow:"hidden"}}>
-                <div style={{height:"100%",width:pct+"%",borderRadius:3,transition:"width .4s ease",
-                  background:ahead?"linear-gradient(90deg,#34d399,#10b981)":"linear-gradient(90deg,#f87171,#ef4444)"}}/>
               </div>
             </div>
           );
