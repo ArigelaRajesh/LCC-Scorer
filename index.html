@@ -9441,20 +9441,21 @@ const AdminTile=({em,title,sub,col,badge,onClick,delay=0,full=false})=>(
     display:"flex",flexDirection:full?"row":"column",
     alignItems:full?"center":"flex-start",
     gap:full?12:8,
-    padding:full?"13px 14px":"14px 14px",
-    borderRadius:16,cursor:"pointer",textAlign:"left",border:`1px solid rgba(${col},.3)`,
-    background:`rgba(${col},.08)`,color:"#fff",width:"100%",
+    padding:full?"15px 15px":"16px 15px",
+    borderRadius:16,cursor:"pointer",textAlign:"left",border:`1px solid rgba(${col},.35)`,
+    background:`linear-gradient(150deg,rgba(${col},.14),rgba(${col},.05))`,color:"#fff",width:"100%",
+    boxShadow:`0 4px 16px rgba(0,0,0,.28)`,
     animation:`fadeUp .3s ease ${delay}s both`,position:"relative"
   }}>
     {badge!=null&&<div style={{position:"absolute",top:8,right:8,minWidth:18,height:18,borderRadius:9,
       background:`rgb(${col})`,display:"flex",alignItems:"center",justifyContent:"center",
       fontSize:9,fontWeight:700,color:"#111",padding:"0 4px"}}>{badge}</div>}
-    <span style={{fontSize:full?22:24,flexShrink:0}}>{em}</span>
-    <span style={{flex:1}}>
-      <span style={{display:"block",fontWeight:700,fontSize:full?13:12,marginBottom:full?2:3}}>{title}</span>
-      <span style={{display:"block",fontSize:10,color:"rgba(255,255,255,.5)",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.4}}>{sub}</span>
+    <span style={{fontSize:full?24:26,flexShrink:0}}>{em}</span>
+    <span style={{flex:1,minWidth:0}}>
+      <span style={{display:"block",fontWeight:700,fontSize:full?14:13,marginBottom:full?2:3}}>{title}</span>
+      <span style={{display:"block",fontSize:10,color:"var(--text-mute)",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.4}}>{sub}</span>
     </span>
-    {full&&<span style={{color:"rgba(255,255,255,.3)",fontSize:14,flexShrink:0}}>→</span>}
+    {full&&<span style={{color:`rgba(${col},.6)`,fontSize:16,flexShrink:0}}>→</span>}
   </button>
 );
 
@@ -9507,45 +9508,40 @@ function AdminHome({tier,onPick,onExit,onLogout}){
   return(
     <div style={{
       background: isSuper
-        ? "linear-gradient(165deg,#1a0a00,#2d1200,#1c1150,#2d0f5c,#0a0414)"
-        : "linear-gradient(165deg,#022c1e,#0a2540,#1c1150,#2d0f5c,#0a0414)",
+        ? "radial-gradient(ellipse 85% 45% at 15% 0%, rgba(245,158,11,.16), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 8%, rgba(147,51,234,.16), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(124,58,237,.18), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))"
+        : "radial-gradient(ellipse 85% 45% at 15% 0%, rgba(16,185,129,.14), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 8%, rgba(56,120,255,.18), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(124,58,237,.18), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",
       minHeight:"100dvh",paddingBottom:32
     }}>
 
       {/* ── Header ── */}
       <div style={{
-        padding:"20px 18px 16px",
-        borderBottom: isSuper ? "1px solid rgba(245,158,11,.2)" : "1px solid rgba(99,102,241,.15)",
-        background: isSuper ? "rgba(245,158,11,.06)" : "rgba(99,102,241,.04)",
+        padding:"22px 18px 18px",
+        borderBottom: isSuper ? "1px solid rgba(245,158,11,.18)" : "1px solid rgba(99,102,241,.15)",
         marginBottom:16
       }}>
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12}}>
-          <div>
-            <p style={{fontSize:12,color:"rgba(255,255,255,.65)",fontFamily:"'Inter',sans-serif",marginBottom:6}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,marginBottom:14}}>
+          <div style={{minWidth:0}}>
+            <p style={{fontSize:12,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace",marginBottom:7,letterSpacing:".02em"}}>
               {timeStr} · {now.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}
             </p>
-            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,lineHeight:1}}>
-              <span>
-                <span>{isSuper?"👑 ":"🛠️ "}</span>
-                <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 60%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 60%,#818cf8)",
-                  WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
-              </span>
+            <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:700,lineHeight:1}}>
+              <span>{isSuper?"👑 ":"🛠️ "}</span>
+              <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 55%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 55%,#818cf8)",
+                WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
             </h1>
           </div>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0}}>
             <button onClick={onExit} style={{
-              background: isSuper?"rgba(245,158,11,.12)":"rgba(99,102,241,.12)",
-              border: isSuper?"1px solid rgba(245,158,11,.3)":"1px solid rgba(99,102,241,.3)",
-              color: isSuper?"#fbbf24":"#a5b4fc",
-              fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",
-              borderRadius:10,padding:"7px 12px"}}>← home</button>
+              background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.14)",color:"var(--text-dim)",
+              fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",
+              borderRadius:10,padding:"8px 13px",whiteSpace:"nowrap"}}>← Home</button>
             {onLogout&&(
               <button onClick={()=>{
                   if(confirm("Log out on this device?\n\nThis frees your admin session for the next device immediately, and forgets your saved PIN here — you'll need to enter it again next time."))
                     onLogout();
                 }}
-                style={{background:"transparent",border:"1px solid rgba(239,68,68,.3)",color:"rgba(248,113,113,.85)",
-                  fontSize:10,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:10,padding:"5px 10px"}}
+                style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.32)",color:"#f87171",
+                  fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:10,padding:"8px 12px",whiteSpace:"nowrap"}}
                 title="Free this session for other devices and forget the remembered PIN here">🔓 Log Out</button>
             )}
           </div>
