@@ -9585,12 +9585,6 @@ function AdminHome({tier,onPick,onExit,onLogout}){
 
 
 
-  const now=new Date();
-  const hour=now.getHours();
-  // (Fixed: the old ternary compared against the STRING "hour<17", which is always truthy —
-  // and neither variable was ever rendered anyway.)
-  const timeStr=hour<12?"Good morning ☀️":hour<17?"Good afternoon ⛅":"Good evening 🌙";
-
   return(
     <div style={{
       background: isSuper
@@ -9605,13 +9599,15 @@ function AdminHome({tier,onPick,onExit,onLogout}){
         borderBottom: isSuper ? "1px solid rgba(245,158,11,.18)" : "1px solid rgba(99,102,241,.15)",
         marginBottom:16
       }}>
-        {/* Row 1: greeting + labelled controls. The buttons carry text because bare icons weren't
-            self-explanatory; 11px keeps the whole greeting visible next to them (measured: the
-            greeting needs ~191px and gets ~204px on a 393px screen). */}
+        {/* Row 1: title top-left, controls top-right. The greeting/date line that used to sit above
+            this was purely decorative, and it was what squeezed everything else — dropping it frees
+            enough width for the title to breathe AND the buttons to keep readable labels. */}
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-          <p style={{flex:1,minWidth:0,fontSize:11,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".02em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",margin:0}}>
-            {timeStr} · {now.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}
-          </p>
+          <h1 style={{flex:1,minWidth:0,fontFamily:"'Oswald',sans-serif",fontSize:"clamp(22px,6.4vw,28px)",fontWeight:700,lineHeight:1.05,margin:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+            <span>{isSuper?"👑 ":"🛠️ "}</span>
+            <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 55%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 55%,#818cf8)",
+              WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
+          </h1>
           <button onClick={onExit} title="Back to home" style={{
             background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",color:"#bcc7d8",
             fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,lineHeight:1,
@@ -9627,28 +9623,12 @@ function AdminHome({tier,onPick,onExit,onLogout}){
               title="Log out — frees this session for other devices and forgets the remembered PIN here">🔓 Log Out</button>
           )}
         </div>
-        {/* Row 2: title + live status side by side. The status used to sit on its own row below,
-            leaving the whole right-hand side of the title row empty. The pills shrink with an
-            ellipsis if space runs short, and the score is placed before the team name so it's the
-            team name that gets trimmed rather than the score. */}
-        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"nowrap"}}>
-          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:"clamp(22px,6vw,26px)",fontWeight:700,lineHeight:1.05,margin:0,whiteSpace:"nowrap",flexShrink:0}}>
-            <span>{isSuper?"👑 ":"🛠️ "}</span>
-            <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 55%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 55%,#818cf8)",
-              WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
-          </h1>
-          {(hasLive||poll)&&(
-            <div style={{display:"flex",gap:6,flex:1,minWidth:0,justifyContent:"flex-end"}}>
-              {hasLive&&<AdminPill label={`LIVE ${live.totalRuns||0}/${live.wickets||0} · ${live.battingTeam}`} color="52,211,153" dot/>}
-              {poll&&!hasLive&&<AdminPill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>}
-            </div>
-          )}
-        </div>
-        {/* Poll status keeps its own line only when a match is ALSO live (both won't fit beside the
-            title), so it's never dropped — just moved. */}
-        {poll&&hasLive&&(
-          <div style={{display:"flex",gap:6,marginTop:10}}>
-            <AdminPill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>
+        {/* Row 2: live status. Score before team name, so a long team name trims rather than the
+            score. Hidden entirely when there's nothing live and no open poll. */}
+        {(hasLive||poll)&&(
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {hasLive&&<AdminPill label={`LIVE ${live.totalRuns||0}/${live.wickets||0} · ${live.battingTeam}`} color="52,211,153" dot/>}
+            {poll&&<AdminPill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>}
           </div>
         )}
       </div>
