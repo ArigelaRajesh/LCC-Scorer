@@ -7651,8 +7651,7 @@ function Landing({onPick}){
             flexShrink:0,width:"clamp(44px,11.5vw,50px)",height:"clamp(44px,11.5vw,50px)",
             borderRadius:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
             background:"rgba(20,17,55,.85)",border:"1.5px solid rgba(99,102,241,.55)",
-            color:"#a5b4fc",fontSize:"clamp(18px,5vw,21px)",backdropFilter:"blur(10px)",
-            animation:menuOpen?"none":"menuPulse 2.4s ease-in-out infinite"
+            color:"#a5b4fc",fontSize:"clamp(18px,5vw,21px)",backdropFilter:"blur(10px)"
           }}>{menuOpen?"✕":"☰"}</button>
         </div>
 
@@ -7665,8 +7664,9 @@ function Landing({onPick}){
             backdropFilter:"blur(20px)",boxShadow:"0 16px 48px rgba(0,0,0,.6)",animation:"fadeUp .25s ease both"
           }}>
             <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:9,textTransform:"uppercase",letterSpacing:".2em",marginBottom:10,paddingLeft:4}}>Club Menu</p>
-            {menuItem("📊","Stats & Records","Leaderboard · player profiles","rgba(245,158,11,.35)",()=>onPick("stats"))}
-            {menuItem("📚","History","Past LCC matches","rgba(99,102,241,.35)",()=>onPick("history"))}
+            {/* Stats and History now live as tiles on the home screen, so they're deliberately not
+                repeated here. Admin stays in the menu: it's PIN-gated and not something members
+                need, so it doesn't warrant a tile. */}
             {menuItem("👑","Admin","Super or Basic · PIN","rgba(239,68,68,.35)",()=>onPick("admin"))}
           </div>
         </>)}
@@ -7705,6 +7705,8 @@ function Landing({onPick}){
           {tile("🏏","Score a Match","Team scorers · PIN","56,189,248",()=>onPick("scorer"),1)}
           {tile("📋","Weekend Poll","Vote for this week","167,139,250",()=>onPick("poll"),2)}
           {tile("🙌","Join the Club","Add your name","244,114,182",()=>onPick("roster"),3,"NEW")}
+          {tile("📊","Stats & Records","Leaderboard · records","251,191,36",()=>onPick("stats"),4)}
+          {tile("📚","Match History","Past match scorecards","99,102,241",()=>onPick("history"),5)}
         </div>
 
         <div style={{marginTop:"clamp(14px,3.5vw,20px)"}}>
