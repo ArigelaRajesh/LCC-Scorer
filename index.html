@@ -6219,13 +6219,20 @@ function HistoryPage({role,onExit}){
   const[q,setQ]=React.useState("");
   React.useEffect(()=>{
     if(!FB_OK||!DB){setList(null);return;}
-    const ref=DB.ref("history").limitToLast(50);
-    const cb=ref.on("value",s=>{
-      const v=s.val()||{};
-      const arr=Object.entries(v).map(([id,m])=>({id,...m})).sort((a,b)=>b.finishedAt-a.finishedAt);
-      setList(arr);
+    let ref=null, cb=null, cancelled=false;
+    // Same fix as the stats page: wait for anonymous auth (a pre-auth read gets permission-denied)
+    // and handle errors, instead of failing silently into a permanent "Loading history…" spinner.
+    onAuthReady(()=>{
+      if(cancelled) return;
+      ref=DB.ref("history").limitToLast(50);
+      cb=ref.on("value",s=>{
+        const v=s.val()||{};
+        const arr=Object.entries(v).map(([id,m])=>({id,...m})).sort((a,b)=>b.finishedAt-a.finishedAt);
+        setList(arr);
+      },err=>{ console.error("history read failed",err); setList(null); });
     });
-    return ()=>ref.off("value",cb);
+    const fallback=setTimeout(()=>setList(l=>l===undefined?null:l),8000);
+    return ()=>{ cancelled=true; clearTimeout(fallback); if(ref&&cb)ref.off("value",cb); };
   },[]);
   const del=(id,e)=>{ e.stopPropagation(); if(confirm("Delete this match permanently? This cannot be undone.")) {DB.ref("history/"+id).remove();globalToast("🗑 Match deleted");} };
 
@@ -7732,12 +7739,20 @@ function sessionPath(matchId,slot){ return matchId?`sessions/${matchId}/${slot}`
 function claimSession(matchId,slot,sessionId,force){
   return new Promise(resolve=>{
     if(!FB_OK||!DB||!slot){ resolve({ok:true}); return; } // no Firebase at all = local-only mode; nothing to race against
+    // The claim must never hang forever. If the database is unreachable (offline, rules broken,
+    // project paused) the transaction's completion callback simply never fires — which stranded the
+    // gate on "Checking device…" with no error and no way out. Whichever settles first wins; the
+    // timeout fails CLOSED (never grants access) so it can't become a lock-bypass.
+    let done=false;
+    const finish=(r)=>{ if(done) return; done=true; resolve(r); };
+    const bail=setTimeout(()=>finish({ok:false,error:true}), 10000);
     // MUST wait for anonymous auth to settle before transacting — every other Firebase read in this
     // app does this via onAuthReady, and this one is no exception. On a FRESH page load (a refresh!)
     // the transaction was firing before auth landed, getting permission-denied, and the old error
     // handler failed OPEN — which let a freshly-refreshed second device sail straight past the lock
     // and into the admin dashboard while another device was actively signed in.
     onAuthReady(()=>{
+      if(done) return;
       const ref=DB.ref(sessionPath(matchId,slot));
       const now=Date.now();
       ref.transaction(cur=>{
@@ -7745,15 +7760,16 @@ function claimSession(matchId,slot,sessionId,force){
         if(activeElsewhere&&!force) return; // abort the transaction — leave the existing claim untouched
         return {sessionId,lastSeen:now};
       },(err,committed,snap)=>{
+        clearTimeout(bail);
         if(err){
           // Fail CLOSED: an errored claim must not grant access — that's the exact hole that let a
           // refreshed device bypass the lock. The 'error' flag lets the gate show "connection
           // problem — try again" rather than the misleading "someone is already signed in".
-          resolve({ok:false,error:true});
+          finish({ok:false,error:true});
           return;
         }
-        if(committed){ resolve({ok:true}); }
-        else { resolve({ok:false,heldSince:(snap&&snap.val()&&snap.val().lastSeen)||null}); }
+        if(committed){ finish({ok:true}); }
+        else { finish({ok:false,heldSince:(snap&&snap.val()&&snap.val().lastSeen)||null}); }
       });
     });
   });
@@ -8800,11 +8816,25 @@ function StatsPage({onExit}){
   const[tournF,setTournF]=React.useState("All");
   React.useEffect(()=>{
     if(!FB_OK||!DB){setHistory({});return;}
-    const hRef=DB.ref("history").limitToLast(200), rRef=DB.ref("roster"), tRef=DB.ref("tournaments");
-    const c1=hRef.on("value",s=>setHistory(s.val()||{}));
-    const c2=rRef.on("value",s=>setRoster(s.val()||{}));
-    const c3=tRef.on("value",s=>setTournaments(s.val()||{}));
-    return ()=>{hRef.off("value",c1);rRef.off("value",c2);tRef.off("value",c3);};
+    let hRef=null,rRef=null,tRef=null,c1=null,c2=null,c3=null,cancelled=false;
+    // Wait for anonymous auth before reading. This read previously attached immediately — unlike
+    // every other read in the app — so if the rules require auth != null it got permission-denied,
+    // and with no error callback that failed SILENTLY: history stayed undefined and the page span
+    // on "Loading stats…" forever with nothing in the UI to explain why.
+    onAuthReady(()=>{
+      if(cancelled) return;
+      hRef=DB.ref("history").limitToLast(200); rRef=DB.ref("roster"); tRef=DB.ref("tournaments");
+      c1=hRef.on("value",s=>setHistory(s.val()||{}),err=>{console.error("stats: history read failed",err);setHistory({});});
+      c2=rRef.on("value",s=>setRoster(s.val()||{}),err=>{console.error("stats: roster read failed",err);});
+      c3=tRef.on("value",s=>setTournaments(s.val()||{}),err=>{console.error("stats: tournaments read failed",err);});
+    });
+    // Safety net: if the database is unreachable the callbacks never fire at all, so resolve to an
+    // empty (but usable) page rather than an endless spinner.
+    const fallback=setTimeout(()=>setHistory(h=>h===undefined?{}:h),8000);
+    return ()=>{
+      cancelled=true; clearTimeout(fallback);
+      if(hRef&&c1)hRef.off("value",c1); if(rRef&&c2)rRef.off("value",c2); if(tRef&&c3)tRef.off("value",c3);
+    };
   },[]);
   if(history===undefined) return <Centered emoji="📊" title="Loading stats…" onExit={onExit}/>;
 
