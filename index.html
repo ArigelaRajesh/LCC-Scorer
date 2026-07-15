@@ -2761,7 +2761,11 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                     }
                   }}
                 />}
-                {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap"}}>← home</button>}
+                {onExit&&<button onClick={onExit} aria-label="Back to home" title="Back to home" style={{
+                  background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",
+                  color:"#bcc7d8",fontSize:15,cursor:"pointer",borderRadius:9,
+                  padding:"4px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace",
+                  whiteSpace:"nowrap",flexShrink:0}}>←</button>}
               </div>
             </div>
             <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:8,flexWrap:"wrap",minWidth:0,marginTop:"auto"}}>
@@ -9570,23 +9574,27 @@ function AdminHome({tier,onPick,onExit,onLogout}){
         borderBottom: isSuper ? "1px solid rgba(245,158,11,.18)" : "1px solid rgba(99,102,241,.15)",
         marginBottom:16
       }}>
-        {/* Row 1: greeting on the left fills the space, controls on the right — no empty gap. */}
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+        {/* Row 1: greeting gets the room it needs — the controls are compact icon buttons rather
+            than text, because "← Home" + "🔓 Log Out" as words ate most of the row and truncated
+            the date to "Tu…" while the rows below sat half empty. */}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
           <p style={{flex:1,minWidth:0,fontSize:12,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".02em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",margin:0}}>
             {timeStr} · {now.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}
           </p>
-          <button onClick={onExit} style={{
-            background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.14)",color:"var(--text-dim)",
-            fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",
-            borderRadius:10,padding:"8px 13px",whiteSpace:"nowrap",flexShrink:0}}>← Home</button>
+          <button onClick={onExit} aria-label="Back to home" title="Back to home" style={{
+            background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",color:"#bcc7d8",
+            fontSize:15,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,lineHeight:1,
+            borderRadius:9,padding:"7px 11px",whiteSpace:"nowrap",flexShrink:0}}>←</button>
           {onLogout&&(
             <button onClick={()=>{
                 if(confirm("Log out on this device?\n\nThis frees your admin session for the next device immediately, and forgets your saved PIN here — you'll need to enter it again next time."))
                   onLogout();
               }}
-              style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.32)",color:"#f87171",
-                fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:10,padding:"8px 13px",whiteSpace:"nowrap",flexShrink:0}}
-              title="Free this session for other devices and forget the remembered PIN here">🔓 Log Out</button>
+              aria-label="Log out"
+              style={{background:"rgba(239,68,68,.12)",border:"1.5px solid rgba(239,68,68,.4)",color:"#f87171",
+                fontSize:15,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,lineHeight:1,
+                borderRadius:9,padding:"7px 11px",whiteSpace:"nowrap",flexShrink:0}}
+              title="Log out — frees this session for other devices and forgets the remembered PIN here">🔓</button>
           )}
         </div>
         {/* Row 2: the big title — full width, single line. */}
