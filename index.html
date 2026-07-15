@@ -9559,8 +9559,8 @@ function AdminHome({tier,onPick,onExit,onLogout}){
   return(
     <div style={{
       background: isSuper
-        ? "radial-gradient(ellipse 85% 45% at 15% 0%, rgba(245,158,11,.16), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 8%, rgba(147,51,234,.16), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(124,58,237,.18), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))"
-        : "radial-gradient(ellipse 85% 45% at 15% 0%, rgba(16,185,129,.14), transparent 55%), radial-gradient(ellipse 80% 50% at 90% 8%, rgba(56,120,255,.18), transparent 60%), radial-gradient(ellipse 95% 55% at 50% 102%, rgba(124,58,237,.18), transparent 62%), linear-gradient(165deg,var(--bg-2),var(--bg-1) 45%,var(--bg-5))",
+        ? "radial-gradient(ellipse 100% 50% at 85% 0%, rgba(251,191,36,.20), transparent 58%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.30), transparent 62%), radial-gradient(circle at 50% 45%, rgba(76,29,149,.20), transparent 70%), linear-gradient(180deg,#140f2e 0%,#0f0b24 32%,#120a24 62%,#150a22 100%)"
+        : "radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(16,185,129,.24), transparent 62%), radial-gradient(circle at 50% 45%, rgba(30,58,138,.18), transparent 70%), linear-gradient(180deg,#0b1230 0%,#0a0e24 32%,#0d0a24 62%,#100a24 100%)",
       minHeight:"100dvh",paddingBottom:32
     }}>
 
@@ -9595,13 +9595,16 @@ function AdminHome({tier,onPick,onExit,onLogout}){
           <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 55%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 55%,#818cf8)",
             WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
         </h1>
-        {/* Row 3: status pills. */}
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {hasLive&&<AdminPill label={`LIVE · ${live.battingTeam} ${live.totalRuns||0}/${live.wickets||0}`} color="52,211,153" dot/>}
-          {poll&&<AdminPill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>}
-          <AdminPill label={`${rosterCount} member${rosterCount===1?"":"s"}`} color="99,102,241"/>
-          <AdminPill label={`${histCount} match${histCount===1?"":"es"}`} color="245,158,11"/>
-        </div>
+        {/* Row 3: status pills — LIVE score and poll activity only. The roster and match counts
+            deliberately aren't repeated here: they already sit on their own tiles below (the badge
+            on Roster & Players, and the subtitle on Match History), so showing them twice just
+            filled the header with numbers you'd already read a moment later. */}
+        {(hasLive||poll)&&(
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {hasLive&&<AdminPill label={`LIVE · ${live.battingTeam} ${live.totalRuns||0}/${live.wickets||0}`} color="52,211,153" dot/>}
+            {poll&&<AdminPill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>}
+          </div>
+        )}
       </div>
 
       <div style={{padding:"0 18px"}}>
