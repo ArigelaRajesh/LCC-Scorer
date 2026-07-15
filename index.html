@@ -7510,75 +7510,14 @@ function FindYourself(){
   );
 }
 
-// Recent matches — small swipeable cards on the landing screen so it feels alive even between live
-// matches, instead of a static page. Purely a read of the last few History entries.
-function RecentMatchesCarousel({onOpen}){
-  const[list,setList]=React.useState(null);
-  React.useEffect(()=>{
-    if(!FB_OK||!DB){setList([]);return;}
-    const ref=DB.ref("history").limitToLast(5);
-    const cb=ref.on("value",s=>{
-      const v=s.val()||{};
-      // Filter out any null/malformed entries BEFORE they ever reach render. A single bad or
-      // partially-deleted history record here was able to crash the ENTIRE app (this whole app is
-      // wrapped in one top-level ErrorBoundary, so an error rendering this small landing-page widget
-      // showed the same "Something went wrong" screen everywhere else too, including trying to start
-      // a new match afterwards — this is almost certainly why both looked broken together).
-      const arr=Object.entries(v).map(([id,m])=>m&&typeof m==="object"?{id,...m}:null)
-        .filter(Boolean).sort((a,b)=>(b.finishedAt||0)-(a.finishedAt||0));
-      setList(arr);
-    });
-    return ()=>ref.off("value",cb);
-  },[]);
-  if(!list||list.length===0) return null;
-  return(
-    <div style={{marginBottom:"clamp(10px,2.5vw,14px)"}}>
-      <p style={{fontSize:13,color:"#ffffff",fontFamily:"'Inter',sans-serif",fontWeight:700,letterSpacing:".01em",marginBottom:10,paddingLeft:2}}>Recent Matches</p>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"clamp(9px,2.4vw,12px)"}}>
-        {list.slice(0,2).map((m,i)=>{
-          if(!m) return null;
-          const r=m.result||{};
-          return(
-            <button key={m.id||i} onClick={()=>onOpen&&onOpen(m)} style={{
-              minHeight:150,position:"relative",overflow:"hidden",width:"100%",
-              display:"flex",flexDirection:"column",
-              background:"linear-gradient(150deg,rgba(99,102,241,.26),rgba(99,102,241,.10) 55%,rgba(99,102,241,.04))",
-              border:"1.5px solid rgba(99,102,241,.5)",borderRadius:18,padding:"14px 14px",
-              boxShadow:"0 6px 20px rgba(0,0,0,.35), 0 0 22px rgba(99,102,241,.12), inset 0 1px 0 rgba(255,255,255,.06)",
-              textAlign:"left",cursor:"pointer",fontFamily:"'Inter',sans-serif",color:"inherit",
-              transition:"transform .15s,box-shadow .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,.4), 0 0 34px rgba(99,102,241,.25)";}}
-              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,.35), 0 0 22px rgba(99,102,241,.12), inset 0 1px 0 rgba(255,255,255,.06)";}}>
-              <span style={{position:"absolute",inset:0,borderRadius:18,pointerEvents:"none",
-                background:"radial-gradient(120% 80% at 85% -10%, rgba(129,140,248,.2), transparent 60%)"}}/>
-              <span style={{position:"relative",display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                <span style={{fontSize:16,width:32,height:32,borderRadius:9,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",
-                  background:"linear-gradient(145deg,rgba(251,191,36,.28),rgba(251,191,36,.1))",boxShadow:"inset 0 1px 0 rgba(255,255,255,.12)"}}>{r.winner?"🏆":"🤝"}</span>
-                <span style={{fontSize:12,fontWeight:700,lineHeight:1.25,color:r.winner?"#fcd34d":"#e8eaf6",minWidth:0}}>{r.winner?`${r.winner} won`:"Match Tied"}{r.margin?" by "+r.margin:""}</span>
-              </span>
-              {m.inn1&&<p style={{position:"relative",fontSize:10,color:"rgba(255,255,255,.72)",fontFamily:"'JetBrains Mono',monospace",marginBottom:2}}>{m.inn1.battingTeam}: {m.inn1.totalRuns}/{m.inn1.wickets}</p>}
-              {m.inn2&&<p style={{position:"relative",fontSize:10,color:"rgba(255,255,255,.72)",fontFamily:"'JetBrains Mono',monospace"}}>{m.inn2.battingTeam}: {m.inn2.totalRuns}/{m.inn2.wickets}</p>}
-              <p style={{position:"relative",fontSize:10,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",marginTop:"auto",paddingTop:8,fontWeight:600}}>View →</p>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function Landing({onPick}){
   const[announcement,setAnnouncement]=React.useState(null);
-  const[viewMatch,setViewMatch]=React.useState(null);
   React.useEffect(()=>{
     if(!FB_OK||!DB)return;
     const ref=DB.ref("announcement");
     const cb=ref.on("value",s=>setAnnouncement(s.val()||null));
     return ()=>ref.off("value",cb);
   },[]);
-  if(viewMatch){
-    return <MatchDetailView match={viewMatch} role="viewer" onBack={()=>setViewMatch(null)} onDelete={()=>{}}/>;
-  }
   // Compact quick-action tile — 2-up grid so all four actions read as one dashboard instead of a
   // scroll-forever list. Icon sits beside the title (not stacked above) so every tile reads the same
   // shape, and a fixed min-height keeps all four the same size even when a subtitle wraps to 2 lines.
@@ -7664,8 +7603,9 @@ function Landing({onPick}){
           </div>
         )}
 
-        {/* ── Quick-action grid — the primary reason people open the app, so it sits right under the
-            search where it's immediately reachable. Recent Matches (supporting context) goes below. ── */}
+        {/* ── Quick-action grid — every route a member needs, in one tap. Past results used to sit
+            below this as a "Recent Matches" strip; that's gone now that Match History is a tile of
+            its own, since it was showing the same information twice. ── */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"clamp(9px,2.4vw,12px)"}}>
           {tile("👁️","Watch Live","Live scoreboard · no PIN","16,185,129",()=>onPick("viewer"),0)}
           {tile("🏏","Score a Match","Team scorers · PIN","56,189,248",()=>onPick("scorer"),1)}
@@ -7673,10 +7613,6 @@ function Landing({onPick}){
           {tile("🙌","Join the Club","Add your name","244,114,182",()=>onPick("roster"),3,"NEW")}
           {tile("📊","Stats & Records","Leaderboard · records","251,191,36",()=>onPick("stats"),4)}
           {tile("📚","Match History","Past match scorecards","99,102,241",()=>onPick("history"),5)}
-        </div>
-
-        <div style={{marginTop:"clamp(14px,3.5vw,20px)"}}>
-          <RecentMatchesCarousel onOpen={setViewMatch}/>
         </div>
 
         <p style={{textAlign:"center",marginTop:"clamp(10px,2.5vw,16px)",marginBottom:0,color:"#a5b4fc",fontSize:11,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".05em",animation:"creditPulse 2.8s ease-in-out infinite"}}>Created by Rajesh Arigela</p>
