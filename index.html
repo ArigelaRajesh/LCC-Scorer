@@ -704,6 +704,24 @@ function chipLbl(ev){
 // `{type:"6"}` with NO separate runs field — record() derives the value via parseInt(ev.type) itself
 // — so that formula silently summed to 0 for every ordinary scoring shot, undercounting overs that
 // were mostly boundaries (an over of six sixes showed "0 runs").
+// Grades the required run rate against the rate the batting side is ACTUALLY managing, which is the
+// comparison that matters in a chase — a required 8.0 is a stroll if they're scoring at 12, and a
+// nightmare if they're scoring at 4. (The old rule was a fixed "red above 12.0", which called an
+// easy chase alarming and a hard one calm.) Returns a colour for the RRR pill.
+//   green  — required rate is at or below what they're already doing
+//   amber  — creeping above it, needs a lift
+//   red    — well clear of it, real pressure
+// Before a ball is bowled there's no current rate to compare with, so stay neutral rather than
+// flashing red at the very start of every chase.
+function rrrTone(crr,rrr,ballsBowled){
+  if(!rrr) return "#67e8f9";
+  if(!ballsBowled) return "#67e8f9";
+  const c=parseFloat(crr), r=parseFloat(rrr);
+  if(!isFinite(c)||!isFinite(r)) return "#67e8f9";
+  if(r<=c) return "#34d399";
+  if(r<=c*1.25) return "#fbbf24";
+  return "#f87171";
+}
 function evRuns(ev){
   if(!ev) return 0;
   if(ev.type==="WD") return ev.extraRuns||0;
@@ -2759,11 +2777,15 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#bcc7d8",
                   background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",
                   borderRadius:9,padding:"4px 9px",whiteSpace:"nowrap"}}>CRR <span style={{color:"#fbbf24",fontWeight:700}}>{crr}</span></span>
-                {inn.target&&rrr&&
-                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#bcc7d8",
-                    background:parseFloat(rrr)>12?"rgba(248,113,113,.12)":"rgba(255,255,255,.05)",
-                    border:parseFloat(rrr)>12?"1px solid rgba(248,113,113,.35)":"1px solid rgba(255,255,255,.1)",
-                    borderRadius:9,padding:"4px 9px",whiteSpace:"nowrap"}}>RRR <span style={{color:parseFloat(rrr)>12?"#f87171":"#67e8f9",fontWeight:700}}>{rrr}</span></span>}
+                {inn.target&&rrr&&(()=>{
+                  const tone=rrrTone(crr,rrr,inn.totalBalls);
+                  return(
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#bcc7d8",
+                      background:tone==="#f87171"?"rgba(248,113,113,.12)":tone==="#34d399"?"rgba(52,211,153,.1)":"rgba(255,255,255,.05)",
+                      border:tone==="#f87171"?"1px solid rgba(248,113,113,.35)":tone==="#34d399"?"1px solid rgba(52,211,153,.3)":"1px solid rgba(255,255,255,.1)",
+                      borderRadius:9,padding:"4px 9px",whiteSpace:"nowrap"}}>RRR <span style={{color:tone,fontWeight:700}}>{rrr}</span></span>
+                  );
+                })()}
                 {!inn.target&&inn.totalBalls>0&&inn.overs>0&&
                   <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#a5b4fc",
                     background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",
@@ -5974,11 +5996,15 @@ function ViewerLive({onExit}){
             <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#bcc7d8",
               background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",
               borderRadius:9,padding:"5px 10px",whiteSpace:"nowrap"}}>CRR <span style={{color:"#fbbf24",fontWeight:700}}>{crr}</span></span>
-            {inn.target&&rrr&&
-              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#bcc7d8",
-                background:parseFloat(rrr)>12?"rgba(248,113,113,.12)":"rgba(255,255,255,.05)",
-                border:parseFloat(rrr)>12?"1px solid rgba(248,113,113,.35)":"1px solid rgba(255,255,255,.1)",
-                borderRadius:9,padding:"5px 10px",whiteSpace:"nowrap"}}>RRR <span style={{color:parseFloat(rrr)>12?"#f87171":"#67e8f9",fontWeight:700}}>{rrr}</span></span>}
+            {inn.target&&rrr&&(()=>{
+              const tone=rrrTone(crr,rrr,inn.totalBalls);
+              return(
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#bcc7d8",
+                  background:tone==="#f87171"?"rgba(248,113,113,.12)":tone==="#34d399"?"rgba(52,211,153,.1)":"rgba(255,255,255,.05)",
+                  border:tone==="#f87171"?"1px solid rgba(248,113,113,.35)":tone==="#34d399"?"1px solid rgba(52,211,153,.3)":"1px solid rgba(255,255,255,.1)",
+                  borderRadius:9,padding:"5px 10px",whiteSpace:"nowrap"}}>RRR <span style={{color:tone,fontWeight:700}}>{rrr}</span></span>
+              );
+            })()}
             {!inn.target&&inn.totalBalls>0&&inn.overs>0&&
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#a5b4fc",
                 background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.3)",
