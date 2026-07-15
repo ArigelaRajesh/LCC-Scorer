@@ -8778,6 +8778,13 @@ function StatsPage({onExit}){
     return rank(a)-rank(b)||a.localeCompare(b);
   });
   const filteredHistory={};
+  // The tournament filter is only a real choice when there are several tournaments, or when some
+  // matches sit OUTSIDE the single tournament (so "All tournaments" genuinely differs from it). If
+  // there's one tournament and every match belongs to it, the two options are identical — hide it.
+  const tournIds=Object.keys(tournaments||{});
+  const allMatches=Object.values(history||{});
+  const inTournCount=allMatches.filter(m=>m&&m.tournamentId).length;
+  const tournFilterUseful=tournIds.length>1||(tournIds.length===1&&inTournCount>0&&inTournCount<allMatches.length);
   Object.entries(history||{}).forEach(([k,m])=>{
     if(venueF!=="All"&&canonVenue(m&&m.venue)!==venueF) return;
     if(tournF!=="All"&&(m&&m.tournamentId)!==tournF) return;
@@ -8887,13 +8894,14 @@ function StatsPage({onExit}){
   return(
     <div style={{background:"radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.26), transparent 62%), radial-gradient(circle at 50% 45%, rgba(30,58,138,.18), transparent 70%), linear-gradient(180deg,#0b1230 0%,#0a0e24 32%,#0d0a24 62%,#100a24 100%)",minHeight:"100dvh"}}>
       <PageHeader title="📊 Club Stats" onBack={onExit} backLabel="home"
-        right={<p style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",margin:0}}>{venueF==="All"?"All":venueF} · {matchCount}M</p>}
+        right={<p style={{fontSize:10,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",margin:0}}>{venueF!=="All"?venueF:(venueList.length===1?venueList[0]:"All venues")} · {matchCount}M</p>}
       />
       {/* ── Content ── */}
       <div style={{padding:"14px 16px 0"}}>
 
-        {/* Venue filter */}
-        {venueList.length>0&&(
+        {/* Venue filter — only worth showing when there's an actual choice. With a single venue,
+            "All" and that venue return identical results, so the row is pure noise. */}
+        {venueList.length>1&&(
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
             {["All",...venueList].map(v=>{
               const active=venueF===v;
@@ -8912,7 +8920,7 @@ function StatsPage({onExit}){
 
         {/* Tournament filter — scopes every leader/award/player stat below to just that tournament's
             matches, using the tournamentId stamped on history at match-finish time. */}
-        {Object.keys(tournaments).length>0&&(
+        {tournFilterUseful&&(
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
             {[["All","All"],...Object.entries(tournaments).map(([id,t])=>[id,t.name])].map(([id,label])=>{
               const active=tournF===id;
