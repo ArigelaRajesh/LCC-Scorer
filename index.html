@@ -1039,7 +1039,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
             <span style={{fontSize:11,background:"rgba(239,68,68,.18)",color:"#f87171",border:"1px solid rgba(239,68,68,.4)",borderRadius:8,padding:"4px 10px",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>👑 ADMIN</span>
             <span style={{fontSize:10,color:FB_OK?"#34d399":"#f87171",fontFamily:"'JetBrains Mono',monospace"}} title={FB_OK?"Live sync connected":"Offline — live sync unavailable"}>{FB_OK?"● online":"⚠️ offline"}</span>
           </div>
-          {onExit&&<button onClick={onExit} aria-label="Back to home" title="Back to home" style={{background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",color:"#bcc7d8",fontSize:15,cursor:"pointer",borderRadius:9,padding:"4px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap",flexShrink:0}}>←</button>}
+          {onExit&&<button onClick={onExit} aria-label="Back to home" title="Back to home" style={{background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",color:"#bcc7d8",fontSize:11,cursor:"pointer",borderRadius:9,padding:"5px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap",flexShrink:0}}>← Home</button>}
         </div>
         <div style={{display:"flex",gap:8,marginBottom:8}}>
           {onHistory&&<button onClick={onHistory} style={{flex:1,background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.35)",color:"#a5b4fc",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}}>📚 History</button>}
@@ -2763,9 +2763,9 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
                 />}
                 {onExit&&<button onClick={onExit} aria-label="Back to home" title="Back to home" style={{
                   background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",
-                  color:"#bcc7d8",fontSize:15,cursor:"pointer",borderRadius:9,
-                  padding:"4px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace",
-                  whiteSpace:"nowrap",flexShrink:0}}>←</button>}
+                  color:"#bcc7d8",fontSize:11,cursor:"pointer",borderRadius:9,
+                  padding:"5px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace",
+                  whiteSpace:"nowrap",flexShrink:0}}>← Home</button>}
               </div>
             </div>
             <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:8,flexWrap:"wrap",minWidth:0,marginTop:"auto"}}>
@@ -4567,7 +4567,7 @@ function OpenersForm({inn,match,onSubmit,role,onExit,rosterNames}){
       <div style={{width:"100%",maxWidth:"min(460px,100%)"}}>
         {(onExit||role==="admin")&&<div style={{display:"flex",justifyContent:"flex-end",gap:10,marginBottom:8}}>
           {role==="admin"&&<PinButton match={match}/>}
-          {onExit&&<button onClick={onExit} aria-label="Back to home" title="Back to home" style={{background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",color:"#bcc7d8",fontSize:15,cursor:"pointer",borderRadius:9,padding:"4px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap",flexShrink:0}}>←</button>}
+          {onExit&&<button onClick={onExit} aria-label="Back to home" title="Back to home" style={{background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",color:"#bcc7d8",fontSize:11,cursor:"pointer",borderRadius:9,padding:"5px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap",flexShrink:0}}>← Home</button>}
         </div>}
         <div className="text-center mb-6">
           <div style={{fontSize:44,marginBottom:10}}>🏏</div>
@@ -4631,7 +4631,7 @@ function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onEditOvers,onE
       <div style={{width:"100%",maxWidth:"min(460px,100%)"}}>
         {(onExit||role==="admin")&&<div style={{display:"flex",justifyContent:"flex-end",gap:10,marginBottom:8}}>
           {role==="admin"&&<PinButton match={match}/>}
-          {onExit&&<button onClick={onExit} aria-label="Back to home" title="Back to home" style={{background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",color:"#bcc7d8",fontSize:15,cursor:"pointer",borderRadius:9,padding:"4px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap",flexShrink:0}}>←</button>}
+          {onExit&&<button onClick={onExit} aria-label="Back to home" title="Back to home" style={{background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",color:"#bcc7d8",fontSize:11,cursor:"pointer",borderRadius:9,padding:"5px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap",flexShrink:0}}>← Home</button>}
         </div>}
         <div className="text-center mb-6">
           <span style={{display:"inline-block",marginBottom:8,color:role==="admin"?"#fbbf24":"#34d399",fontFamily:"'JetBrains Mono',monospace",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".15em",border:`1px solid ${role==="admin"?"rgba(251,191,36,.5)":"rgba(52,211,153,.5)"}`,borderRadius:6,padding:"3px 8px"}}>{role==="admin"?"🔑 Admin mode":"✏️ Scorer mode"}</span>
@@ -9497,11 +9497,12 @@ function AnnouncementPage({onExit}){
 // after login, and again on every ball while a match is live. Hoisting them to module scope makes
 // the element types stable, so re-renders reconcile in place and the animations play exactly once.
 const AdminPill=({label,color,dot})=>(
-  <div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:20,
+  <div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:20,minWidth:0,
     background:`rgba(${color},.12)`,border:`1px solid rgba(${color},.35)`}}>
-    {dot&&<div style={{width:6,height:6,borderRadius:"50%",background:`rgb(${color})`,
+    {dot&&<div style={{width:6,height:6,borderRadius:"50%",background:`rgb(${color})`,flexShrink:0,
       boxShadow:`0 0 6px rgba(${color},.8)`,animation:"menuPulse 2s ease-in-out infinite"}}/>}
-    <span style={{fontSize:10,color:`rgb(${color})`,fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{label}</span>
+    <span style={{fontSize:10,color:`rgb(${color})`,fontFamily:"'JetBrains Mono',monospace",fontWeight:600,
+      whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>{label}</span>
   </div>
 );
 const AdminHero=({em,title,sub,grad,onClick})=>(
@@ -9604,43 +9605,50 @@ function AdminHome({tier,onPick,onExit,onLogout}){
         borderBottom: isSuper ? "1px solid rgba(245,158,11,.18)" : "1px solid rgba(99,102,241,.15)",
         marginBottom:16
       }}>
-        {/* Row 1: greeting gets the room it needs — the controls are compact icon buttons rather
-            than text, because "← Home" + "🔓 Log Out" as words ate most of the row and truncated
-            the date to "Tu…" while the rows below sat half empty. */}
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-          <p style={{flex:1,minWidth:0,fontSize:12,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".02em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",margin:0}}>
+        {/* Row 1: greeting + labelled controls. The buttons carry text because bare icons weren't
+            self-explanatory; 11px keeps the whole greeting visible next to them (measured: the
+            greeting needs ~191px and gets ~204px on a 393px screen). */}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+          <p style={{flex:1,minWidth:0,fontSize:11,color:"var(--text-dim)",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".02em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",margin:0}}>
             {timeStr} · {now.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}
           </p>
-          <button onClick={onExit} aria-label="Back to home" title="Back to home" style={{
+          <button onClick={onExit} title="Back to home" style={{
             background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",color:"#bcc7d8",
-            fontSize:15,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,lineHeight:1,
-            borderRadius:9,padding:"7px 11px",whiteSpace:"nowrap",flexShrink:0}}>←</button>
+            fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,lineHeight:1,
+            borderRadius:9,padding:"8px",whiteSpace:"nowrap",flexShrink:0}}>← Home</button>
           {onLogout&&(
             <button onClick={()=>{
                 if(confirm("Log out on this device?\n\nThis frees your admin session for the next device immediately, and forgets your saved PIN here — you'll need to enter it again next time."))
                   onLogout();
               }}
-              aria-label="Log out"
               style={{background:"rgba(239,68,68,.12)",border:"1.5px solid rgba(239,68,68,.4)",color:"#f87171",
-                fontSize:15,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,lineHeight:1,
-                borderRadius:9,padding:"7px 11px",whiteSpace:"nowrap",flexShrink:0}}
-              title="Log out — frees this session for other devices and forgets the remembered PIN here">🔓</button>
+                fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,lineHeight:1,
+                borderRadius:9,padding:"8px",whiteSpace:"nowrap",flexShrink:0}}
+              title="Log out — frees this session for other devices and forgets the remembered PIN here">🔓 Log Out</button>
           )}
         </div>
-        {/* Row 2: the big title — full width, single line. */}
-        <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:"clamp(24px,7vw,30px)",fontWeight:700,lineHeight:1.05,marginBottom:14,whiteSpace:"nowrap"}}>
-          <span>{isSuper?"👑 ":"🛠️ "}</span>
-          <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 55%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 55%,#818cf8)",
-            WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
-        </h1>
-        {/* Row 3: status pills — LIVE score and poll activity only. The roster and match counts
-            deliberately aren't repeated here: they already sit on their own tiles below (the badge
-            on Roster & Players, and the subtitle on Match History), so showing them twice just
-            filled the header with numbers you'd already read a moment later. */}
-        {(hasLive||poll)&&(
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {hasLive&&<AdminPill label={`LIVE · ${live.battingTeam} ${live.totalRuns||0}/${live.wickets||0}`} color="52,211,153" dot/>}
-            {poll&&<AdminPill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>}
+        {/* Row 2: title + live status side by side. The status used to sit on its own row below,
+            leaving the whole right-hand side of the title row empty. The pills shrink with an
+            ellipsis if space runs short, and the score is placed before the team name so it's the
+            team name that gets trimmed rather than the score. */}
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"nowrap"}}>
+          <h1 style={{fontFamily:"'Oswald',sans-serif",fontSize:"clamp(22px,6vw,26px)",fontWeight:700,lineHeight:1.05,margin:0,whiteSpace:"nowrap",flexShrink:0}}>
+            <span>{isSuper?"👑 ":"🛠️ "}</span>
+            <span style={{background:isSuper?"linear-gradient(135deg,#fff7d6,#fbbf24 55%,#f59e0b)":"linear-gradient(135deg,#fff,#a5b4fc 55%,#818cf8)",
+              WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{isSuper?"Super Admin":"Basic Admin"}</span>
+          </h1>
+          {(hasLive||poll)&&(
+            <div style={{display:"flex",gap:6,flex:1,minWidth:0,justifyContent:"flex-end"}}>
+              {hasLive&&<AdminPill label={`LIVE ${live.totalRuns||0}/${live.wickets||0} · ${live.battingTeam}`} color="52,211,153" dot/>}
+              {poll&&!hasLive&&<AdminPill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>}
+            </div>
+          )}
+        </div>
+        {/* Poll status keeps its own line only when a match is ALSO live (both won't fit beside the
+            title), so it's never dropped — just moved. */}
+        {poll&&hasLive&&(
+          <div style={{display:"flex",gap:6,marginTop:10}}>
+            <AdminPill label={`Poll open · ${yesCount} Yes`} color="167,139,250" dot/>
           </div>
         )}
       </div>
