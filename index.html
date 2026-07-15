@@ -7568,7 +7568,6 @@ function RecentMatchesCarousel({onOpen}){
 }
 
 function Landing({onPick}){
-  const[menuOpen,setMenuOpen]=React.useState(false);
   const[announcement,setAnnouncement]=React.useState(null);
   const[viewMatch,setViewMatch]=React.useState(null);
   React.useEffect(()=>{
@@ -7580,23 +7579,6 @@ function Landing({onPick}){
   if(viewMatch){
     return <MatchDetailView match={viewMatch} role="viewer" onBack={()=>setViewMatch(null)} onDelete={()=>{}}/>;
   }
-  const menuItem=(emoji,title,sub,color,onClick)=>(
-    <button onClick={()=>{setMenuOpen(false);onClick();}} style={{
-      width:"100%",display:"flex",alignItems:"center",gap:12,textAlign:"left",
-      padding:"13px 14px",borderRadius:14,cursor:"pointer",marginBottom:8,
-      background:"rgba(15,12,41,.6)",border:`1px solid ${color}`,
-      color:"#fff",fontFamily:"'Inter',sans-serif",transition:"background .15s"
-    }}
-    onMouseEnter={e=>e.currentTarget.style.background="rgba(30,27,75,.85)"}
-    onMouseLeave={e=>e.currentTarget.style.background="rgba(15,12,41,.6)"}>
-      <span style={{fontSize:22}}>{emoji}</span>
-      <span style={{flex:1}}>
-        <span style={{display:"block",fontWeight:700,fontSize:14}}>{title}</span>
-        <span style={{display:"block",fontSize:10,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",marginTop:1}}>{sub}</span>
-      </span>
-      <span style={{color:"#9aa8bf",fontSize:13}}>→</span>
-    </button>
-  );
   // Compact quick-action tile — 2-up grid so all four actions read as one dashboard instead of a
   // scroll-forever list. Icon sits beside the title (not stacked above) so every tile reads the same
   // shape, and a fixed min-height keeps all four the same size even when a subtitle wraps to 2 lines.
@@ -7647,29 +7629,13 @@ function Landing({onPick}){
             fontSize:"clamp(12px,3.6vw,16px)",fontWeight:700,letterSpacing:".01em",
             margin:0,lineHeight:1.15,textShadow:"0 2px 10px rgba(2,4,15,.9)",pointerEvents:"none"
           }}>Lindenhurst Cricket Club</p>
-          <button onClick={()=>setMenuOpen(o=>!o)} aria-label="Menu" style={{
+          <button onClick={()=>onPick("admin")} aria-label="Admin access" title="Admin — Super or Basic · PIN required" style={{
             flexShrink:0,width:"clamp(44px,11.5vw,50px)",height:"clamp(44px,11.5vw,50px)",
             borderRadius:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
             background:"rgba(20,17,55,.85)",border:"1.5px solid rgba(99,102,241,.55)",
             color:"#a5b4fc",fontSize:"clamp(18px,5vw,21px)",backdropFilter:"blur(10px)"
-          }}>{menuOpen?"✕":"☰"}</button>
+          }}>🔑</button>
         </div>
-
-        {menuOpen&&(<>
-          <div onClick={()=>setMenuOpen(false)} style={{position:"fixed",inset:0,zIndex:20,background:"rgba(0,0,0,.45)"}}/>
-          <div style={{
-            position:"absolute",top:"clamp(58px,15vw,68px)",right:0,zIndex:25,
-            width:272,padding:14,borderRadius:18,
-            background:"rgba(20,17,55,.98)",border:"1px solid rgba(99,102,241,.45)",
-            backdropFilter:"blur(20px)",boxShadow:"0 16px 48px rgba(0,0,0,.6)",animation:"fadeUp .25s ease both"
-          }}>
-            <p style={{color:"#4338ca",fontFamily:"'JetBrains Mono',monospace",fontSize:9,textTransform:"uppercase",letterSpacing:".2em",marginBottom:10,paddingLeft:4}}>Club Menu</p>
-            {/* Stats and History now live as tiles on the home screen, so they're deliberately not
-                repeated here. Admin stays in the menu: it's PIN-gated and not something members
-                need, so it doesn't warrant a tile. */}
-            {menuItem("👑","Admin","Super or Basic · PIN","rgba(239,68,68,.35)",()=>onPick("admin"))}
-          </div>
-        </>)}
 
         {/* Cricket animation — full width to match the cards below exactly */}
         <div style={{position:"relative",opacity:.97,pointerEvents:"none",
