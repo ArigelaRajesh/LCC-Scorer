@@ -1039,7 +1039,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
             <span style={{fontSize:11,background:"rgba(239,68,68,.18)",color:"#f87171",border:"1px solid rgba(239,68,68,.4)",borderRadius:8,padding:"4px 10px",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>👑 ADMIN</span>
             <span style={{fontSize:10,color:FB_OK?"#34d399":"#f87171",fontFamily:"'JetBrains Mono',monospace"}} title={FB_OK?"Live sync connected":"Offline — live sync unavailable"}>{FB_OK?"● online":"⚠️ offline"}</span>
           </div>
-          {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
+          {onExit&&<button onClick={onExit} aria-label="Back to home" title="Back to home" style={{background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",color:"#bcc7d8",fontSize:15,cursor:"pointer",borderRadius:9,padding:"4px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap",flexShrink:0}}>←</button>}
         </div>
         <div style={{display:"flex",gap:8,marginBottom:8}}>
           {onHistory&&<button onClick={onHistory} style={{flex:1,background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.35)",color:"#a5b4fc",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"9px 12px"}}>📚 History</button>}
@@ -4567,7 +4567,7 @@ function OpenersForm({inn,match,onSubmit,role,onExit,rosterNames}){
       <div style={{width:"100%",maxWidth:"min(460px,100%)"}}>
         {(onExit||role==="admin")&&<div style={{display:"flex",justifyContent:"flex-end",gap:10,marginBottom:8}}>
           {role==="admin"&&<PinButton match={match}/>}
-          {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
+          {onExit&&<button onClick={onExit} aria-label="Back to home" title="Back to home" style={{background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",color:"#bcc7d8",fontSize:15,cursor:"pointer",borderRadius:9,padding:"4px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap",flexShrink:0}}>←</button>}
         </div>}
         <div className="text-center mb-6">
           <div style={{fontSize:44,marginBottom:10}}>🏏</div>
@@ -4631,7 +4631,7 @@ function InningsBreak({inn,match,onStart,role,onRevert,canRevert,onEditOvers,onE
       <div style={{width:"100%",maxWidth:"min(460px,100%)"}}>
         {(onExit||role==="admin")&&<div style={{display:"flex",justifyContent:"flex-end",gap:10,marginBottom:8}}>
           {role==="admin"&&<PinButton match={match}/>}
-          {onExit&&<button onClick={onExit} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:12,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>← home</button>}
+          {onExit&&<button onClick={onExit} aria-label="Back to home" title="Back to home" style={{background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.16)",color:"#bcc7d8",fontSize:15,cursor:"pointer",borderRadius:9,padding:"4px 8px",fontWeight:700,lineHeight:1,fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap",flexShrink:0}}>←</button>}
         </div>}
         <div className="text-center mb-6">
           <span style={{display:"inline-block",marginBottom:8,color:role==="admin"?"#fbbf24":"#34d399",fontFamily:"'JetBrains Mono',monospace",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".15em",border:`1px solid ${role==="admin"?"rgba(251,191,36,.5)":"rgba(52,211,153,.5)"}`,borderRadius:6,padding:"3px 8px"}}>{role==="admin"?"🔑 Admin mode":"✏️ Scorer mode"}</span>
