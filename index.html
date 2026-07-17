@@ -430,6 +430,24 @@ const T=20;
 // Scorecards store players by typed name; profiles use ids. We bridge them by
 // matching on a normalized full name (trim + lowercase + collapse spaces).
 function normName(n){return (n||"").trim().toLowerCase().replace(/\s+/g," ");}
+// Word-aware name matching — replaces plain substring matching, which had two failure modes:
+// (1) false positive — a query could match purely because its internal spacing happened to align
+//     inside an unrelated name (e.g. "Rajesh G" was found inside "Vrajesh Gandhi": the query's
+//     space lined up with the space before "Gandhi", so "rajesh g" sat right there as a substring,
+//     even though "Vrajesh" and "Rajesh" are different first names entirely);
+// (2) false negative — a longer typed name can never be "found inside" a shorter stored one, so
+//     typing someone's full name wouldn't find them if the roster has them under a short/abbreviated
+//     form (e.g. searching "Aniketh Balaji" against a roster entry stored as "Aniketh B").
+// Comparing word-by-word with a prefix check in both directions fixes both: each query word must
+// genuinely start a word in the candidate name (catching partial typing, "Raj" -> "Rajesh"), or that
+// candidate word must start the query word (catching abbreviations, "B" -> "Balaji") — but a name
+// can never match just because it happens to contain the right letters in the right order.
+function nameMatches(candidateName,query){
+  const cWords=normName(candidateName).split(" ").filter(Boolean);
+  const qWords=normName(query).split(" ").filter(Boolean);
+  if(!qWords.length) return false;
+  return qWords.every(qw=>cWords.some(cw=>cw.startsWith(qw)||qw.startsWith(cw)));
+}
 // "Avinash Thammineni" -> "Avinash T." — used in compact live cards (batsman/bowler) where a full
 // name would get cut off. Keeps the first name in full (that's what people actually go by) and
 // reduces the rest to initials, so it's still unambiguous between two players sharing a first name.
@@ -7439,14 +7457,15 @@ function FindYourself(){
     setQ(nm); setFocused(false); setOpen(true); setData("loading");
     Promise.all([DB.ref("history").once("value"),DB.ref("roster").once("value")]).then(([hs,rs])=>{
       const stats=computeCareerStats(hs.val()||{},rs.val()||{});
-      const hit=stats.find(s=>normName(s.name).includes(normName(nm)));
+      const found=stats.filter(s=>nameMatches(s.name,nm));
+      const hit=found.find(s=>normName(s.name)===normName(nm))||found[0];
       setData(hit||"none");
     }).catch(()=>setData("none"));
   };
   const search=()=>runFor(q.trim());
   const clearSearch=()=>{ setQ(""); setOpen(false); setData(null); setFocused(false); try{inputRef.current&&inputRef.current.focus();}catch(e){} };
   const nq=normName(q.trim());
-  const suggestions=focused&&nq&&!open?names.filter(n=>normName(n).includes(nq)).slice(0,5):[];
+  const suggestions=focused&&nq&&!open?names.filter(n=>nameMatches(n,q.trim())).slice(0,5):[];
   return(
     <div style={{marginBottom:"clamp(10px,2.5vw,14px)",position:"relative"}}>
       <div style={{display:"flex",gap:8}}>
