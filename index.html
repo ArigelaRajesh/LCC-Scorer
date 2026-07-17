@@ -2214,6 +2214,11 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
     // here — doing both caused two racing writes and left the scoring engine unable to add a bowler
     // or score, because the device's own progress tracker (appliedSig) got out of step with Firebase.
     writeIntent.current="revert";
+    // Same stale-echo guard applyRevert uses, which was missing here. We're about to clear mo/ib; any
+    // snapshot still carrying the OLD mo/ib (our own round-trip, or another device that hasn't seen
+    // this restore yet) would otherwise land a moment later and snap us straight back to the completed
+    // / innings-break screen — leaving the scorer unable to score right after a restore.
+    moClearedAt.current=Date.now();
     clearHist(); // stale relative to the backup snapshot — Undo starts fresh from here
     setMatch(snap.match);
     setInn(snap.inn);
@@ -2509,7 +2514,16 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
     // suppressAutoEnd: set by a revert of a chase that couldn't roll back the winning ball. Skip the
     // target auto-complete for this one ball, then clear the flag so normal completion resumes.
     if(i.suppressAutoEnd){ i={...i,suppressAutoEnd:false}; setInn(i); if(overDone){ setInn(p=>({...p,pending:"newBowler"})); } return; }
-    if(i.target!==null&&i.totalRuns>=i.target){setMO({winner:i.battingTeam,margin:`${i.maxWkts-i.wickets} wicket${i.maxWkts-i.wickets===1?"":"s"}`});if(FB_OK&&DB)DB.ref("potm").set({open:true,votes:{}}).catch(()=>{});return;}
+    // Only complete when THIS ball actually takes the score past the target — not merely whenever the
+    // score happens to be at/past it. After a revert-to-live or a restore-from-backup the innings can
+    // sit at a score that ALREADY meets the target (the winning ball is still on the board), and the
+    // old at-or-past test then re-fired on every single delivery, snapping the match back to completed
+    // and making it impossible to score at all. suppressAutoEnd only skipped one ball, so the next ball
+    // re-completed regardless. Checking that the previous score was BELOW the target means an already-won
+    // position stays scoreable (the admin reverted deliberately — they can correct it, or end the match
+    // manually), while a genuine winning delivery still completes exactly as before.
+    const runsBeforeThisBall = inn.totalRuns||0;
+    if(i.target!==null&&i.totalRuns>=i.target&&runsBeforeThisBall<i.target){setMO({winner:i.battingTeam,margin:`${i.maxWkts-i.wickets} wicket${i.maxWkts-i.wickets===1?"":"s"}`});if(FB_OK&&DB)DB.ref("potm").set({open:true,votes:{}}).catch(()=>{});return;}
     if(overDone){ setInn(p=>({...p,pending:"newBowler"})); }
   };
 
@@ -6234,6 +6248,28 @@ function PageHeader({title,onBack,backLabel,right}){
   );
 }
 
+// Deleting a match used to only remove it from /history, leaving its tournament fixture (if it had
+// one) permanently stuck showing "✅ Played" and linked to a matchId that no longer exists — the
+// fixture's played/matchId flags were set when the match finished but were never reversed on delete.
+// The history record only stores tournamentId (not fixtureId), so this looks up that tournament's
+// fixtures to find the one pointing at this match, and resets it back to unplayed. Best-effort: if
+// the tournament or fixture is already gone, this just skips it rather than blocking the delete —
+// the person's actual request (remove the match) should still succeed either way.
+async function deleteMatchAndUnlinkFixture(match){
+  const{id,tournamentId}=match||{};
+  if(tournamentId&&FB_OK&&DB){
+    try{
+      const snap=await DB.ref(`tournaments/${tournamentId}/fixtures`).once("value");
+      const fixtures=snap.val()||{};
+      const fixtureId=Object.keys(fixtures).find(fid=>fixtures[fid]?.matchId===id);
+      if(fixtureId){
+        await DB.ref(`tournaments/${tournamentId}/fixtures/${fixtureId}`).update({played:false,matchId:null});
+      }
+    }catch(e){ console.error("fixture unlink failed",e); }
+  }
+  await DB.ref("history/"+id).remove();
+}
+
 function HistoryPage({role,onExit}){
   const[list,setList]=React.useState(undefined);
   const[openId,setOpenId]=React.useState(null);
@@ -6255,13 +6291,13 @@ function HistoryPage({role,onExit}){
     const fallback=setTimeout(()=>setList(l=>l===undefined?null:l),8000);
     return ()=>{ cancelled=true; clearTimeout(fallback); if(ref&&cb)ref.off("value",cb); };
   },[]);
-  const del=(id,e)=>{ e.stopPropagation(); if(confirm("Delete this match permanently? This cannot be undone.")) {DB.ref("history/"+id).remove();globalToast("🗑 Match deleted");} };
+  const del=(m,e)=>{ e.stopPropagation(); if(confirm("Delete this match permanently? This cannot be undone.")) {deleteMatchAndUnlinkFixture(m).catch(err=>console.error("delete failed",err));globalToast("🗑 Match deleted");} };
 
   if(list===undefined) return <Centered emoji="📚" title="Loading history…" onExit={onExit}/>;
   if(!list||list.length===0) return <Centered emoji="📭" title="No matches yet" sub="Play your first match, then it'll show up here automatically." onExit={onExit}/>;
 
   const opened=openId?list.find(m=>m.id===openId):null;
-  if(opened) return <MatchDetailView match={opened} role={role} onBack={()=>setOpenId(null)} onDelete={(id)=>{DB.ref("history/"+id).remove();setOpenId(null);}}/>;
+  if(opened) return <MatchDetailView match={opened} role={role} onBack={()=>setOpenId(null)} onDelete={(match)=>{deleteMatchAndUnlinkFixture(match).catch(err=>console.error("delete failed",err));setOpenId(null);}}/>;
 
   // Search/filter by team name or venue — helps once History has grown past a quick scroll.
   const nq=normName(q);
@@ -6298,7 +6334,7 @@ function HistoryPage({role,onExit}){
                 {m.potm&&<span style={{fontSize:10,color:"#fbbf24",fontFamily:"'JetBrains Mono',monospace"}}>🏆 {m.potm}</span>}
                 <span style={{fontSize:11,color:"#818cf8",fontFamily:"'JetBrains Mono',monospace"}}>View →</span>
               </div>
-              {role==="admin"&&<button onClick={(e)=>del(m.id,e)} style={{marginTop:8,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",borderRadius:10,padding:"6px 12px",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>🗑️ Delete</button>}
+              {role==="admin"&&<button onClick={(e)=>del(m,e)} style={{marginTop:8,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",borderRadius:10,padding:"6px 12px",fontSize:12,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>🗑️ Delete</button>}
             </div>
           );
         })}
@@ -6577,7 +6613,7 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
               {dlSaving?"Generating…":"📋 Scorecard"}
             </button>
             {role==="admin"&&<button onClick={()=>setEditOpen(true)} style={{background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.4)",color:"#a5b4fc",borderRadius:10,padding:"6px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>✏️ Edit</button>}
-            {role==="admin"&&<button onClick={()=>{if(confirm("Delete this match permanently? This cannot be undone."))onDelete(m.id);}} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",borderRadius:10,padding:"6px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>🗑️</button>}
+            {role==="admin"&&<button onClick={()=>{if(confirm("Delete this match permanently? This cannot be undone."))onDelete(m);}} style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",borderRadius:10,padding:"6px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600}}>🗑️</button>}
           </div>
         </div>
         {editOpen&&<Modal onClose={()=>setEditOpen(false)} title="✏️ Edit Match Result">
