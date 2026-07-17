@@ -734,6 +734,33 @@ function chipLbl(ev){
 //   red    — well clear of it, real pressure
 // Before a ball is bowled there's no current rate to compare with, so stay neutral rather than
 // flashing red at the very start of every chase.
+// Firebase never persists an empty array or empty object — writing `overEvents: []` stores nothing,
+// and the key comes back UNDEFINED on read. Anything that loads an innings out of Firebase must
+// therefore rebuild those collections, or the first thing that touches one blows up: scoring a ball
+// does `[...i.overEvents, ev]`, which throws "not iterable" on undefined. The click handler dies
+// silently mid-way — no error surfaces, the score just never moves, and the buttons look dead.
+//
+// This bites hardest right after a restore-from-backup or revert-to-live, because `overEvents` is
+// reset to [] the instant an over completes — and the event-driven backup fires on exactly that
+// event, so snapshots taken at an over boundary are guaranteed to come back missing it.
+//
+// The live listener always did this inline, which is why normal play was fine; the restore/revert
+// paths applied the raw snapshot and did not. Kept module-scope and shared so every path that loads
+// an innings gets the same treatment rather than each one having to remember.
+function normalizeInn(x){
+  if(!x) return x;
+  return {
+    ...x,
+    overEvents: x.overEvents||[],
+    completedOvers: (x.completedOvers||[]).map(o=>o||[]),
+    battingOrder: x.battingOrder||[],
+    bowlingOrder: x.bowlingOrder||[],
+    batsmen: x.batsmen||{},
+    bowlers: x.bowlers||{},
+    partnerships: x.partnerships||[],
+    extras: {wd:0,nb:0,b:0,lb:0, ...(x.extras||{})},
+  };
+}
 function rrrTone(crr,rrr,ballsBowled){
   if(!rrr) return "#67e8f9";
   if(!ballsBowled) return "#67e8f9";
@@ -1748,19 +1775,10 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
         return;
       }
       // ──────────────────────────────────────────────────────────────────────────────────────
-      const normInn = {
-        ...v.inn,
-        overEvents: v.inn.overEvents||[],
-        completedOvers: v.inn.completedOvers||[],
-        battingOrder: v.inn.battingOrder||[],
-        bowlingOrder: v.inn.bowlingOrder||[],
-        batsmen: v.inn.batsmen||{},
-        bowlers: v.inn.bowlers||{},
-        extras: v.inn.extras||{wd:0,nb:0,b:0,lb:0},
-      };
+      const normInn = normalizeInn(v.inn);
       setMatch(v.match);
       setInn(normInn);
-      setInn1(v.inn1||null);
+      setInn1(v.inn1?normalizeInn(v.inn1):null);
       // GUARD against a stale "match over" / "innings break" echo. If we deliberately cleared mo/ib in
       // the last 12 seconds (revert or undo) but this incoming snapshot STILL carries mo or ib set,
       // it's a late/stale echo (our own round-trip, or another device that hadn't yet seen the revert).
@@ -2110,7 +2128,12 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
     endInnings(inn);
   };
   const applyRevert=(snap)=>{
-    let revertedInn=snap.inn, revertedInn1=snap.inn1||null;
+    // Normalize FIRST: the _preEnd snapshot is read back out of Firebase, which strips empty arrays
+    // and objects, so it can arrive missing overEvents/batsmen/etc — and an innings that ended right
+    // on an over boundary is guaranteed to, since overEvents is [] at that moment. Applying it raw
+    // killed scoring after a revert (the next ball threw inside the click handler and silently did
+    // nothing). Doing it here means every branch below works on a safe object. See normalizeInn.
+    let revertedInn=normalizeInn(snap.inn), revertedInn1=snap.inn1?normalizeInn(snap.inn1):null;
     // SINGLE-DEVICE re-completion bug: the preEnd snapshot is captured at the instant the innings/match
     // ended — i.e. AFTER the winning run was already on the board. So for a target chase that finished by
     // reaching the target, the reverted innings still has totalRuns >= target. Scoring any further ball
@@ -2221,8 +2244,12 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
     moClearedAt.current=Date.now();
     clearHist(); // stale relative to the backup snapshot — Undo starts fresh from here
     setMatch(snap.match);
-    setInn(snap.inn);
-    setInn1(snap.inn1||null);
+    // MUST normalize: this snapshot came out of Firebase, which strips empty arrays/objects, so it
+    // can be missing overEvents/batsmen/etc entirely. Applying it raw is what left scoring dead after
+    // a restore — the next ball threw "overEvents is not iterable" inside the click handler and the
+    // score silently never moved. See normalizeInn.
+    setInn(normalizeInn(snap.inn));
+    setInn1(snap.inn1?normalizeInn(snap.inn1):null);
     setIB(!!snap.ib);
     setMO(snap.mo||null);
     setSaved(false);
