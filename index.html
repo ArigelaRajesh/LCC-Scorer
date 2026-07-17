@@ -92,7 +92,10 @@
 <style>
 
 @keyframes pulseGlow{0%,100%{box-shadow:0 0 20px rgba(245,158,11,.4)}50%{box-shadow:0 0 40px rgba(245,158,11,.8)}}
-@keyframes creditPulse{0%,100%{opacity:.55;text-shadow:0 0 6px rgba(165,180,252,.2)}50%{opacity:1;text-shadow:0 0 14px rgba(165,180,252,.7)}}
+@keyframes letterJump{0%,100%{transform:translateY(0)}2%{transform:translateY(-7px)}4%{transform:translateY(0)}}
+@media (prefers-reduced-motion: reduce){
+  .credit-wave span{animation:none!important;}
+}
 @keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
 @keyframes slowDrift{0%{background-position:0% center}100%{background-position:-300% center}}
 @keyframes bounceIn{0%{transform:scale(0.3);opacity:0}50%{transform:scale(1.05)}70%{transform:scale(0.9)}100%{transform:scale(1);opacity:1}}
@@ -7639,7 +7642,21 @@ function Landing({onPick}){
           {tile("📚","Match History","Past match scorecards","99,102,241",()=>onPick("history"),5)}
         </div>
 
-        <p style={{textAlign:"center",marginTop:"clamp(10px,2.5vw,16px)",marginBottom:0,color:"#a5b4fc",fontSize:11,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".05em",animation:"creditPulse 2.8s ease-in-out infinite"}}>Created by Rajesh Arigela</p>
+        <p className="credit-wave" style={{textAlign:"center",marginTop:"clamp(10px,2.5vw,16px)",marginBottom:0,color:"#a5b4fc",fontSize:11,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".05em"}}>
+          {(()=>{
+            const NAME="Created by Rajesh Arigela";
+            // PER is how long each character gets before the next one's turn starts. The keyframe
+            // above concentrates the actual hop in the first 4% of a character's own timeline, so
+            // TOTAL (one full lap = character count × PER) must keep that 4% window equal to PER —
+            // if NAME's length ever changes, this stays correct automatically since both are
+            // computed from NAME.length here, not hardcoded separately.
+            const PER=0.11, TOTAL=NAME.length*PER;
+            return NAME.split("").map((ch,i)=>(
+              <span key={i} style={{display:"inline-block",
+                animation:`letterJump ${TOTAL}s ease-out ${i*PER}s infinite`}}>{ch===" "?"\u00A0":ch}</span>
+            ));
+          })()}
+        </p>
       </div>
     </div>
   );
