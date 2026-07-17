@@ -7470,7 +7470,7 @@ function FindYourself(){
   const nq=normName(q.trim());
   const suggestions=focused&&nq&&!open?names.filter(n=>nameMatches(n,q.trim())).slice(0,5):[];
   return(
-    <div style={{marginBottom:"clamp(10px,2.5vw,14px)",position:"relative"}}>
+    <div style={{marginBottom:"clamp(18px,4.5vw,26px)",position:"relative"}}>
       <div style={{display:"flex",gap:8}}>
         <div style={{flex:1,position:"relative"}}>
           <input ref={inputRef} value={q}
@@ -7572,12 +7572,12 @@ function Landing({onPick}){
     </button>
   );
   return(
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
       padding:"0 clamp(12px,4vw,20px) calc(16px + env(safe-area-inset-bottom, 0px))",
       position:"relative",overflow:"hidden",minHeight:"100dvh",
       background:"radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.26), transparent 62%), radial-gradient(circle at 50% 45%, rgba(30,58,138,.18), transparent 70%), linear-gradient(180deg,#0b1230 0%,#0a0e24 32%,#0d0a24 62%,#100a24 100%)"}}>
       <div style={{width:"100%",maxWidth:"min(440px, 100%)",position:"relative",zIndex:1,
-        paddingTop:"max(8px, env(safe-area-inset-top))",display:"flex",flexDirection:"column",minHeight:"100dvh"}}>
+        paddingTop:"max(8px, env(safe-area-inset-top))",display:"flex",flexDirection:"column"}}>
 
         {/* ── Top bar: logo left, title centred, admin key right.
             Logo shrunk from 66px to 53px (all internal values scaled together, not a blurring CSS
@@ -7633,7 +7633,7 @@ function Landing({onPick}){
         {/* ── Quick-action grid — every route a member needs, in one tap. Past results used to sit
             below this as a "Recent Matches" strip; that's gone now that Match History is a tile of
             its own, since it was showing the same information twice. ── */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"clamp(9px,2.4vw,12px)"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"clamp(13px,3.4vw,17px)"}}>
           {tile("👁️","Watch Live","Live scoreboard · no PIN","16,185,129",()=>onPick("viewer"),0)}
           {tile("🏏","Score a Match","Team scorers · PIN","56,189,248",()=>onPick("scorer"),1)}
           {tile("📋","Weekend Poll","Vote for this week","167,139,250",()=>onPick("poll"),2)}
