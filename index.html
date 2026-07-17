@@ -7287,30 +7287,30 @@ function LCCLogo(){
       flexShrink:0,display:"inline-flex",
       // Outer glow ring — single elegant gradient matching the site's indigo/purple/cyan palette
       background:"linear-gradient(145deg,#06b6d4,#6366f1,#8b5cf6,#06b6d4)",
-      borderRadius:18,padding:"2.5px",
+      borderRadius:14,padding:"2px",
       boxShadow:"0 0 18px rgba(99,102,241,.45),0 4px 16px rgba(0,0,0,.5)",
       animation:"slowDrift 8s linear infinite",backgroundSize:"300% 300%"
     }}>
       <div style={{
         display:"inline-flex",flexDirection:"column",alignItems:"center",
         background:"linear-gradient(160deg,#0d0b28,#13103a)",
-        borderRadius:16,padding:"6px 10px 7px",gap:0
+        borderRadius:13,padding:"5px 8px 6px",gap:0
       }}>
         {/* Bat + wickets icon row */}
-        <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:4,opacity:.7}}>
-          <div style={{width:14,height:2.5,borderRadius:2,background:"linear-gradient(90deg,#a67c52,#e8c39a)",transform:"rotate(-25deg)",transformOrigin:"right center"}}/>
-          <div style={{display:"flex",gap:1.5}}>
-            {[0,1,2].map(i=><div key={i} style={{width:1.5,height:8,borderRadius:1,background:"rgba(226,232,240,.5)"}}/>)}
+        <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:3,opacity:.7}}>
+          <div style={{width:11,height:2,borderRadius:2,background:"linear-gradient(90deg,#a67c52,#e8c39a)",transform:"rotate(-25deg)",transformOrigin:"right center"}}/>
+          <div style={{display:"flex",gap:1.2}}>
+            {[0,1,2].map(i=><div key={i} style={{width:1.2,height:6,borderRadius:1,background:"rgba(226,232,240,.5)"}}/>)}
           </div>
         </div>
         {/* LCC — Indian flag colours: L=Orange, C=White/Blue, C=Green */}
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:700,letterSpacing:"-0.5px",lineHeight:1}}>
+        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:21,fontWeight:700,letterSpacing:"-0.5px",lineHeight:1}}>
           <span style={{background:"linear-gradient(90deg,#FF9933,#ffb347,#FF9933)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>L</span>
           <span style={{background:"linear-gradient(90deg,#ffffff,#a5b4fc,#ffffff)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
           <span style={{background:"linear-gradient(90deg,#22c55e,#4ade80,#22c55e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"slowDrift 9s linear infinite"}}>C</span>
         </div>
         {/* Ball accent dot */}
-        <div style={{marginTop:4,width:6,height:6,borderRadius:"50%",
+        <div style={{marginTop:3,width:5,height:5,borderRadius:"50%",
           background:"radial-gradient(circle at 35% 35%,#ff6b6b,#dc2626)",
           boxShadow:"0 0 6px rgba(239,68,68,.6)"}}/>
       </div>
@@ -7557,22 +7557,27 @@ function Landing({onPick}){
       <div style={{width:"100%",maxWidth:"min(440px, 100%)",position:"relative",zIndex:1,
         paddingTop:"max(8px, env(safe-area-inset-top))",display:"flex",flexDirection:"column",minHeight:"100dvh"}}>
 
-        {/* ── Top bar: logo left, title centred, menu right — perfectly in sync ── */}
+        {/* ── Top bar: logo left, title centred, admin key right.
+            Logo shrunk from 66px to 53px (all internal values scaled together, not a blurring CSS
+            transform) — it was 1.3x the key's height and reading as oversized for a header badge.
+            Key matched to the same 53px so both bookends are equal. Row has no fixed height: it
+            hugs its content instead of being capped shorter than what's inside it, which was the
+            original overflow bug. ── */}
         <div style={{position:"relative",display:"flex",alignItems:"center",
           justifyContent:"space-between",zIndex:30,
-          height:"clamp(52px,14vw,62px)",marginBottom:"clamp(12px,3.5vw,20px)"}}>
+          marginBottom:"clamp(12px,3.5vw,20px)"}}>
           <div style={{flexShrink:0,display:"flex",alignItems:"center"}}><LCCLogo/></div>
           <p style={{
             position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",
-            textAlign:"center",color:"#fff",width:"60%",
-            fontSize:"clamp(12px,3.6vw,16px)",fontWeight:700,letterSpacing:".01em",
+            textAlign:"center",color:"#fff",width:"62%",
+            fontSize:"clamp(14px,4.1vw,18px)",fontWeight:700,letterSpacing:".01em",
             margin:0,lineHeight:1.15,textShadow:"0 2px 10px rgba(2,4,15,.9)",pointerEvents:"none"
           }}>Lindenhurst Cricket Club</p>
           <button onClick={()=>onPick("admin")} aria-label="Admin access" title="Admin — Super or Basic · PIN required" style={{
-            flexShrink:0,width:"clamp(44px,11.5vw,50px)",height:"clamp(44px,11.5vw,50px)",
+            flexShrink:0,width:53,height:53,
             borderRadius:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
             background:"rgba(20,17,55,.85)",border:"1.5px solid rgba(99,102,241,.55)",
-            color:"#a5b4fc",fontSize:"clamp(18px,5vw,21px)",backdropFilter:"blur(10px)"
+            color:"#a5b4fc",fontSize:19,backdropFilter:"blur(10px)"
           }}>🔑</button>
         </div>
 
