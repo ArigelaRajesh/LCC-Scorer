@@ -747,6 +747,65 @@ function chipLbl(ev){
 // The live listener always did this inline, which is why normal play was fine; the restore/revert
 // paths applied the raw snapshot and did not. Kept module-scope and shared so every path that loads
 // an innings gets the same treatment rather than each one having to remember.
+// ── Tournament standings ─────────────────────────────────────────────────────
+// Computes a points table for one tournament from its fixtures plus the finished matches they link
+// to (fixture.matchId -> history entry). Only linked, completed matches count — nothing is guessed
+// by team name, since the same name ("Rajesh's Team") can mean different squads on different weeks.
+//
+// Points follow the standard T20 convention: win 2 · tie/no-result 1 · loss 0.
+//
+// NRR is the real cricket formula, including the rule casual implementations miss: (runs scored /
+// overs faced) - (runs conceded / overs bowled), where a side that is BOWLED OUT is charged its
+// full overs quota, not the overs it actually lasted — being skittled cheaply in 8 overs of a
+// 20-over game hurts your rate as if you'd used all 20. Overs are decimal-converted properly
+// (12 overs 3 balls = 12.5, not 12.3).
+function computeStandings(tournament, history){
+  const fixtures=Object.values(tournament?.fixtures||{});
+  const table={}; // teamName -> row
+  const row=(name)=>table[name]||(table[name]={team:name,P:0,W:0,L:0,T:0,pts:0,runsFor:0,oversFor:0,runsAg:0,oversAg:0});
+  // Every fixture team appears in the table even before playing, so a new tournament shows all
+  // entrants at 0 rather than an empty box.
+  fixtures.forEach(fx=>{ if(fx?.team1) row(fx.team1); if(fx?.team2) row(fx.team2); });
+
+  const oversUsed=(inn,allOut)=>{
+    // Bowled-out sides are debited the FULL allocation; inn.maxWkts is the wicket count that ends
+    // the innings (club rules can be under 10).
+    if(allOut) return inn.overs||0;
+    const balls=inn.totalBalls||0;
+    return Math.floor(balls/6)+(balls%6)/6;
+  };
+
+  fixtures.forEach(fx=>{
+    if(!fx?.played||!fx?.matchId) return;
+    const m=history?.[fx.matchId];
+    if(!m||!m.inn2) return; // needs a completed match
+    const i1=m.inn1, i2=m.inn2;
+    if(!i1) return; // single-innings data cannot produce a result row
+    const t1=i1.battingTeam, t2=i2.battingTeam;
+    if(!t1||!t2) return;
+    const r1=row(t1), r2=row(t2);
+    const winner=m.result?.winner||null;
+    r1.P++; r2.P++;
+    if(winner===t1){ r1.W++; r1.pts+=2; r2.L++; }
+    else if(winner===t2){ r2.W++; r2.pts+=2; r1.L++; }
+    else { r1.T++; r2.T++; r1.pts++; r2.pts++; }
+    const allOut1=(i1.wickets||0)>=(i1.maxWkts||10);
+    const allOut2=(i2.wickets||0)>=(i2.maxWkts||10);
+    r1.runsFor+=i1.totalRuns||0; r1.oversFor+=oversUsed(i1,allOut1);
+    r1.runsAg +=i2.totalRuns||0; r1.oversAg +=oversUsed(i2,allOut2);
+    r2.runsFor+=i2.totalRuns||0; r2.oversFor+=oversUsed(i2,allOut2);
+    r2.runsAg +=i1.totalRuns||0; r2.oversAg +=oversUsed(i1,allOut1);
+  });
+
+  const rows=Object.values(table).map(r=>({
+    ...r,
+    nrr:(r.oversFor>0&&r.oversAg>0)?(r.runsFor/r.oversFor)-(r.runsAg/r.oversAg):0,
+  }));
+  // Standard ordering: points, then NRR, then wins, then name for a stable tie-break.
+  rows.sort((a,b)=>b.pts-a.pts||b.nrr-a.nrr||b.W-a.W||a.team.localeCompare(b.team));
+  return rows;
+}
+
 function normalizeInn(x){
   if(!x) return x;
   return {
@@ -839,6 +898,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
   const[customCvOv,setCustomCvOv]=useState(false);
   const[customCvWk,setCustomCvWk]=useState(false);
   const[single,setSingle]=useState(false);
+  const[maxOverPerBowler,setMaxOverPerBowler]=useState(null); // null = no limit; set explicitly per match
   const[pinA,setPinA]=useState(()=>String(Math.floor(1000+Math.random()*9000)));
   const[pinB,setPinB]=useState(()=>String(Math.floor(1000+Math.random()*9000)));
   const[tossWinner,setTossWinner]=useState(null);
@@ -1017,6 +1077,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
       if(!cvOvers||cvOvers<1||cvOvers>50){alert("Enter valid overs (1-50).");return;}
       if(!cvWkts||cvWkts<1||cvWkts>20){alert("Enter valid wickets (1-20).");return;}
     }
+    if(maxOverPerBowler==="custom"){alert("Enter the bowler over limit, or pick a preset.");return;}
     if(!pinA||pinA.length<3||!pinB||pinB.length<3){alert("Both team PINs must be at least 3 digits.");return;}
     if(pinA===pinB){alert("Team A and Team B PINs must be different.");return;}
 
@@ -1043,6 +1104,7 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
       pubTeamB: pubB,
       tournamentId: fxTournamentId||null,
       fixtureId: fxFixtureId||null,
+      maxOverPerBowler: (maxOverPerBowler===null||maxOverPerBowler==="custom")?null:Number(maxOverPerBowler),
       ...v});
   };
   const clr=()=>{[rA,rB].forEach(r=>{if(r.current)r.current.value=""});setTossWinner(null);setTossChoice(null);rA.current?.focus();};
@@ -1335,6 +1397,27 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
                   {(tossWinner==="A"?teamAName:teamBName)} won the toss, chose to {tossChoice} first
                 </p>
               )}
+            </div>
+
+            {/* Bowler over limit — varies match to match (sometimes 4, sometimes 5, sometimes none),
+                so it's a plain per-match choice rather than tied to a venue default. Enforced later in
+                the bowler picker: once someone hits this many overs, they drop out of the "fresh"
+                bowlers list and can't be selected again this innings. */}
+            <div style={{marginBottom:16}}>
+              <p style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:8}}>🎯 Bowler over limit</p>
+              <div style={{display:"flex",gap:6,marginBottom:maxOverPerBowler==="custom"?6:0}}>
+                {[null,4,5].map(v=>(
+                  <button key={v===null?"none":v} onClick={()=>setMaxOverPerBowler(v)} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:13,transition:"all .15s",
+                    border:maxOverPerBowler===v?"none":"1.5px solid rgba(99,102,241,.3)",
+                    background:maxOverPerBowler===v?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",
+                    color:maxOverPerBowler===v?"#111":"#bcc7d8"}}>{v===null?"No limit":`${v} ov`}</button>
+                ))}
+                <button onClick={()=>setMaxOverPerBowler("custom")} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",
+                  border:maxOverPerBowler==="custom"?"none":"1.5px solid rgba(99,102,241,.3)",
+                  background:maxOverPerBowler==="custom"?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",
+                  color:maxOverPerBowler==="custom"?"#fff":"#bcc7d8"}}>Custom</button>
+              </div>
+              {maxOverPerBowler==="custom"&&<input type="number" min="1" max="50" placeholder="Type max overs (e.g. 3, 6)" onChange={e=>setMaxOverPerBowler(e.target.value===""?"custom":Number(e.target.value))} style={{width:"100%",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(139,92,246,.5)",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>}
             </div>
 
             {/* Two team PINs */}
@@ -2043,7 +2126,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
     }
   };
 
-  const startMatch=({teamA,teamB,battingFirst,bowlingFirst,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary,pubTeamA,pubTeamB,tournamentId,fixtureId})=>{
+  const startMatch=({teamA,teamB,battingFirst,bowlingFirst,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary,pubTeamA,pubTeamB,tournamentId,fixtureId,maxOverPerBowler})=>{
     setSaved(false);
     // Stable match ID created ONCE here and synced inside the match object to every device.
     // All scorers/admins then write the final result to history/{matchId} — the SAME key — so
@@ -2056,7 +2139,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
     // despite Setup sending them correctly. That meant every "who's playing today" selection was
     // discarded the moment a match started. Now captured properly, along with tournamentId/fixtureId
     // for matches started from a tournament fixture.
-    setMatch({matchId,teamA,teamB,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary,
+    setMatch({matchId,teamA,teamB,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary,maxOverPerBowler:maxOverPerBowler||null,
       pubTeamA:pubTeamA||[],pubTeamB:pubTeamB||[],tournamentId:tournamentId||null,fixtureId:fixtureId||null});
     setHist([]);setInn1(null);
     // Shell innings — no players yet, batting team must enter openers
@@ -2644,6 +2727,16 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
       if((inn.battingOrder||[]).some(n=>n.toLowerCase()===ln)){
         alert(`${nm} has already batted in this innings, for the batting side — they can't also bowl for the fielding side.`);
         return;
+      }
+      // Bowler over limit — set per match in Setup, checked here (not just the chip UI) so the
+      // dropdown/"type a new name" paths can't bypass it.
+      const limit=match?.maxOverPerBowler||null;
+      if(limit){
+        const b=inn.bowlers?.[nm];
+        if(b&&b.overs>=limit&&b.ballsThisOver===0){
+          alert(`${nm} has already bowled the maximum ${limit} over${limit===1?"":"s"} for this match. Pick a different bowler.`);
+          return;
+        }
       }
     }
     // Same auto-save-to-roster fix as confBatsman above — see that comment for the full reasoning.
@@ -3439,11 +3532,17 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
       {nnb&&!pw&&(
         <div className="alert-indigo" style={{border:"2px solid #6366f1"}}>
           <p style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:12,textTransform:"uppercase",letterSpacing:".12em",marginBottom:4,fontWeight:700}}>🎯 Over Complete!</p>
-          <p ref={nnb&&!(pw||pr)?pendRef:null} style={{color:"#818cf8",fontSize:12,marginBottom:10}}>Who bowls next? <span style={{color:"#4338ca",fontSize:11}}>(not {inn.bowlerName})</span></p>
+          <p ref={nnb&&!(pw||pr)?pendRef:null} style={{color:"#818cf8",fontSize:12,marginBottom:10}}>Who bowls next? <span style={{color:"#4338ca",fontSize:11}}>(not {inn.bowlerName}{match?.maxOverPerBowler?` · max ${match.maxOverPerBowler} ov/bowler`:""})</span></p>
 
           {/* Quick-tap: show ONLY bowling team's players */}
           {(()=>{
             const bowled=new Set(inn.bowlingOrder||[]);
+            const overLimit=match?.maxOverPerBowler||null;
+            const atLimit=(n)=>{
+              if(!overLimit) return false;
+              const b=inn.bowlers?.[n];
+              return !!b && b.overs>=overLimit && b.ballsThisOver===0;
+            };
             const hasPubTeam=(match?.pubTeamA?.length>0||match?.pubTeamB?.length>0);
             const bowlingPub=hasPubTeam
               ?(inn.battingTeam===match?.teamA?match.pubTeamB:match.pubTeamA)||[]
@@ -3453,15 +3552,16 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
             const BowlBtn=({n})=>{
               const b=inn.bowlers?.[n];
               const prev=bowled.has(n);
+              const maxed=atLimit(n);
               return(
-                <button key={n} onClick={()=>confBowler(n)} style={{
+                <button key={n} onClick={()=>{ if(!maxed) confBowler(n); }} disabled={maxed} style={{
                   padding:"8px 14px",borderRadius:10,touchAction:"manipulation",
-                  border:prev?"1.5px solid rgba(99,102,241,.4)":"1.5px solid rgba(52,211,153,.4)",
-                  background:prev?"rgba(99,102,241,.12)":"rgba(52,211,153,.1)",
-                  color:prev?"#a5b4fc":"#6ee7b7",fontSize:13,cursor:"pointer",
-                  fontFamily:"'Inter',sans-serif",fontWeight:600
+                  border:maxed?"1.5px solid rgba(148,163,184,.25)":prev?"1.5px solid rgba(99,102,241,.4)":"1.5px solid rgba(52,211,153,.4)",
+                  background:maxed?"rgba(148,163,184,.06)":prev?"rgba(99,102,241,.12)":"rgba(52,211,153,.1)",
+                  color:maxed?"#64748b":prev?"#a5b4fc":"#6ee7b7",fontSize:13,cursor:maxed?"not-allowed":"pointer",
+                  fontFamily:"'Inter',sans-serif",fontWeight:600,opacity:maxed?0.7:1
                 }}>
-                  {n}{prev&&b?<span style={{fontSize:10,opacity:.65,marginLeft:4}}>{b.overs}.{b.ballsThisOver}-{b.runs}-{b.wickets}</span>:""}
+                  {n}{(prev||maxed)&&b?<span style={{fontSize:10,opacity:.65,marginLeft:4}}>{b.overs}.{b.ballsThisOver}-{b.runs}-{b.wickets}{maxed?` · max ${overLimit}ov`:""}</span>:""}
                 </button>
               );
             };
@@ -3469,7 +3569,8 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
             if(bowlingPub&&bowlingPub.length>0){
               // TEAM MODE: only show bowling team's players
               const fresh=bowlingPub.filter(n=>n!==inn.bowlerName&&!bowled.has(n));
-              const prev=bowlingPub.filter(n=>n!==inn.bowlerName&&bowled.has(n));
+              const prev=bowlingPub.filter(n=>n!==inn.bowlerName&&bowled.has(n)&&!atLimit(n));
+              const maxedOut=bowlingPub.filter(n=>n!==inn.bowlerName&&atLimit(n));
               return(
                 <div style={{marginBottom:10}}>
                   {fresh.length>0&&(
@@ -3485,12 +3586,20 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
                   {prev.length>0&&(
                     <>
                       <p style={{fontSize:10,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Bowled before:</p>
-                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:maxedOut.length>0?8:0}}>
                         {prev.map(n=><BowlBtn key={n} n={n}/>)}
                       </div>
                     </>
                   )}
-                  {fresh.length===0&&prev.length===0&&(
+                  {maxedOut.length>0&&(
+                    <>
+                      <p style={{fontSize:10,color:"#64748b",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>🚫 Reached {overLimit}-over limit:</p>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                        {maxedOut.map(n=><BowlBtn key={n} n={n}/>)}
+                      </div>
+                    </>
+                  )}
+                  {fresh.length===0&&prev.length===0&&maxedOut.length===0&&(
                     <p style={{fontSize:12,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace"}}>No available bowlers from team</p>
                   )}
                 </div>
@@ -3500,13 +3609,20 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
               // user didn't want). Only show players who have ALREADY bowled in THIS match as quick
               // re-pick chips — a short, relevant list. Everyone else is reachable via the dropdown +
               // search below, or the "add new player" option. Keeps this panel clean.
-              const prev=(rosterNames||[]).filter(n=>n!==inn.bowlerName&&bowled.has(n));
+              const prev=(rosterNames||[]).filter(n=>n!==inn.bowlerName&&bowled.has(n)&&!atLimit(n));
+              const maxedOut=(rosterNames||[]).filter(n=>n!==inn.bowlerName&&bowled.has(n)&&atLimit(n));
               return(
                 <div style={{marginBottom:10}}>
                   {prev.length>0&&<>
                     <p style={{fontSize:10,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>Bowled before — tap to re-pick:</p>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:maxedOut.length>0?8:0}}>
                       {prev.map(n=><BowlBtn key={n} n={n}/>)}
+                    </div>
+                  </>}
+                  {maxedOut.length>0&&<>
+                    <p style={{fontSize:10,color:"#64748b",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>🚫 Reached {overLimit}-over limit:</p>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      {maxedOut.map(n=><BowlBtn key={n} n={n}/>)}
                     </div>
                   </>}
                 </div>
@@ -9242,6 +9358,7 @@ function StatsPage({onExit}){
 function TournamentsPage({role,onExit,onStartMatch}){
   const isAdmin=role==="admin";
   const[tournaments,setTournaments]=React.useState(undefined);
+  const[history,setHistory]=React.useState({});
   const[teamSquads,setTeamSquads]=React.useState({});
   const[selected,setSelected]=React.useState(null);
   const[newName,setNewName]=React.useState("");
@@ -9260,7 +9377,9 @@ function TournamentsPage({role,onExit,onStartMatch}){
     const cb=ref.on("value",s=>setTournaments(s.val()||{}));
     const sqRef=DB.ref("teamSquads");
     const sqCb=sqRef.on("value",s=>setTeamSquads(s.val()||{}));
-    return ()=>{ref.off("value",cb);sqRef.off("value",sqCb);};
+    const hRef=DB.ref("history");
+    const hCb=hRef.on("value",s=>setHistory(s.val()||{}),()=>setHistory({}));
+    return ()=>{ref.off("value",cb);sqRef.off("value",sqCb);hRef.off("value",hCb);};
   },[]);
 
   if(tournaments===undefined) return <Centered emoji="🏆" title="Loading tournaments…" onExit={onExit}/>;
