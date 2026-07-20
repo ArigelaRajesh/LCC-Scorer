@@ -41,6 +41,49 @@
   const ADMIN_PIN = "4821";
   const BASIC_ADMIN_PIN = "1234";
 
+  // ── Real admin accounts (email/password) ────────────────────────────────────
+  // The PIN path above is being retired: PINs live in this source file, readable by anyone who opens
+  // View Source, and every visitor is the SAME anonymous Firebase user — so security rules cannot tell
+  // an admin from a stranger. Real accounts fix both: a verified email/password login yields a unique
+  // uid, and that uid's privilege level is stored server-side at /admins/{uid} = "super" | "basic".
+  // Rules can then require a non-anonymous, known-admin uid for privileged writes.
+  //
+  // Returns the same {ok, tier} shape the PIN verify returns, so the rest of the app is unchanged.
+  async function adminSignIn(email, password){
+    if(typeof firebase==="undefined"||!firebase.auth) return {ok:false, msg:"Auth not available — check your connection."};
+    try{
+      const cred=await firebase.auth().signInWithEmailAndPassword((email||"").trim(), password||"");
+      const uid=cred.user&&cred.user.uid;
+      if(!uid) return {ok:false, msg:"Sign-in failed. Try again."};
+      // Read this account's admin tier. Only accounts an existing Super Admin has added here can log in.
+      const snap=await firebase.database().ref("admins/"+uid).once("value");
+      const tier=snap.val();
+      if(tier!=="super"&&tier!=="basic"){
+        // Authenticated, but not authorised as an admin. Sign back out so they aren't left in a
+        // half-logged-in state, and don't leak whether the account exists.
+        try{ await firebase.auth().signOut(); }catch(e){}
+        return {ok:false, msg:"This account isn't set up as an admin. Ask a Super Admin to add you."};
+      }
+      return {ok:true, tier, uid, email:cred.user.email};
+    }catch(e){
+      const code=e&&e.code||"";
+      // Firebase lumps wrong-password / no-such-user into one message on newer SDKs; keep it generic
+      // so we don't reveal which accounts exist.
+      const msg=(code==="auth/invalid-email")?"That doesn't look like a valid email."
+        :(code==="auth/too-many-requests")?"Too many attempts. Wait a moment and try again."
+        :(code==="auth/network-request-failed")?"Network problem — check your connection."
+        :"Wrong email or password.";
+      return {ok:false, msg};
+    }
+  }
+  async function adminSignOut(){ try{ if(firebase&&firebase.auth&&firebase.auth().currentUser&&!firebase.auth().currentUser.isAnonymous){ await firebase.auth().signOut(); } }catch(e){} }
+  async function adminSendReset(email){
+    try{ await firebase.auth().sendPasswordResetEmail((email||"").trim()); return {ok:true}; }
+    catch(e){ return {ok:false, msg:(e&&e.code==="auth/invalid-email")?"Enter a valid email first.":"Couldn't send reset email. Check the address."}; }
+  }
+  // The signed-in admin's uid, or null. Used by "Manage Admins" and to re-hydrate a session on reload.
+  function currentAdminUid(){ try{ const u=firebase.auth().currentUser; return (u&&!u.isAnonymous)?u.uid:null; }catch(e){ return null; } }
+
   function getDeviceId(){
     try{
       let id = localStorage.getItem("lcc_device_id");
@@ -6934,6 +6977,208 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
   );
 }
 
+function ManageAdminsPage({onExit}){
+  const[admins,setAdmins]=React.useState(undefined);
+  const[uid,setUid]=React.useState("");
+  const[label,setLabel]=React.useState("");
+  const[tier,setTier]=React.useState("basic");
+  const[msg,setMsg]=React.useState("");
+  const[err,setErr]=React.useState("");
+  const myUid=currentAdminUid();
+
+  React.useEffect(()=>{
+    if(!FB_OK||!DB) { setAdmins({}); return; }
+    const ref=DB.ref("admins"), meta=DB.ref("adminMeta");
+    let a={}, m={};
+    const merge=()=>setAdmins(Object.keys({...a,...m}).reduce((o,k)=>{o[k]={tier:a[k],...(m[k]||{})};return o;},{}));
+    const cbA=ref.on("value",s=>{a=s.val()||{};merge();},()=>setAdmins({}));
+    const cbM=meta.on("value",s=>{m=s.val()||{};merge();});
+    return ()=>{ref.off("value",cbA);meta.off("value",cbM);};
+  },[]);
+
+  const add=()=>{
+    setMsg("");setErr("");
+    const u=uid.trim();
+    if(!u||u.length<20){ setErr("Paste the full User UID from Firebase Console → Authentication → Users."); return; }
+    if(!FB_OK||!DB){ setErr("Offline — can't save right now."); return; }
+    Promise.all([
+      DB.ref("admins/"+u).set(tier),
+      DB.ref("adminMeta/"+u).set({label:label.trim()||null, addedAt:Date.now()}),
+    ]).then(()=>{ setMsg(`✅ Added as ${tier} admin.`); setUid("");setLabel(""); })
+      .catch(e=>setErr("Failed to save: "+(e&&e.message||"unknown error")));
+  };
+  const changeTier=(u,newTier)=>{ DB.ref("admins/"+u).set(newTier).catch(()=>{}); };
+  const remove=(u)=>{
+    if(u===myUid){ alert("You can't remove your own admin access while signed in — ask another Super Admin, or do it from the Firebase Console."); return; }
+    if(!confirm("Remove this admin's access? They won't be able to sign in as an admin until re-added.")) return;
+    Promise.all([DB.ref("admins/"+u).remove(), DB.ref("adminMeta/"+u).remove()]).catch(()=>{});
+  };
+
+  const[clearingBk,setClearingBk]=React.useState(false);
+  const clearOldBackups=async()=>{
+    if(clearingBk) return;
+    if(!FB_OK||!DB){ alert("Offline — can't clear backups right now."); return; }
+    if(!confirm("Clear stored backups from past matches?\n\nThe current live match (if any) is kept safe, and saved Match History is not affected.")) return;
+    setClearingBk(true);
+    try{
+      // Which match is live right now? Its backup must be preserved. If we can't determine it, abort
+      // rather than risk deleting an in-progress match's only safety net.
+      const liveSnap=await DB.ref("live").once("value");
+      const liveMid=liveSnap.val()&&liveSnap.val().match&&liveSnap.val().match.matchId||null;
+      const bkSnap=await DB.ref("backup").once("value");
+      const all=bkSnap.val()||{};
+      const ids=Object.keys(all).filter(id=>id!==liveMid);
+      if(ids.length===0){ setClearingBk(false); alert(liveMid?"Nothing to clear — only the current live match's backup exists.":"No old backups to clear."); return; }
+      await Promise.all(ids.map(id=>DB.ref("backup/"+id).remove().catch(()=>{})));
+      setClearingBk(false);
+      alert(`✅ Cleared ${ids.length} old backup${ids.length===1?"":"s"}.${liveMid?" The live match's backup was kept.":""}`);
+    }catch(e){
+      setClearingBk(false);
+      alert("Couldn't clear backups: "+(e&&e.message||"unknown error"));
+    }
+  };
+
+  const list=admins?Object.entries(admins):[];
+
+  return(
+    <div style={{minHeight:"100dvh",padding:"0 clamp(12px,4vw,20px) 40px",background:"radial-gradient(ellipse 90% 60% at 8% 4%, rgba(139,92,246,.28), transparent 60%), linear-gradient(180deg,#0b1230,#0a0e24 40%,#100a24)"}}>
+      <PageHeader title="👥 Manage Admins" onBack={onExit} backLabel="admin"/>
+      <div style={{maxWidth:440,margin:"0 auto"}}>
+
+        <div style={{background:"rgba(139,92,246,.08)",border:"1px solid rgba(139,92,246,.3)",borderRadius:14,padding:"14px 16px",marginBottom:18}}>
+          <p style={{color:"#c4b5fd",fontSize:12,lineHeight:1.6,margin:0,fontFamily:"'JetBrains Mono',monospace"}}>
+            <b>First create the account</b> in Firebase Console → Authentication → Users → Add user (email + a password).
+            Then copy that user's <b>User UID</b> and paste it below to grant admin access.
+          </p>
+        </div>
+
+        <p style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:8}}>➕ Add admin</p>
+        <input value={uid} onChange={e=>setUid(e.target.value)} placeholder="Paste User UID (28 characters)"
+          style={{width:"100%",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(99,102,241,.4)",borderRadius:12,padding:"11px 14px",color:"#fff",fontSize:13,outline:"none",marginBottom:10,fontFamily:"'JetBrains Mono',monospace",boxSizing:"border-box"}}/>
+        <input value={label} onChange={e=>setLabel(e.target.value)} placeholder="Name or email (label, optional)"
+          style={{width:"100%",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(99,102,241,.4)",borderRadius:12,padding:"11px 14px",color:"#fff",fontSize:14,outline:"none",marginBottom:10,boxSizing:"border-box"}}/>
+        <div style={{display:"flex",gap:8,marginBottom:12}}>
+          {["basic","super"].map(t=>(
+            <button key={t} onClick={()=>setTier(t)} style={{flex:1,padding:"10px",borderRadius:12,cursor:"pointer",fontWeight:700,fontSize:13,
+              border:tier===t?"none":"1.5px solid rgba(99,102,241,.3)",
+              background:tier===t?(t==="super"?"linear-gradient(135deg,#fbbf24,#f59e0b)":"linear-gradient(135deg,#6366f1,#8b5cf6)"):"transparent",
+              color:tier===t?(t==="super"?"#111":"#fff"):"#bcc7d8"}}>{t==="super"?"👑 Super":"🛠️ Basic"}</button>
+          ))}
+        </div>
+        {err&&<p style={{color:"#f87171",fontSize:13,marginBottom:10}}>{err}</p>}
+        {msg&&<p style={{color:"#6ee7b7",fontSize:13,marginBottom:10}}>{msg}</p>}
+        <button onClick={add} className="btn btn-primary w-full" style={{marginBottom:24}}>Add Admin</button>
+
+        <p style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:8}}>Current admins {admins?`(${list.length})`:""}</p>
+        {admins===undefined&&<p style={{color:"#9aa8bf",fontSize:13}}>Loading…</p>}
+        {admins&&list.length===0&&<p style={{color:"#9aa8bf",fontSize:13}}>No admin accounts yet. Add the first one above.</p>}
+        {list.map(([u,info])=>(
+          <div key={u} style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.09)",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+              <div style={{minWidth:0}}>
+                <p style={{color:"#fff",fontSize:14,fontWeight:600,margin:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                  {info.label||"(no label)"}{u===myUid?<span style={{color:"#6ee7b7",fontSize:11,marginLeft:6}}>· you</span>:null}
+                </p>
+                <p style={{color:"#6b7280",fontSize:10,fontFamily:"'JetBrains Mono',monospace",margin:"2px 0 0",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u}</p>
+              </div>
+              <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center"}}>
+                <button onClick={()=>changeTier(u,info.tier==="super"?"basic":"super")} style={{padding:"5px 9px",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer",border:"1px solid rgba(99,102,241,.4)",background:info.tier==="super"?"rgba(251,191,36,.15)":"rgba(99,102,241,.15)",color:info.tier==="super"?"#fbbf24":"#a5b4fc"}}>{info.tier==="super"?"👑 Super":"🛠️ Basic"}</button>
+                <button onClick={()=>remove(u)} disabled={u===myUid} style={{padding:"5px 9px",borderRadius:8,fontSize:11,cursor:u===myUid?"not-allowed":"pointer",border:"1px solid rgba(239,68,68,.4)",background:"rgba(239,68,68,.1)",color:"#f87171",opacity:u===myUid?0.4:1}}>Remove</button>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Maintenance: clear old match backups. Deliberately preserves the currently-live match's
+            backup so the in-match safety net is never removed. Saved match History is untouched —
+            this only clears the rolling restore snapshots, which are only useful mid-match. */}
+        <div style={{marginTop:26,paddingTop:18,borderTop:"1px solid rgba(255,255,255,.09)"}}>
+          <p style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:6}}>🧹 Maintenance</p>
+          <p style={{color:"#9aa8bf",fontSize:12,lineHeight:1.5,marginBottom:10}}>
+            Clears stored restore-backups from past matches. Keeps the current live match's backup, and never touches saved Match History.
+          </p>
+          <button onClick={clearOldBackups} disabled={clearingBk} style={{width:"100%",background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.4)",color:"#f87171",fontSize:13,cursor:clearingBk?"default":"pointer",fontFamily:"'Inter',sans-serif",fontWeight:600,borderRadius:10,padding:"11px",opacity:clearingBk?0.6:1}}>
+            {clearingBk?"Clearing…":"🗑 Clear old backups"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminLogin({onOk,onCancel,onUsePin}){
+  const[email,setEmail]=React.useState(()=>{try{return localStorage.getItem("lcc_admin_email")||"";}catch(e){return "";}});
+  const[pw,setPw]=React.useState("");
+  const[remember,setRemember]=React.useState(true);
+  const[busy,setBusy]=React.useState(false);
+  const[err,setErr]=React.useState("");
+  const[resetMsg,setResetMsg]=React.useState("");
+
+  const submit=async()=>{
+    if(busy) return;
+    setErr(""); setResetMsg("");
+    if(!email.trim()||!pw){ setErr("Enter your email and password."); return; }
+    setBusy(true);
+    const r=await adminSignIn(email,pw);
+    setBusy(false);
+    if(r.ok){
+      try{
+        if(remember) localStorage.setItem("lcc_admin_email",email.trim());
+        else localStorage.removeItem("lcc_admin_email");
+      }catch(e){}
+      onOk(r);
+    }else{
+      setErr(r.msg||"Sign-in failed.");
+    }
+  };
+  const doReset=async()=>{
+    setErr(""); setResetMsg("");
+    if(!email.trim()){ setErr("Type your email above first, then tap reset."); return; }
+    const r=await adminSendReset(email);
+    if(r.ok) setResetMsg("✅ Password reset email sent — check your inbox.");
+    else setErr(r.msg||"Couldn't send reset email.");
+  };
+
+  return(
+    <div style={{minHeight:"100dvh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",
+      background:"radial-gradient(ellipse 100% 55% at 85% 0%, rgba(37,99,235,.30), transparent 60%), radial-gradient(ellipse 90% 60% at 8% 92%, rgba(139,92,246,.26), transparent 62%), linear-gradient(180deg,#0b1230 0%,#0a0e24 40%,#100a24 100%)"}}>
+      <div style={{width:"100%",maxWidth:380,background:"rgba(20,17,55,.7)",border:"1px solid rgba(99,102,241,.35)",borderRadius:20,padding:"26px 22px",backdropFilter:"blur(12px)"}}>
+        <p style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:700,textAlign:"center",marginBottom:4,
+          background:"linear-gradient(135deg,#fff,#a5b4fc 60%,#818cf8)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>🔑 Admin Sign In</p>
+        <p style={{color:"#818cf8",fontSize:11,textAlign:"center",fontFamily:"'JetBrains Mono',monospace",marginBottom:20}}>Your admin account email & password</p>
+
+        <input type="email" autoComplete="username" inputMode="email" placeholder="you@example.com" value={email}
+          onChange={e=>setEmail(e.target.value)}
+          style={{width:"100%",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(99,102,241,.4)",borderRadius:12,padding:"12px 14px",color:"#fff",fontSize:15,outline:"none",marginBottom:10,boxSizing:"border-box"}}/>
+        <input type="password" autoComplete="current-password" placeholder="Password" value={pw}
+          onChange={e=>setPw(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")submit();}}
+          style={{width:"100%",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(99,102,241,.4)",borderRadius:12,padding:"12px 14px",color:"#fff",fontSize:15,outline:"none",marginBottom:12,boxSizing:"border-box"}}/>
+
+        <label style={{display:"flex",alignItems:"center",gap:8,marginBottom:16,cursor:"pointer"}}>
+          <input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)} style={{width:16,height:16,accentColor:"#6366f1"}}/>
+          <span style={{color:"#bcc7d8",fontSize:13}}>Remember my email on this device</span>
+        </label>
+
+        {err&&<p style={{color:"#f87171",fontSize:13,marginBottom:12,textAlign:"center"}}>{err}</p>}
+        {resetMsg&&<p style={{color:"#6ee7b7",fontSize:13,marginBottom:12,textAlign:"center"}}>{resetMsg}</p>}
+
+        <button onClick={submit} disabled={busy} className="btn btn-primary w-full" style={{marginBottom:12,opacity:busy?0.7:1}}>
+          {busy?"Signing in…":"Sign In"}</button>
+
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <button onClick={doReset} style={{background:"none",border:"none",color:"#818cf8",fontSize:12,cursor:"pointer",padding:0,textDecoration:"underline"}}>Forgot password?</button>
+          <button onClick={onCancel} style={{background:"none",border:"none",color:"#9aa8bf",fontSize:12,cursor:"pointer",padding:0}}>← Home</button>
+        </div>
+
+        {onUsePin&&(
+          <div style={{marginTop:18,paddingTop:14,borderTop:"1px solid rgba(99,102,241,.2)",textAlign:"center"}}>
+            <button onClick={onUsePin} style={{background:"none",border:"none",color:"#6b7280",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Use PIN instead (temporary)</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PinGate({title,pin,altPin,verify,hint,onOk,onCancel,rememberKey}){
   const[val,setVal]=React.useState("");
   const[err,setErr]=React.useState(false);
@@ -9889,6 +10134,8 @@ function AdminHome({tier,onPick,onExit,onLogout}){
                 onClick={()=>onPick("announce")} delay={.02}/>
               <AdminTile em="🔐" title="Manage PINs" sub="Change admin PINs" col="251,191,36"
                 onClick={()=>onPick("pinMgmt")} delay={.04}/>
+              <AdminTile em="👥" title="Manage Admins" sub="Add or remove admin accounts" col="139,92,246"
+                onClick={()=>onPick("manageAdmins")} delay={.06}/>
             </div>
           </div>
         )}
@@ -9984,6 +10231,7 @@ function Root(){
   });
   const[gate,setGate]=React.useState(null);
   const[adminTier,setAdminTier]=React.useState(null);
+  const[adminUsePin,setAdminUsePin]=React.useState(false);
   const[dynPins,setDynPins]=React.useState(null);
   // Stable per-tab identity for the single-active-session lock (see claimSession above) — generated
   // once and reused for every claim/heartbeat this tab makes, whether as admin or as a team scorer.
@@ -10082,6 +10330,12 @@ function Root(){
   const logoutAdmin=()=>{
     if(adminTier!==null) releaseSession(null,SCORING_SLOT,mySessionId);
     try{localStorage.removeItem("lcc_pin_admin");}catch(e){}
+    // If this was an email/password login, sign the account out so the next person on this device
+    // does NOT inherit the admin's authenticated session, then restore anonymous auth so the app
+    // keeps working for ordinary use. No-op for PIN logins (there's no non-anonymous user).
+    adminSignOut().then(()=>{ try{ if(firebase&&firebase.auth&&!firebase.auth().currentUser){ firebase.auth().signInAnonymously().catch(()=>{}); } }catch(e){} });
+    adminAutoTriedRef.current=false;
+    setAdminUsePin(false);
     navStack.current=["landing"];
     window.history.replaceState({screen:"landing",depth:1},"");
     setScreen("landing");
@@ -10144,7 +10398,12 @@ function Root(){
         if(r.ok){ setTimeout(()=>adminOnOk(r),0); return <Centered emoji="🔑" title="Welcome back…" sub="Remembered this device"/>; }
       }
     }
-    return <PinGate title="Admin Access" hint="Super or Basic admin PIN" verify={adminVerify} onOk={(r)=>adminOnOk(r)} onCancel={home} rememberKey="lcc_pin_admin"/>;
+    // TRANSITION: real email/password accounts are the primary path; the PIN stays as a temporary
+    // fallback (via "Use PIN instead") until every admin has an account, then it's removed.
+    if(adminUsePin){
+      return <PinGate title="Admin Access" hint="Super or Basic admin PIN" verify={adminVerify} onOk={(r)=>adminOnOk(r)} onCancel={()=>setAdminUsePin(false)} rememberKey="lcc_pin_admin"/>;
+    }
+    return <AdminLogin onOk={(r)=>adminOnOk(r)} onCancel={home} onUsePin={()=>setAdminUsePin(true)}/>;
   }
 
   const isAdmin=adminTier!==null;
@@ -10175,6 +10434,7 @@ function Root(){
     onExit={home}
     onLogout={logoutAdmin}/>;
   if(screen==="pinMgmt") return <PinMgmtModal onClose={()=>nav(adminHome)}/>;
+  if(screen==="manageAdmins") return isSuper ? <ManageAdminsPage onExit={()=>nav(adminHome)}/> : <Centered emoji="🔒" title="Super admins only" onExit={()=>nav(adminHome)}/>;
   if(screen==="admin") return <App role="admin" mySessionId={mySessionId} onExit={()=>nav(adminHome)} onHistory={()=>nav("history")} onPoll={()=>nav("poll")} onRoster={()=>nav("roster")} onAnnounce={()=>nav("announce")} prefillFixture={pendingFixtureRef.current}/>;
   return <Landing onPick={pick}/>;
 }
