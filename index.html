@@ -806,6 +806,34 @@ function computeStandings(tournament, history){
   return rows;
 }
 
+// ── Two-tier bowler over limits ──────────────────────────────────────────────
+// A match can cap bowlers in two tiers: a set number of "main" bowlers may bowl up to `mainOvers`,
+// everyone else up to `restOvers`. The scorer marks who is "main" as they pick (inn.mainBowlers is
+// the running list of designated names); the app just tracks how many main slots remain. rule=null
+// means no limit at all. A "flat / same for all" rule is stored as mainCount:0, so every bowler
+// simply falls to restOvers — one code path handles both.
+function mainSlotsLeft(rule, mainBowlers){
+  if(!rule||!rule.mainCount) return 0;
+  return Math.max(0, rule.mainCount - (mainBowlers||[]).length);
+}
+// The over cap that applies to THIS bowler right now. A bowler already designated main keeps the
+// main cap; an undesignated bowler gets the main cap only if a main slot is still open to give them
+// (used to decide whether the "make main" choice should even be offered), otherwise the rest cap.
+function bowlerCap(rule, mainBowlers, name){
+  if(!rule) return Infinity;                 // no limit
+  const isMain=(mainBowlers||[]).includes(name);
+  if(isMain) return rule.mainOvers;
+  return rule.restOvers;
+}
+// True if this bowler has bowled their allowed overs and is between overs (so cannot start another).
+function bowlerAtCap(rule, inn, name){
+  if(!rule) return false;
+  const b=inn.bowlers?.[name];
+  if(!b) return false;
+  const cap=bowlerCap(rule, inn.mainBowlers, name);
+  return b.overs>=cap && b.ballsThisOver===0;
+}
+
 function normalizeInn(x){
   if(!x) return x;
   return {
@@ -814,6 +842,7 @@ function normalizeInn(x){
     completedOvers: (x.completedOvers||[]).map(o=>o||[]),
     battingOrder: x.battingOrder||[],
     bowlingOrder: x.bowlingOrder||[],
+    mainBowlers: x.mainBowlers||[],
     batsmen: x.batsmen||{},
     bowlers: x.bowlers||{},
     partnerships: x.partnerships||[],
@@ -898,7 +927,15 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
   const[customCvOv,setCustomCvOv]=useState(false);
   const[customCvWk,setCustomCvWk]=useState(false);
   const[single,setSingle]=useState(false);
-  const[maxOverPerBowler,setMaxOverPerBowler]=useState(null); // null = no limit; set explicitly per match
+  // Bowler over-limit. Two tiers: a set number of "main" bowlers may bowl up to `mainOvers` each,
+  // and every other bowler is capped at `restOvers`. null = no limit at all (simplest case). The
+  // scorer decides WHO is a main bowler as they pick — the app just tracks how many main slots
+  // remain, so nobody has to be named upfront.
+  const[blMode,setBlMode]=useState("none"); // "none" | "flat" | "tiered"
+  const[blMainCount,setBlMainCount]=useState(2);
+  const[blMainOvers,setBlMainOvers]=useState(5);
+  const[blRestOvers,setBlRestOvers]=useState(2);
+  const[blFlatOvers,setBlFlatOvers]=useState(4);
   const[pinA,setPinA]=useState(()=>String(Math.floor(1000+Math.random()*9000)));
   const[pinB,setPinB]=useState(()=>String(Math.floor(1000+Math.random()*9000)));
   const[tossWinner,setTossWinner]=useState(null);
@@ -1077,7 +1114,12 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
       if(!cvOvers||cvOvers<1||cvOvers>50){alert("Enter valid overs (1-50).");return;}
       if(!cvWkts||cvWkts<1||cvWkts>20){alert("Enter valid wickets (1-20).");return;}
     }
-    if(maxOverPerBowler==="custom"){alert("Enter the bowler over limit, or pick a preset.");return;}
+    if(blMode==="tiered"){
+      if(!blMainCount||blMainCount<1){alert("Enter how many main bowlers get the higher limit.");return;}
+      if(!blMainOvers||blMainOvers<1){alert("Enter the over limit for main bowlers.");return;}
+      if(!blRestOvers||blRestOvers<1){alert("Enter the over limit for the remaining bowlers.");return;}
+    }
+    if(blMode==="flat"&&(!blFlatOvers||blFlatOvers<1)){alert("Enter the over limit per bowler.");return;}
     if(!pinA||pinA.length<3||!pinB||pinB.length<3){alert("Both team PINs must be at least 3 digits.");return;}
     if(pinA===pinB){alert("Team A and Team B PINs must be different.");return;}
 
@@ -1104,7 +1146,11 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
       pubTeamB: pubB,
       tournamentId: fxTournamentId||null,
       fixtureId: fxFixtureId||null,
-      maxOverPerBowler: (maxOverPerBowler===null||maxOverPerBowler==="custom")?null:Number(maxOverPerBowler),
+      bowlerRule: blMode==="tiered"
+        ? {mainCount:Number(blMainCount), mainOvers:Number(blMainOvers), restOvers:Number(blRestOvers)}
+        : blMode==="flat"
+        ? {mainCount:0, mainOvers:0, restOvers:Number(blFlatOvers)}
+        : null,
       ...v});
   };
   const clr=()=>{[rA,rB].forEach(r=>{if(r.current)r.current.value=""});setTossWinner(null);setTossChoice(null);rA.current?.focus();};
@@ -1399,25 +1445,48 @@ function Setup({onStart,role,onExit,onHistory,onPoll,onRoster,prefillFixture}){
               )}
             </div>
 
-            {/* Bowler over limit — varies match to match (sometimes 4, sometimes 5, sometimes none),
-                so it's a plain per-match choice rather than tied to a venue default. Enforced later in
-                the bowler picker: once someone hits this many overs, they drop out of the "fresh"
-                bowlers list and can't be selected again this innings. */}
+            {/* Bowler over limit — two tiers. A set number of "main" bowlers get a higher limit, the
+                rest get a lower one; the scorer picks who's "main" as they go, so nobody is named
+                here. "Same for all" is the simple single-limit case; "No limit" disables it. */}
             <div style={{marginBottom:16}}>
               <p style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".12em",marginBottom:8}}>🎯 Bowler over limit</p>
-              <div style={{display:"flex",gap:6,marginBottom:maxOverPerBowler==="custom"?6:0}}>
-                {[null,4,5].map(v=>(
-                  <button key={v===null?"none":v} onClick={()=>setMaxOverPerBowler(v)} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'JetBrains Mono',monospace",fontSize:13,transition:"all .15s",
-                    border:maxOverPerBowler===v?"none":"1.5px solid rgba(99,102,241,.3)",
-                    background:maxOverPerBowler===v?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",
-                    color:maxOverPerBowler===v?"#111":"#bcc7d8"}}>{v===null?"No limit":`${v} ov`}</button>
+              <div style={{display:"flex",gap:6,marginBottom:blMode==="none"?0:10}}>
+                {[["none","No limit"],["flat","Same for all"],["tiered","Main + rest"]].map(([m,label])=>(
+                  <button key={m} onClick={()=>setBlMode(m)} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",
+                    border:blMode===m?"none":"1.5px solid rgba(99,102,241,.3)",
+                    background:blMode===m?"linear-gradient(135deg,#f59e0b,#ef4444)":"transparent",
+                    color:blMode===m?"#111":"#bcc7d8"}}>{label}</button>
                 ))}
-                <button onClick={()=>setMaxOverPerBowler("custom")} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",fontWeight:700,fontFamily:"'Inter',sans-serif",fontSize:12,transition:"all .15s",
-                  border:maxOverPerBowler==="custom"?"none":"1.5px solid rgba(99,102,241,.3)",
-                  background:maxOverPerBowler==="custom"?"linear-gradient(135deg,#8b5cf6,#6366f1)":"transparent",
-                  color:maxOverPerBowler==="custom"?"#fff":"#bcc7d8"}}>Custom</button>
               </div>
-              {maxOverPerBowler==="custom"&&<input type="number" min="1" max="50" placeholder="Type max overs (e.g. 3, 6)" onChange={e=>setMaxOverPerBowler(e.target.value===""?"custom":Number(e.target.value))} style={{width:"100%",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(139,92,246,.5)",borderRadius:12,padding:"10px 14px",color:"#fff",fontSize:14,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>}
+
+              {blMode==="flat"&&(
+                <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.25)",borderRadius:12,padding:"10px 12px"}}>
+                  <span style={{color:"#bcc7d8",fontSize:13}}>Every bowler can bowl up to</span>
+                  <input type="number" min="1" max="50" value={blFlatOvers} onChange={e=>setBlFlatOvers(e.target.value===""?"":Number(e.target.value))}
+                    style={{width:56,textAlign:"center",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(139,92,246,.5)",borderRadius:10,padding:"8px",color:"#fff",fontSize:15,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>
+                  <span style={{color:"#bcc7d8",fontSize:13}}>overs</span>
+                </div>
+              )}
+
+              {blMode==="tiered"&&(
+                <div style={{background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.25)",borderRadius:12,padding:"12px",display:"flex",flexDirection:"column",gap:10}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <input type="number" min="1" max="11" value={blMainCount} onChange={e=>setBlMainCount(e.target.value===""?"":Number(e.target.value))}
+                      style={{width:52,textAlign:"center",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(245,158,11,.6)",borderRadius:10,padding:"8px",color:"#fbbf24",fontSize:15,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>
+                    <span style={{color:"#bcc7d8",fontSize:13}}>main bowlers bowl up to</span>
+                    <input type="number" min="1" max="50" value={blMainOvers} onChange={e=>setBlMainOvers(e.target.value===""?"":Number(e.target.value))}
+                      style={{width:52,textAlign:"center",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(245,158,11,.6)",borderRadius:10,padding:"8px",color:"#fbbf24",fontSize:15,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>
+                    <span style={{color:"#bcc7d8",fontSize:13}}>overs each</span>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <span style={{color:"#bcc7d8",fontSize:13}}>everyone else bowls up to</span>
+                    <input type="number" min="1" max="50" value={blRestOvers} onChange={e=>setBlRestOvers(e.target.value===""?"":Number(e.target.value))}
+                      style={{width:52,textAlign:"center",background:"rgba(7,5,15,.8)",border:"1.5px solid rgba(52,211,153,.5)",borderRadius:10,padding:"8px",color:"#6ee7b7",fontSize:15,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>
+                    <span style={{color:"#bcc7d8",fontSize:13}}>overs each</span>
+                  </div>
+                  <p style={{color:"#4338ca",fontSize:11,fontFamily:"'JetBrains Mono',monospace",margin:0}}>You'll tap "⭐ main bowler" when picking each one — first {blMainCount||0||"—"} get the higher limit.</p>
+                </div>
+              )}
             </div>
 
             {/* Two team PINs */}
@@ -2126,7 +2195,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
     }
   };
 
-  const startMatch=({teamA,teamB,battingFirst,bowlingFirst,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary,pubTeamA,pubTeamB,tournamentId,fixtureId,maxOverPerBowler})=>{
+  const startMatch=({teamA,teamB,battingFirst,bowlingFirst,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary,pubTeamA,pubTeamB,tournamentId,fixtureId,bowlerRule})=>{
     setSaved(false);
     // Stable match ID created ONCE here and synced inside the match object to every device.
     // All scorers/admins then write the final result to history/{matchId} — the SAME key — so
@@ -2139,7 +2208,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
     // despite Setup sending them correctly. That meant every "who's playing today" selection was
     // discarded the moment a match started. Now captured properly, along with tournamentId/fixtureId
     // for matches started from a tournament fixture.
-    setMatch({matchId,teamA,teamB,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary,maxOverPerBowler:maxOverPerBowler||null,
+    setMatch({matchId,teamA,teamB,venue,format,overs,maxWkts,single,pinA,pinB,tossSummary,bowlerRule:bowlerRule||null,
       pubTeamA:pubTeamA||[],pubTeamB:pubTeamB||[],tournamentId:tournamentId||null,fixtureId:fixtureId||null});
     setHist([]);setInn1(null);
     // Shell innings — no players yet, batting team must enter openers
@@ -2150,6 +2219,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
       bowlers:{},bowlingOrder:[],
       strikerName:null,nonStrikerName:null,bowlerName:null,
       totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],overBowlers:[],partnerships:[],partnership:0,partnershipBalls:0,
+      mainBowlers:[],
       extras:{wd:0,nb:0,b:0,lb:0},target:null});
   };
 
@@ -2729,12 +2799,27 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
         return;
       }
       // Bowler over limit — set per match in Setup, checked here (not just the chip UI) so the
-      // dropdown/"type a new name" paths can't bypass it.
-      const limit=match?.maxOverPerBowler||null;
-      if(limit){
+      // dropdown/"type a new name" paths can't bypass it. Uses the shared bowlerAtCap so this stays
+      // consistent with the picker's own logic.
+      const rule=match?.bowlerRule||null;
+      if(rule&&bowlerAtCap(rule, inn, nm)){
+        const slots=mainSlotsLeft(rule, inn.mainBowlers);
         const b=inn.bowlers?.[nm];
-        if(b&&b.overs>=limit&&b.ballsThisOver===0){
-          alert(`${nm} has already bowled the maximum ${limit} over${limit===1?"":"s"} for this match. Pick a different bowler.`);
+        const cap=bowlerCap(rule, inn.mainBowlers, nm);
+        if(rule.mainCount&&slots>0&&!(inn.mainBowlers||[]).includes(nm)&&b&&b.overs>=rule.restOvers&&b.overs<rule.mainOvers){
+          // They could keep bowling if made a main bowler — offer that instead of a flat block.
+          if(confirm(`${nm} has bowled their ${rule.restOvers}-over limit. Make them a main bowler (up to ${rule.mainOvers} overs)? ${slots} main slot${slots===1?"":"s"} left.`)){
+            setInn(p=>{
+              const curM=p.mainBowlers||[];
+              if(curM.includes(nm)||mainSlotsLeft(rule,curM)<=0) return p;
+              return {...p, mainBowlers:[...curM, nm]};
+            });
+            // fall through — they're now under the main cap, so allow the pick
+          } else {
+            return;
+          }
+        } else {
+          alert(`${nm} has bowled their ${cap}-over limit for this match. Pick a different bowler.`);
           return;
         }
       }
@@ -3532,16 +3617,31 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
       {nnb&&!pw&&(
         <div className="alert-indigo" style={{border:"2px solid #6366f1"}}>
           <p style={{color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontSize:12,textTransform:"uppercase",letterSpacing:".12em",marginBottom:4,fontWeight:700}}>🎯 Over Complete!</p>
-          <p ref={nnb&&!(pw||pr)?pendRef:null} style={{color:"#818cf8",fontSize:12,marginBottom:10}}>Who bowls next? <span style={{color:"#4338ca",fontSize:11}}>(not {inn.bowlerName}{match?.maxOverPerBowler?` · max ${match.maxOverPerBowler} ov/bowler`:""})</span></p>
+          <p ref={nnb&&!(pw||pr)?pendRef:null} style={{color:"#818cf8",fontSize:12,marginBottom:10}}>Who bowls next? <span style={{color:"#4338ca",fontSize:11}}>(not {inn.bowlerName}{match?.bowlerRule?(match.bowlerRule.mainCount?` · ${match.bowlerRule.mainCount} main×${match.bowlerRule.mainOvers}ov, rest ${match.bowlerRule.restOvers}ov`:` · max ${match.bowlerRule.restOvers}ov each`):""})</span></p>
 
           {/* Quick-tap: show ONLY bowling team's players */}
           {(()=>{
             const bowled=new Set(inn.bowlingOrder||[]);
-            const overLimit=match?.maxOverPerBowler||null;
-            const atLimit=(n)=>{
-              if(!overLimit) return false;
+            const rule=match?.bowlerRule||null;
+            const mainBowlers=inn.mainBowlers||[];
+            const slotsLeft=mainSlotsLeft(rule, mainBowlers);
+            const atLimit=(n)=>bowlerAtCap(rule, inn, n);
+            const isMain=(n)=>mainBowlers.includes(n);
+            // A bowler benefits from being made "main" if: there's a tiered rule, a main slot is open,
+            // they're not already main, and they've reached the REST cap (so the higher cap actually
+            // frees them to keep bowling). That's exactly when we offer the ⭐ upgrade.
+            const canPromote=(n)=>{
+              if(!rule||!rule.mainCount||slotsLeft<=0||isMain(n)) return false;
               const b=inn.bowlers?.[n];
-              return !!b && b.overs>=overLimit && b.ballsThisOver===0;
+              if(!b) return true; // fresh bowler can be pre-designated main
+              return b.overs>=rule.restOvers;
+            };
+            const promote=(n)=>{
+              setInn(p=>{
+                const cur=p.mainBowlers||[];
+                if(cur.includes(n)||mainSlotsLeft(rule,cur)<=0) return p;
+                return {...p, mainBowlers:[...cur, n]};
+              });
             };
             const hasPubTeam=(match?.pubTeamA?.length>0||match?.pubTeamB?.length>0);
             const bowlingPub=hasPubTeam
@@ -3553,16 +3653,27 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
               const b=inn.bowlers?.[n];
               const prev=bowled.has(n);
               const maxed=atLimit(n);
+              const main=isMain(n);
+              const cap=bowlerCap(rule, mainBowlers, n);
+              const promotable=maxed&&canPromote(n);
               return(
-                <button key={n} onClick={()=>{ if(!maxed) confBowler(n); }} disabled={maxed} style={{
-                  padding:"8px 14px",borderRadius:10,touchAction:"manipulation",
-                  border:maxed?"1.5px solid rgba(148,163,184,.25)":prev?"1.5px solid rgba(99,102,241,.4)":"1.5px solid rgba(52,211,153,.4)",
-                  background:maxed?"rgba(148,163,184,.06)":prev?"rgba(99,102,241,.12)":"rgba(52,211,153,.1)",
-                  color:maxed?"#64748b":prev?"#a5b4fc":"#6ee7b7",fontSize:13,cursor:maxed?"not-allowed":"pointer",
-                  fontFamily:"'Inter',sans-serif",fontWeight:600,opacity:maxed?0.7:1
-                }}>
-                  {n}{(prev||maxed)&&b?<span style={{fontSize:10,opacity:.65,marginLeft:4}}>{b.overs}.{b.ballsThisOver}-{b.runs}-{b.wickets}{maxed?` · max ${overLimit}ov`:""}</span>:""}
-                </button>
+                <span key={n} style={{display:"inline-flex",alignItems:"center",gap:4}}>
+                  <button onClick={()=>{ if(!maxed) confBowler(n); }} disabled={maxed} style={{
+                    padding:"8px 14px",borderRadius:10,touchAction:"manipulation",
+                    border:maxed?"1.5px solid rgba(148,163,184,.25)":main?"1.5px solid rgba(245,158,11,.5)":prev?"1.5px solid rgba(99,102,241,.4)":"1.5px solid rgba(52,211,153,.4)",
+                    background:maxed?"rgba(148,163,184,.06)":main?"rgba(245,158,11,.1)":prev?"rgba(99,102,241,.12)":"rgba(52,211,153,.1)",
+                    color:maxed?"#64748b":main?"#fbbf24":prev?"#a5b4fc":"#6ee7b7",fontSize:13,cursor:maxed?"not-allowed":"pointer",
+                    fontFamily:"'Inter',sans-serif",fontWeight:600,opacity:maxed?0.7:1
+                  }}>
+                    {main?"⭐ ":""}{n}{(prev||maxed)&&b?<span style={{fontSize:10,opacity:.65,marginLeft:4}}>{b.overs}.{b.ballsThisOver}-{b.runs}-{b.wickets}{maxed&&isFinite(cap)?` · max ${cap}ov`:""}</span>:""}
+                  </button>
+                  {promotable&&(
+                    <button onClick={()=>promote(n)} title={`Promote to main bowler (${rule.mainOvers} overs). ${slotsLeft} slot${slotsLeft===1?"":"s"} left.`} style={{
+                      padding:"6px 8px",borderRadius:9,border:"1.5px solid rgba(245,158,11,.6)",background:"rgba(245,158,11,.15)",
+                      color:"#fbbf24",fontSize:11,cursor:"pointer",fontFamily:"'Inter',sans-serif",fontWeight:700,whiteSpace:"nowrap"
+                    }}>⭐ main</button>
+                  )}
+                </span>
               );
             };
 
@@ -3593,7 +3704,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
                   )}
                   {maxedOut.length>0&&(
                     <>
-                      <p style={{fontSize:10,color:"#64748b",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>🚫 Reached {overLimit}-over limit:</p>
+                      <p style={{fontSize:10,color:"#64748b",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>🚫 Reached over limit:</p>
                       <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                         {maxedOut.map(n=><BowlBtn key={n} n={n}/>)}
                       </div>
@@ -3620,7 +3731,7 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
                     </div>
                   </>}
                   {maxedOut.length>0&&<>
-                    <p style={{fontSize:10,color:"#64748b",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>🚫 Reached {overLimit}-over limit:</p>
+                    <p style={{fontSize:10,color:"#64748b",fontFamily:"'JetBrains Mono',monospace",marginBottom:6}}>🚫 Reached over limit:</p>
                     <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                       {maxedOut.map(n=><BowlBtn key={n} n={n}/>)}
                     </div>
