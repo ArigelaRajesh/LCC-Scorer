@@ -886,6 +886,7 @@ function normalizeInn(x){
     battingOrder: x.battingOrder||[],
     bowlingOrder: x.bowlingOrder||[],
     mainBowlers: x.mainBowlers||[],
+    highlights: x.highlights||[],
     batsmen: x.batsmen||{},
     bowlers: x.bowlers||{},
     partnerships: x.partnerships||[],
@@ -901,6 +902,68 @@ function rrrTone(crr,rrr,ballsBowled){
   if(r<=c*1.25) return "#fbbf24";
   return "#f87171";
 }
+// Detect highlights earned by the ball that turned `prev` into `next`. Pure + module-scope so it runs
+// once, authoritatively, inside scoring (not per-viewer), and its output is written to the innings so
+// it syncs to every viewer and persists into History. Thresholds mirror MilestoneCelebration's live
+// celebrations, but here we RECORD them. Each item: {kind,text,who,over,inningsNum,at}.
+function detectNewHighlights(prev, next){
+  if(!prev||!next) return [];
+  const out=[];
+  const overLabel=`${Math.floor((next.totalBalls||0)/6)}.${(next.totalBalls||0)%6}`;
+  const inns=next.inningsNum||1;
+  const mk=(kind,text,who)=>({kind,text,who:who||null,over:overLabel,inningsNum:inns,at:Date.now()});
+
+  // Batting 50 / 100 (and every further 50)
+  Object.entries(next.batsmen||{}).forEach(([n,b])=>{
+    const before=(prev.batsmen&&prev.batsmen[n]&&prev.batsmen[n].runs)||0;
+    const after=b.runs||0;
+    const bf=Math.floor(before/50), af=Math.floor(after/50);
+    if(af>bf&&after>0){
+      const lvl=af*50;
+      out.push(mk("batting", `${lvl===100?"Century":lvl===50?"Fifty":lvl+" runs"} — ${n} (${after})`, n));
+    }
+  });
+  // Six
+  Object.entries(next.batsmen||{}).forEach(([n,b])=>{
+    const before=(prev.batsmen&&prev.batsmen[n]&&prev.batsmen[n].sixes)||0;
+    if((b.sixes||0)>before){ out.push(mk("six", `Six — ${n}`, n)); }
+  });
+  // Four
+  Object.entries(next.batsmen||{}).forEach(([n,b])=>{
+    const before=(prev.batsmen&&prev.batsmen[n]&&prev.batsmen[n].fours)||0;
+    if((b.fours||0)>before){ out.push(mk("four", `Four — ${n}`, n)); }
+  });
+  // Wicket — find the batsman who just became out this ball, and record how they went.
+  Object.entries(next.batsmen||{}).forEach(([n,b])=>{
+    const wasOut=(prev.batsmen&&prev.batsmen[n]&&prev.batsmen[n].out)||false;
+    if(b.out&&!wasOut){
+      const how=(b.howOut||"").trim();
+      out.push(mk("wicket", `Wicket — ${n} out${how?` (${how})`:""}`, n));
+    }
+  });
+  // Team 50s
+  const tb=Math.floor((prev.totalRuns||0)/50), ta=Math.floor((next.totalRuns||0)/50);
+  if(ta>tb&&next.totalRuns>0){ out.push(mk("team", `${ta*50} up — ${next.battingTeam}`, null)); }
+  // Partnership 50/100 (not in single-batsman format)
+  if(!next.single){
+    const pb=Math.floor((prev.partnership||0)/50), pa=Math.floor((next.partnership||0)/50);
+    if(pa>pb&&next.partnership>0&&next.strikerName&&next.nonStrikerName){
+      out.push(mk("partnership", `${pa*50} partnership — ${next.strikerName} & ${next.nonStrikerName}`, null));
+    }
+  }
+  // Bowling: hat-trick / streaks, and 3/4/5-wicket hauls
+  Object.entries(next.bowlers||{}).forEach(([n,bw])=>{
+    const pbw=(prev.bowlers&&prev.bowlers[n])||{};
+    const streakB=pbw.streak||0, streakA=bw.streak||0;
+    if(streakA>=3&&streakA>streakB){
+      out.push(mk("bowling", streakA===3?`Hat-trick — ${n}!`:`${streakA} in a row — ${n}`, n));
+    }
+    const wb=pbw.wickets||0, wa=bw.wickets||0;
+    [3,4,5].forEach(m=>{ if(wa>=m&&wb<m){ out.push(mk("bowling", m>=5?`Five-for — ${n} (${wa}/${bw.runs})`:`${wa} wickets — ${n} (${wa}/${bw.runs})`, n)); } });
+  });
+  return out;
+}
+
 function evRuns(ev){
   if(!ev) return 0;
   if(ev.type==="WD") return ev.extraRuns||0;
@@ -2263,6 +2326,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
       strikerName:null,nonStrikerName:null,bowlerName:null,
       totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],overBowlers:[],partnerships:[],partnership:0,partnershipBalls:0,
       mainBowlers:[],
+      highlights:[],
       extras:{wd:0,nb:0,b:0,lb:0},target:null});
   };
 
@@ -2726,12 +2790,17 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
         // New batsman fills non-striker slot so survivor faces. Mid-over: new batsman faces normally.
         i.pendingOutEnd=cross?"nonStriker":"striker";
       }
-      if(i.battingOrder.length>=i.maxWkts+1||i.wickets>=i.maxWkts||i.totalBalls>=i.overs*6){setInn(i);endInnings(i);return;}
+      if(i.battingOrder.length>=i.maxWkts+1||i.wickets>=i.maxWkts||i.totalBalls>=i.overs*6){
+        const hl=detectNewHighlights(inn,i); if(hl.length)i.highlights=[...(i.highlights||[]),...hl];
+        setInn(i);endInnings(i);return;
+      }
       i.pending=overDone?"wicketAndBowler":"wicket";
+      { const hl=detectNewHighlights(inn,i); if(hl.length)i.highlights=[...(i.highlights||[]),...hl]; }
       setInn(i);
       return;
     }
     if(cross){ i=swap(i); }
+    { const hl=detectNewHighlights(inn,i); if(hl.length)i.highlights=[...(i.highlights||[]),...hl]; }
     setInn(i);
     if(i.totalBalls>=i.overs*6){endInnings(i);return;}
     // suppressAutoEnd: set by a revert of a chase that couldn't roll back the winning ball. Skip the
@@ -2885,6 +2954,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
       bowlers:{[bowler]:nw(bowler,resolvePid(bowler))},bowlingOrder:[bowler],
       strikerName:striker,nonStrikerName:p.single?null:nonStriker,bowlerName:bowler,
       totalRuns:0,totalBalls:0,wickets:0,overEvents:[],completedOvers:[],overBowlers:[],partnerships:[],partnership:0,partnershipBalls:0,
+      mainBowlers:[],highlights:[],
       extras:{wd:0,nb:0,b:0,lb:0},target:p.totalRuns+1}));
     setIB(false);
   };
@@ -3863,18 +3933,29 @@ function ScoreTab({inn,SK,NS,BW,record,rosterNames,match,pw,nbn,setNBN,confBatsm
         {(()=>{
           const co=inn.completedOvers||[];
           if(co.length===0) return null;
-          const last=co[co.length-1]||[];
-          const runsInOver=last.reduce((s,ev)=>s+evRuns(ev),0);
-          const wktsInOver=last.filter(ev=>ev.type==="W").length;
+          // Recent-overs strip: the last few completed overs, newest first, so the scorer can glance
+          // back without scrolling up to the full scorecard. Capped at 3 so it never pushes the scoring
+          // buttons below the fold on a phone.
+          const RECENT=3;
+          const start=Math.max(0,co.length-RECENT);
+          const recent=co.map((over,idx)=>({over,idx})).slice(start).reverse();
           return(
-            <div style={{marginTop:5,display:"flex",alignItems:"center",gap:6,flexWrap:"nowrap",overflow:"hidden"}}>
-              <span style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".08em",flexShrink:0}}>Ov {co.length} →</span>
-              <div style={{display:"flex",gap:4,overflowX:"auto",flex:1,minWidth:0}}>
-                {last.map((ev,i)=><div key={i} className={chipClass(ev)} style={{transform:"scale(.8)",transformOrigin:"left center",opacity:.85}}>{chipLbl(ev)}</div>)}
-              </div>
-              <span style={{fontSize:10,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",flexShrink:0}}>
-                {runsInOver}r{wktsInOver>0?` ${wktsInOver}w`:""}
-              </span>
+            <div style={{marginTop:5,display:"flex",flexDirection:"column",gap:3}}>
+              {recent.map(({over,idx})=>{
+                const runsInOver=over.reduce((s,ev)=>s+evRuns(ev),0);
+                const wktsInOver=over.filter(ev=>ev.type==="W").length;
+                return(
+                  <div key={idx} style={{display:"flex",alignItems:"center",gap:6,flexWrap:"nowrap",overflow:"hidden"}}>
+                    <span style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:".08em",flexShrink:0,width:32}}>Ov {idx+1}</span>
+                    <div style={{display:"flex",gap:4,overflowX:"auto",flex:1,minWidth:0}}>
+                      {over.map((ev,i)=><div key={i} className={chipClass(ev)} style={{transform:"scale(.8)",transformOrigin:"left center",opacity:.85}}>{chipLbl(ev)}</div>)}
+                    </div>
+                    <span style={{fontSize:10,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace",flexShrink:0}}>
+                      {runsInOver}r{wktsInOver>0?` ${wktsInOver}w`:""}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           );
         })()}
@@ -4683,6 +4764,99 @@ function PinButton({match}){
 }
 
 // ── Batting Tab ───────────────────────────────────────────────────────────────
+// Renders captured match highlights (from inn.highlights on either innings). Used live in the viewer
+// Highlights tab and in the completed-match History view. Newest first, with an icon per kind.
+function HighlightsFeed({inn,inn1}){
+  const icon=(k)=>k==="batting"?"🏏":k==="six"?"💥":k==="four"?"🏏":k==="wicket"?"🎳":k==="bowling"?"🎯":k==="team"?"📈":k==="partnership"?"🤝":"⭐";
+  const all=[]
+    .concat((inn1&&inn1.highlights)||[])
+    .concat((inn&&inn.highlights)||[]);
+  // Newest first. Each highlight has `at` (ms); fall back to array order if missing.
+  const items=all.map((h,idx)=>({...h,idx})).sort((a,b)=>(b.at||b.idx)-(a.at||a.idx));
+  if(items.length===0){
+    return(
+      <div style={{textAlign:"center",padding:"40px 20px"}}>
+        <div style={{fontSize:40,marginBottom:10,opacity:.5}}>✨</div>
+        <p style={{color:"#9aa8bf",fontSize:14,fontFamily:"'JetBrains Mono',monospace"}}>No highlights yet</p>
+        <p style={{color:"#6b7280",fontSize:12,marginTop:6}}>Fifties, hat-tricks, sixes and other big moments will appear here as they happen.</p>
+      </div>
+    );
+  }
+  return(
+    <div style={{marginTop:4}}>
+      {items.map((h)=>(
+        <div key={h.idx} style={{display:"flex",alignItems:"center",gap:12,background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.08)",borderRadius:12,padding:"11px 14px",marginBottom:8}}>
+          <span style={{fontSize:22,flexShrink:0}}>{icon(h.kind)}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <p style={{color:"#e2e8f0",fontSize:14,fontWeight:600,margin:0}}>{h.text}</p>
+            <p style={{color:"#6b7280",fontSize:10,fontFamily:"'JetBrains Mono',monospace",margin:"2px 0 0"}}>
+              {h.inningsNum===1?"1st inns":"2nd inns"}{h.over?` · ${h.over} ov`:""}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Tappable over-by-over breakdown for the viewer scorecard. Each over is a tile showing its number
+// and runs/wickets; tapping expands it to the ball-by-ball chips. Includes the in-progress over so a
+// live viewer can tap the current over too. Built from completedOvers (+ the live overEvents).
+function OversBreakdown({inn}){
+  const[open,setOpen]=React.useState(null);
+  if(!inn) return null;
+  const completed=(inn.completedOvers||[]);
+  const live=(inn.overEvents||[]);
+  // Assemble a uniform list of {num, balls, done}. The live over only appears if it has a ball in it.
+  const overs=completed.map((balls,i)=>({num:i+1, balls:balls||[], done:true}));
+  if(live.length>0) overs.push({num:completed.length+1, balls:live, done:false});
+  if(overs.length===0) return null;
+
+  const summary=(balls)=>{
+    const r=balls.reduce((s,ev)=>s+evRuns(ev),0);
+    const w=balls.filter(ev=>ev.type==="W").length;
+    return {r,w};
+  };
+  return(
+    <div style={{marginTop:8}}>
+      <p className="section-title">🧮 Over by over <span style={{color:"#6b7280",fontSize:11,fontWeight:400}}>· tap an over</span></p>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(58px,1fr))",gap:6}}>
+        {overs.map(({num,balls,done})=>{
+          const {r,w}=summary(balls);
+          const isOpen=open===num;
+          return(
+            <button key={num} onClick={()=>setOpen(isOpen?null:num)} style={{
+              display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"7px 4px",borderRadius:10,cursor:"pointer",
+              border:isOpen?"1.5px solid rgba(99,102,241,.7)":done?"1px solid rgba(99,102,241,.25)":"1px solid rgba(251,191,36,.5)",
+              background:isOpen?"rgba(99,102,241,.18)":done?"rgba(99,102,241,.06)":"rgba(251,191,36,.08)",touchAction:"manipulation"}}>
+              <span style={{fontSize:9,color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace"}}>Ov {num}{done?"":"•"}</span>
+              <span style={{fontSize:13,fontWeight:700,color:w>0?"#f87171":"#e2e8f0",fontFamily:"'JetBrains Mono',monospace"}}>{r}{w>0?`/${w}`:""}</span>
+            </button>
+          );
+        })}
+      </div>
+      {open!=null&&(()=>{
+        const o=overs.find(x=>x.num===open);
+        if(!o) return null;
+        const {r,w}=summary(o.balls);
+        return(
+          <div style={{marginTop:8,background:"#130f3a",border:"1px solid #1e1b4b",borderRadius:12,padding:"10px 12px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <span style={{fontSize:11,color:"#a5b4fc",fontFamily:"'JetBrains Mono',monospace",fontWeight:700}}>Over {open}{o.done?"":" (in progress)"}</span>
+              <span style={{fontSize:11,color:"#bcc7d8",fontFamily:"'JetBrains Mono',monospace"}}>{r} run{r===1?"":"s"}{w>0?` · ${w} wkt${w===1?"":"s"}`:""}</span>
+            </div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {o.balls.length===0
+                ?<span style={{color:"#2d2a6a",fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>— no balls —</span>
+                :o.balls.map((ev,i)=><div key={i} className={chipClass(ev)}>{chipLbl(ev)}</div>)}
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
 function BattingTab({inn}){
   return(
     <div style={{background:"#1e1b4b",border:"1px solid #3730a3",borderRadius:20,overflow:"hidden"}}>
@@ -6393,6 +6567,7 @@ function ViewerLive({onExit}){
           <div className="tabs" style={{margin:0,flex:1}}>
             <button className={`tab${tab==="live"?" active":""}`} onClick={()=>setTab("live")}>📡 Live</button>
             <button className={`tab${tab==="scorecard"?" active":""}`} onClick={()=>setTab("scorecard")}>📋 Scorecard</button>
+            <button className={`tab${tab==="highlights"?" active":""}`} onClick={()=>setTab("highlights")}>✨ Highlights</button>
             <button className={`tab${tab==="teams"?" active":""}`} onClick={()=>setTab("teams")}>👥 Match</button>
           </div>
           <button onClick={()=>{ setSoundOn(s=>!s); try{_getHeroCtx();}catch(e){} }}
@@ -6406,6 +6581,8 @@ function ViewerLive({onExit}){
 
         {tab==="teams"?(
           <ViewerTeams match={match} inn={inn}/>
+        ):tab==="highlights"?(
+          <HighlightsFeed inn={inn} inn1={inn1}/>
         ):tab==="scorecard"?(
           <>
             <PartnershipChart inn={inn}/>
@@ -6414,12 +6591,14 @@ function ViewerLive({onExit}){
               <BattingTab inn={inn1}/>
               <div style={{marginTop:14}}/>
               <BowlingTab inn={inn1}/>
+              <OversBreakdown inn={inn1}/>
               <div className="divider" style={{margin:"18px 0"}}/>
             </>)}
             <p className="section-title">{inn.inningsNum===2?"2nd Innings — ":""}{inn.battingTeam}</p>
             <BattingTab inn={inn}/>
             <div style={{marginTop:14}}/>
             <BowlingTab inn={inn}/>
+            <OversBreakdown inn={inn}/>
           </>
         ):(<>
         <div className="grid-2" style={{marginBottom:16}}>
@@ -6952,7 +7131,7 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
 
         {/* Innings tabs */}
         <div className="tabs" style={{margin:"0 0 16px"}}>
-          {[["summary","Summary"],m.inn1?["inn1",`${m.inn1.battingTeam} Inn`]:null,m.inn2?["inn2",`${m.inn2.battingTeam} Inn`]:null].filter(Boolean).map(([id,lbl])=>(
+          {[["summary","Summary"],m.inn1?["inn1",`${m.inn1.battingTeam} Inn`]:null,m.inn2?["inn2",`${m.inn2.battingTeam} Inn`]:null,(((m.inn1&&m.inn1.highlights&&m.inn1.highlights.length)||(m.inn2&&m.inn2.highlights&&m.inn2.highlights.length))?["highlights","✨ Highlights"]:null)].filter(Boolean).map(([id,lbl])=>(
             <button key={id} className={`tab${tab===id?" active":""}`} onClick={()=>setTab(id)}>{lbl}</button>
           ))}
         </div>
@@ -6969,8 +7148,9 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
             </div>
           </div>
         )}
-        {tab==="inn1"&&m.inn1&&<><BattingTab inn={m.inn1}/><div style={{marginTop:14}}/><BowlingTab inn={m.inn1}/></>}
-        {tab==="inn2"&&m.inn2&&<><BattingTab inn={m.inn2}/><div style={{marginTop:14}}/><BowlingTab inn={m.inn2}/></>}
+        {tab==="inn1"&&m.inn1&&<><BattingTab inn={m.inn1}/><div style={{marginTop:14}}/><BowlingTab inn={m.inn1}/><OversBreakdown inn={m.inn1}/></>}
+        {tab==="highlights"&&<HighlightsFeed inn={m.inn2||m.inn1} inn1={m.inn2?m.inn1:null}/>}
+        {tab==="inn2"&&m.inn2&&<><BattingTab inn={m.inn2}/><div style={{marginTop:14}}/><BowlingTab inn={m.inn2}/><OversBreakdown inn={m.inn2}/></>}
       </div>
     </div>
     </>
