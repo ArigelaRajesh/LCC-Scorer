@@ -10175,7 +10175,7 @@ function AdminHome({tier,onPick,onExit,onLogout}){
   );
 }
 
-function SuperAdminHome({onScore,onHistory,onAnnounce,onRoster,onStats,onPoll,onPins,onTournaments,onExit,onLogout}){
+function SuperAdminHome({onScore,onHistory,onAnnounce,onRoster,onStats,onPoll,onPins,onTournaments,onManageAdmins,onExit,onLogout}){
   return <AdminHome tier="super" onPick={(s)=>{
     if(s==="admin")      onScore();
     else if(s==="history")  onHistory();
@@ -10185,6 +10185,7 @@ function SuperAdminHome({onScore,onHistory,onAnnounce,onRoster,onStats,onPoll,on
     else if(s==="poll")     onPoll();
     else if(s==="pinMgmt")  onPins();
     else if(s==="tournaments") onTournaments();
+    else if(s==="manageAdmins") onManageAdmins();
   }} onExit={onExit} onLogout={onLogout}/>;
 }
 
@@ -10431,6 +10432,7 @@ function Root(){
     onAnnounce={()=>nav("announce")}
     onPins={()=>nav("pinMgmt")}
     onTournaments={()=>nav("tournaments")}
+    onManageAdmins={()=>nav("manageAdmins")}
     onExit={home}
     onLogout={logoutAdmin}/>;
   if(screen==="pinMgmt") return <PinMgmtModal onClose={()=>nav(adminHome)}/>;
