@@ -6564,7 +6564,7 @@ function ViewerLive({onExit}){
         {/* Tabs as a clean 3-column segmented control; the sound control sits on its own as a
             separate labelled pill so it no longer crowds the tab row. */}
         <div style={{display:"flex",alignItems:"center",gap:10,margin:"8px 14px 16px"}}>
-          <div className="tabs" style={{margin:0,flex:1}}>
+          <div className="tabs" style={{margin:0,flex:1,gridTemplateColumns:"1fr 1fr"}}>
             <button className={`tab${tab==="live"?" active":""}`} onClick={()=>setTab("live")}>📡 Live</button>
             <button className={`tab${tab==="scorecard"?" active":""}`} onClick={()=>setTab("scorecard")}>📋 Scorecard</button>
             <button className={`tab${tab==="highlights"?" active":""}`} onClick={()=>setTab("highlights")}>✨ Highlights</button>
@@ -7130,11 +7130,16 @@ function MatchDetailView({match:m,role,onBack,onDelete}){
         </div>
 
         {/* Innings tabs */}
-        <div className="tabs" style={{margin:"0 0 16px"}}>
-          {[["summary","Summary"],m.inn1?["inn1",`${m.inn1.battingTeam} Inn`]:null,m.inn2?["inn2",`${m.inn2.battingTeam} Inn`]:null,(((m.inn1&&m.inn1.highlights&&m.inn1.highlights.length)||(m.inn2&&m.inn2.highlights&&m.inn2.highlights.length))?["highlights","✨ Highlights"]:null)].filter(Boolean).map(([id,lbl])=>(
-            <button key={id} className={`tab${tab===id?" active":""}`} onClick={()=>setTab(id)}>{lbl}</button>
-          ))}
-        </div>
+        {(()=>{
+          const detailTabs=[["summary","Summary"],m.inn1?["inn1",`${m.inn1.battingTeam} Inn`]:null,m.inn2?["inn2",`${m.inn2.battingTeam} Inn`]:null,(((m.inn1&&m.inn1.highlights&&m.inn1.highlights.length)||(m.inn2&&m.inn2.highlights&&m.inn2.highlights.length))?["highlights","✨ Highlights"]:null)].filter(Boolean);
+          return(
+            <div className="tabs" style={{margin:"0 0 16px",gridTemplateColumns:`repeat(${detailTabs.length},1fr)`}}>
+              {detailTabs.map(([id,lbl])=>(
+                <button key={id} className={`tab${tab===id?" active":""}`} onClick={()=>setTab(id)}>{lbl}</button>
+              ))}
+            </div>
+          );
+        })()}
 
         {tab==="summary"&&(
           <div className="mini-card">
