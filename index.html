@@ -6479,6 +6479,13 @@ function ViewerLive({onExit}){
             <span style={{color:"#818cf8",fontFamily:"'JetBrains Mono',monospace",fontSize:10,textTransform:"uppercase",letterSpacing:".2em"}}>{inn.inningsNum===1?"1st":"2nd"} Innings</span>
           </div>
           <div className="flex items-center" style={{gap:10}}>
+            <button onClick={()=>{ setSoundOn(s=>!s); try{_getHeroCtx();}catch(e){} }}
+              title={soundOn?"Match sounds on — tap to mute":"Match sounds off — tap to enable"}
+              style={{background:soundOn?"rgba(52,211,153,.15)":"transparent",
+                border:soundOn?"1px solid rgba(52,211,153,.5)":"1px solid rgba(99,102,241,.25)",borderRadius:8,
+                padding:"3px 8px",cursor:"pointer",color:soundOn?"#6ee7b7":"#9aa8bf",fontSize:13,lineHeight:1.3}}>
+              {soundOn?"🔊":"🔇"}
+            </button>
             <button onClick={()=>shareLive(snap,()=>{ setShareToast(true); setTimeout(()=>setShareToast(false),2200); })}
               style={{background:"rgba(37,211,102,.15)",border:"1px solid rgba(37,211,102,.4)",color:"#25d366",
                 fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",borderRadius:8,padding:"4px 10px",fontWeight:600}}
@@ -6563,20 +6570,16 @@ function ViewerLive({onExit}){
       <div className="content" style={{paddingTop:16}}>
         {/* Tabs as a clean 3-column segmented control; the sound control sits on its own as a
             separate labelled pill so it no longer crowds the tab row. */}
-        <div style={{display:"flex",alignItems:"center",gap:10,margin:"8px 14px 16px"}}>
-          <div className="tabs" style={{margin:0,flex:1,gridTemplateColumns:"1fr 1fr"}}>
-            <button className={`tab${tab==="live"?" active":""}`} onClick={()=>setTab("live")}>📡 Live</button>
-            <button className={`tab${tab==="scorecard"?" active":""}`} onClick={()=>setTab("scorecard")}>📋 Scorecard</button>
-            <button className={`tab${tab==="highlights"?" active":""}`} onClick={()=>setTab("highlights")}>✨ Highlights</button>
-            <button className={`tab${tab==="teams"?" active":""}`} onClick={()=>setTab("teams")}>👥 Match</button>
+        <div style={{margin:"8px 14px 16px"}}>
+          <div className="tabs" style={{margin:0,gridTemplateColumns:"repeat(4,1fr)"}}>
+            {[["live","📡","Live"],["scorecard","📋","Scorecard"],["highlights","✨","Highlights"],["teams","👥","Match"]].map(([id,em,lbl])=>(
+              <button key={id} className={`tab${tab===id?" active":""}`} onClick={()=>setTab(id)}
+                style={{padding:"7px 2px",fontSize:9,letterSpacing:".03em",display:"flex",flexDirection:"column",alignItems:"center",gap:3,lineHeight:1.1}}>
+                <span style={{fontSize:15,lineHeight:1}}>{em}</span>
+                <span>{lbl}</span>
+              </button>
+            ))}
           </div>
-          <button onClick={()=>{ setSoundOn(s=>!s); try{_getHeroCtx();}catch(e){} }}
-            title={soundOn?"Match sounds on — tap to mute":"Match sounds off — tap to enable"}
-            style={{display:"flex",alignItems:"center",gap:5,background:soundOn?"rgba(52,211,153,.15)":"#1e1b4b",
-              border:soundOn?"1px solid rgba(52,211,153,.5)":"1px solid transparent",borderRadius:14,
-              padding:"9px 12px",cursor:"pointer",color:soundOn?"#6ee7b7":"#9aa8bf",fontSize:16,lineHeight:1,flexShrink:0}}>
-            {soundOn?"🔊":"🔇"}
-          </button>
         </div>
 
         {tab==="teams"?(
@@ -6651,9 +6654,9 @@ function ViewerLive({onExit}){
                     <p className="section-title" style={{marginBottom:0}}>Recent Overs</p>
                     {co.length>=2&&<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"var(--text-mute)"}}>last {Math.min(5,co.length)} ov: <span style={{color:"#67e8f9",fontWeight:700}}>{last5}</span> runs</span>}
                   </div>
-                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(56px,1fr))",gap:8}}>
                     {recent.map((o,i)=>(
-                      <div key={i} style={{flex:"1 1 auto",minWidth:52,textAlign:"center",background:"rgba(255,255,255,.03)",
+                      <div key={i} style={{textAlign:"center",background:"rgba(255,255,255,.03)",
                         border:`1px solid ${o.wkts>0?"rgba(248,113,113,.35)":"rgba(99,102,241,.25)"}`,borderRadius:10,padding:"7px 4px"}}>
                         <div style={{fontFamily:"'Oswald',sans-serif",fontSize:19,fontWeight:700,color:o.runs>=12?"#34d399":o.runs<=2?"#9aa8bf":"#fff"}}>{o.runs}</div>
                         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:8,color:"var(--text-mute)",letterSpacing:".05em"}}>OV {o.n}{o.wkts>0?` · ${o.wkts}w`:""}</div>
