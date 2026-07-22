@@ -3124,7 +3124,7 @@ function App({role,onExit,onHistory,onPoll,onRoster,onAnnounce,prefillFixture,se
             <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:8,flexWrap:"wrap",minWidth:0,marginTop:"auto"}}>
               <div style={{display:"flex",alignItems:"baseline",gap:8,minWidth:0}}>
                 <span key={inn.totalRuns+"-"+inn.wickets} className={`score-big score-pulse${flash?" flash":""}`}>{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
-                <span style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:13}}>({ovStr(inn.totalBalls)} ov)</span>
+                <span style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:17}}>({ovStr(inn.totalBalls)} ov)</span>
               </div>
               {/* Compact stat chips on the score line — CRR always; Proj in the 1st innings
                   (extrapolated final at the current rate); RRR alongside CRR while chasing, so the
@@ -6507,7 +6507,7 @@ function ViewerLive({onExit}){
         <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
           <div style={{display:"flex",alignItems:"baseline",gap:8,minWidth:0}}>
             <span key={inn.totalRuns+"-"+inn.wickets} className="score-big score-pulse">{inn.totalRuns}<span className="score-wkt">/{inn.wickets}</span></span>
-            <span style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:14}}>({ovStr(inn.totalBalls)} ov)</span>
+            <span style={{color:"#9aa8bf",fontFamily:"'JetBrains Mono',monospace",fontSize:17}}>({ovStr(inn.totalBalls)} ov)</span>
           </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end"}}>
             <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#bcc7d8",
